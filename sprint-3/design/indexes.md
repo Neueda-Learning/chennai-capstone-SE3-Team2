@@ -47,19 +47,3 @@ PostgreSQL can use an index scan to find matching orders.
 **Write cost:**
 Every order insert requires the index to be updated.
 
-### `idx_position_instrument`
-
-**Query:** Find all client positions for a particular instrument.
-
-**Why the index is useful:**
-The query filters positions by `instrument_id`.
-
-**Without the index:**
-PostgreSQL may scan the entire `position` table.
-
-**With the index:**
-PostgreSQL can directly locate positions for the requested instrument.
-
-**Write cost:**
-Every position insert or update involving `instrument_id` requires
-index maintenance.
