@@ -50,4 +50,4 @@ Each row represents the current holding of one client in one instrument.
 
 The (client_id, instrument_id) combination identifies the position, and the quantity/average price depend on that combination.
 
-scope of this database.
+
