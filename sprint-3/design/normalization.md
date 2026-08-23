@@ -50,10 +50,4 @@ Each row represents the current holding of one client in one instrument.
 
 The (client_id, instrument_id) combination identifies the position, and the quantity/average price depend on that combination.
 
-3. Design Decisions
-
-1) ORDER stores the order and its current status; a separate failed-order table is not required.
-2) A separate ORDER_HISTORY table is not required because historical status tracking is outside the current scope.
-3) POSITION stores the current state rather than recalculating holdings from past orders every time.
-4) Indexes were added mainly for common queries such as retrieving a client's recent orders and finding orders for an instrument.
-5) The actual trade execution is assumed to be handled by an external service, so individual executions are outside the scope of this database.
+scope of this database.
