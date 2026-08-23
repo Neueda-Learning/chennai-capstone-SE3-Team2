@@ -1,4 +1,4 @@
-Database Design Notes
+# Normalization Notes
 
 1. ER Diagram → Tables
 
