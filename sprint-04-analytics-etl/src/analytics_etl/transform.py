@@ -123,9 +123,20 @@ def validate_candle(candle: dict) -> tuple[bool, str | None]:
         if isinstance(value, bool) or not isinstance(value, Real):
             return False, f"invalid {field}"
 
-    # 4. High cannot be below low.
-    if candle["high"] < candle["low"]:
+   # 4. OHLC consistency.
+    high = candle["high"]
+    low = candle["low"]
+    open_price = candle["open"]
+    close = candle["close"]
+
+    if high < low:
         return False, "high below low"
+
+    if not (low <= open_price <= high):
+        return False, "open outside high-low range"
+
+    if not (low <= close <= high):
+        return False, "close outside high-low range"
 
     # 5. Volume may be NULL, but cannot be negative.
     volume = candle["volume"]
@@ -136,6 +147,10 @@ def validate_candle(candle: dict) -> tuple[bool, str | None]:
 
         if volume < 0:
             return False, "negative volume"
+        
+    # 6. Synthetic must be boolean.
+    if not isinstance(candle["synthetic"], bool):
+        return False, "invalid synthetic"
 
     return True, None
 
@@ -180,7 +195,7 @@ def _build_clean_dataframe(
         "daily_return",
         "daily_range",
         "daily_range_pct",
-        "turnover",
+        "turnover_proxy",
     ]
 
     if not candles:
@@ -228,8 +243,8 @@ def _build_clean_dataframe(
     )
 
     # Trading value proxy.
-    # If volume is NULL, turnover remains NULL.
-    df["turnover"] = df["close"] * df["volume"]
+    # If volume is NULL, turnover_proxy remains NULL.
+    df["turnover_proxy"] = df["close"] * df["volume"]
 
     return df[columns]
 
