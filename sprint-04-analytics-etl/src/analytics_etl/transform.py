@@ -42,6 +42,7 @@ def transform(raw_response: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
 
     symbol = data["symbol"]
     currency = data["currency"]
+    interval = data["interval"]
     candles = data.get("candles", [])
 
     clean_rows = []
@@ -189,6 +190,7 @@ def _build_clean_dataframe(
 
     df.insert(0, "symbol", symbol)
     df.insert(1, "currency", currency)
+    df.insert(2, "interval", interval)
 
     # Convert the validated ISO date to datetime.
     df["date"] = pd.to_datetime(
