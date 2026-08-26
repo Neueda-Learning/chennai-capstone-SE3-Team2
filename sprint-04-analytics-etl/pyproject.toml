@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sprint-04-analytics-etl"
+version = "0.1.0"
+description = "Analytics ETL pipeline for market candle data"
+requires-python = ">=3.11"
+dependencies = [
+    "requests",
+    "pandas",
+    "duckdb",
+    "plotly",
+    "python-dotenv"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest"
+]
+
+[project.scripts]
+analytics-etl = "analytics_etl.pipeline:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
