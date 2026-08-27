@@ -13,11 +13,11 @@ import requests
 logger = logging.getLogger(__name__)
 
 BASE_URL = os.getenv(
-    "FAUXNANCE_BASE_URL",
+    "https://y4t9nq2bqf.execute-api.eu-west-2.amazonaws.com/v1",
     "http://localhost:8000",
 )
 
-API_KEY_ENV = "FAUXNANCE_API_KEY"
+API_KEY_ENV = "HERE"
 
 CACHE_DIR = Path(
     os.getenv("ETL_CACHE_DIR", ".cache")
