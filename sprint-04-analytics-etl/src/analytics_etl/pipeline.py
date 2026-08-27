@@ -3,10 +3,10 @@ from __future__ import annotations
 import logging
 import sys
 
-from extract import extract
-from load import load
-from pipeline_exceptions import PipelineError
-from transform import transform
+from .extract import extract
+from .load import load
+from .pipeline_exceptions import PipelineError
+from .transform import transform
 
 logger = logging.getLogger(__name__)
 

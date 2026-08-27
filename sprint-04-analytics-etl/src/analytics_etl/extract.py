@@ -11,24 +11,15 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 
-try:
-    from pipeline_exceptions import (
-        BadRequestError,
-        MalformedResponseError,
-        MissingCredentialError,
-        QuotaExhaustedError,
-        ServiceUnreachableError,
-        UpstreamServiceError,
-    )
-except ImportError:
-    from pipeline_errors import (
-        BadRequestError,
-        MalformedResponseError,
-        MissingCredentialError,
-        QuotaExhaustedError,
-        ServiceUnreachableError,
-        UpstreamServiceError,
-    )
+
+from .pipeline_exceptions import (
+    BadRequestError,
+    MalformedResponseError,
+    MissingCredentialError,
+    QuotaExhaustedError,
+    ServiceUnreachableError,
+    UpstreamServiceError,
+)
 
 load_dotenv()
 

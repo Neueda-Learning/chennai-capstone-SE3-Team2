@@ -8,19 +8,12 @@ from pathlib import Path
 
 import pandas as pd
 
-try:
-    from pipeline_exceptions import (
-        LoadWriteError,
-        OutputUnavailableError,
-        SchemaDriftError,
-    )
-except ImportError:
-    from pipeline_errors import (
-        LoadWriteError,
-        OutputUnavailableError,
-        SchemaDriftError,
-    )
 
+from .pipeline_exceptions import (
+    LoadWriteError,
+    OutputUnavailableError,
+    SchemaDriftError,
+)
 logger = logging.getLogger(__name__)
 
 # Folder where CSV files will be stored

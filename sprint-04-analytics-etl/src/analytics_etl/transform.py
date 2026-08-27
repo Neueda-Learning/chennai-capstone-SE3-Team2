@@ -6,10 +6,9 @@ from numbers import Real
 
 import pandas as pd
 
-try:
-    from pipeline_exceptions import MalformedEnvelopeError
-except ImportError:
-    from pipeline_exceptions import MalformedEnvelopeError
+
+from .pipeline_exceptions import MalformedEnvelopeError
+
 
 logger = logging.getLogger(__name__)
 
