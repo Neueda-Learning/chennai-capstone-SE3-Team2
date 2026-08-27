@@ -8,16 +8,16 @@ import time
 from pathlib import Path
 
 import requests
-
+from dotenv import load_dotenv
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
 BASE_URL = os.getenv(
-    "https://y4t9nq2bqf.execute-api.eu-west-2.amazonaws.com/v1",
+    "FAUXNANCE_BASE_URL",
     "http://localhost:8000",
 )
 
-API_KEY_ENV = "HERE"
 
 CACHE_DIR = Path(
     os.getenv("ETL_CACHE_DIR", ".cache")
@@ -82,17 +82,17 @@ def extract(symbol: str) -> dict:
     # ---------------------------------------------------------
     # 2. Get API key
     # ---------------------------------------------------------
-    api_key = os.getenv(API_KEY_ENV)
+    api_key = os.getenv("FAUXNANCE_API_KEY")
 
     if not api_key:
         raise ExtractionError(
-            f"{API_KEY_ENV} is not set"
+            f"{"FAUXNANCE_API_KEY"} is not set"
         )
 
     url = f"{BASE_URL}/candles/{symbol}"
 
     headers = {
-        "Authorization": f"Bearer {api_key}",
+        "X-Api-Key": api_key,
     }
 
     # ---------------------------------------------------------
