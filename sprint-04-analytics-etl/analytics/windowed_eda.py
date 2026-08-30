@@ -32,6 +32,7 @@ def _metrics_for_slice(df: pd.DataFrame) -> dict:
         "biggest_move_pct": round(daily_return.abs().max() * 100, 2) if has_return else None,
         "prices": df[["date", "close"]].reset_index(drop=True),
         "volumes": real[["date", "volume"]].reset_index(drop=True),
+        "ohlc": df[["date", "open", "high", "low", "close", "synthetic"]].reset_index(drop=True),
     }
 
 
@@ -58,11 +59,42 @@ def analyze_windows(symbol: str) -> dict:
     return {"symbol": symbol, "windows": windows}
 
 
+def print_dashboard(all_results: list):
+    """Print EDA results (All Available window per symbol) in a readable console format."""
+    print("\n" + "=" * 75)
+    print("                         EDA DASHBOARD")
+    print("=" * 75)
+
+    for result in all_results:
+        symbol = result["symbol"]
+        all_label = next(k for k in result["windows"] if k.startswith("All Available"))
+        m = result["windows"][all_label]
+
+        print("\n" + "-" * 75)
+        print(f"  {symbol}")
+        print("-" * 75)
+        print(f"  Date range          : {m['start']} → {m['end']}")
+        print(f"  Trading days        : {m['n_days']}")
+        print(f"  Synthetic candles   : {m['n_synthetic']}")
+        print(f"  Average close       : ₹{m['avg_close']:,.2f}")
+        print(f"  Volatility          : {m['volatility_pct']:.2f}%" if m['volatility_pct'] is not None else "  Volatility          : N/A")
+        vol = m["avg_daily_volume"]
+        print(f"  Avg daily volume    : {vol:,.0f} shares" if vol is not None else "  Avg daily volume    : N/A")
+        print(f"  Avg true range      : ₹{m['avg_true_range']:.2f}")
+        print(f"  Biggest move date   : {m['biggest_move_date']}")
+        print(f"  Biggest move        : {m['biggest_move_pct']:.2f}%" if m['biggest_move_pct'] is not None else "  Biggest move        : N/A")
+
+        other_windows = [k for k in result["windows"] if k != all_label]
+        if other_windows:
+            print(f"  Also available      : {', '.join(other_windows)}")
+
+    print("\n" + "=" * 75)
+    print("                         END OF EDA")
+    print("=" * 75 + "\n")
+
+
 if __name__ == "__main__":
     import sys
     symbols = sys.argv[1:] or ["INFY.NS", "RELIANCE.NS", "TATASTEEL.BO"]
-    for sym in symbols:
-        result = analyze_windows(sym)
-        print(f"\n{sym}: {list(result['windows'].keys())}")
-        for label, m in result["windows"].items():
-            print(f"  {label}: {m['start']} to {m['end']}, vol={m['volatility_pct']}%")
+    results = [analyze_windows(sym) for sym in symbols]
+    print_dashboard(results)
