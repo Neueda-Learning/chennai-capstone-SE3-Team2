@@ -1,13 +1,20 @@
-# load_candles.py
 import json
 from pathlib import Path
 import pandas as pd
+from fetch_candles import fetch_and_cache
 
 CANDLE_DIR = Path("candle-data")
 
-def load_symbol(symbol: str) -> pd.DataFrame:
-    """Load one symbol's raw candle JSON into a clean DataFrame."""
-    path = CANDLE_DIR / f"{symbol}-candle.json"
+
+def load_symbol(symbol: str, force_refresh: bool = False) -> pd.DataFrame:
+    """
+    Load one symbol's candle data into a clean DataFrame.
+    Fetches from the API and caches locally if not already present
+    (or if force_refresh=True); otherwise reads the cached file.
+    This is the only function eda.py and visualize_claims.py call,
+    so nothing downstream needs to change.
+    """
+    path = fetch_and_cache(symbol, force=force_refresh)
     raw = json.loads(path.read_text())
     candles = raw["data"]["candles"]
     df = pd.DataFrame(candles)
@@ -16,7 +23,6 @@ def load_symbol(symbol: str) -> pd.DataFrame:
     df["symbol"] = raw["data"]["symbol"]
     df["currency"] = raw["data"]["currency"]
 
-    # Data quality: flag synthetic/interpolated candles instead of silently using them
     n_synthetic = df["synthetic"].sum()
     if n_synthetic:
         print(f"[{symbol}] {n_synthetic} synthetic candle(s) found (volume unreliable) — excluding from volume claims")
