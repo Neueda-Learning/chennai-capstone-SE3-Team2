@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.fidelity</groupId>
+    <artifactId>sprint5-domain</artifactId>
+    <version>1.0-SNAPSHOT</version>
+
+    <properties>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <junit.version>5.11.4</junit.version>
+    </properties>
+
+    <dependencies>
+
+        <!-- The ONLY allowed non-test dependency -->
+        <dependency>
+            <groupId>jakarta.validation</groupId>
+            <artifactId>jakarta.validation-api</artifactId>
+            <version>3.1.1</version>
+        </dependency>
+
+        <!-- JUnit is test-only -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+        <plugins>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <release>21</release>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.5.2</version>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>3.5.0</version>
+
+                <executions>
+                    <execution>
+                        <id>ban-forbidden-dependencies</id>
+
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+
+                        <configuration>
+                            <rules>
+
+                                <bannedDependencies>
+                                    <searchTransitive>true</searchTransitive>
+
+                                    <excludes>
+
+                                        <!-- Spring -->
+                                        <exclude>org.springframework:*</exclude>
+                                        <exclude>org.springframework.boot:*</exclude>
+
+                                        <!-- Servlet APIs -->
+                                        <exclude>jakarta.servlet:*</exclude>
+                                        <exclude>javax.servlet:*</exclude>
+
+                                        <!-- MyBatis -->
+                                        <exclude>org.mybatis:*</exclude>
+
+                                        <!-- JDBC drivers -->
+                                        <exclude>com.mysql:*</exclude>
+                                        <exclude>mysql:*</exclude>
+                                        <exclude>org.postgresql:*</exclude>
+                                        <exclude>com.oracle.database.jdbc:*</exclude>
+                                        <exclude>com.microsoft.sqlserver:*</exclude>
+                                        <exclude>org.xerial:sqlite-jdbc</exclude>
+                                        <exclude>com.h2database:h2</exclude>
+
+                                        <!-- Connection pools -->
+                                        <exclude>com.zaxxer:HikariCP</exclude>
+                                        <exclude>org.apache.commons:commons-dbcp2</exclude>
+                                        <exclude>org.apache.tomcat:tomcat-jdbc</exclude>
+
+                                    </excludes>
+
+                                </bannedDependencies>
+
+                            </rules>
+
+                            <fail>true</fail>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+        </plugins>
+    </build>
+
+</project>
