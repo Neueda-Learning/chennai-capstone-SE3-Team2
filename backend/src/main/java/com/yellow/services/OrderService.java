@@ -1,4 +1,4 @@
-package com.yellow;
+package com.yellow.services;
 
 import com.yellow.dto.PlaceOrderRequest;
 import com.yellow.entities.Account;
@@ -87,6 +87,17 @@ public class OrderService {
                 request.getIdempotencyKey())) {
             throw new DuplicateOrderException();
         }
+
+        Order order = Order.place(
+                account.accountId(),
+                instrument.instrumentId(),
+                request.getSide(),
+                BigDecimal.valueOf(request.getQuantity()),
+                request.getPrice(),
+                request.getIdempotencyKey()
+        );
+
+        return orderRepo.save(order);
 
 
         return null;
