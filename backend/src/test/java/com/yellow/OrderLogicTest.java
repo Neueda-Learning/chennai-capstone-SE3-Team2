@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
+
 @ExtendWith(MockitoExtension.class)
 class OrderLogicTest {
 
@@ -34,7 +35,7 @@ class OrderLogicTest {
     @Mock private PositionRepository positionRepo;
     @Mock private OrderRepository orderRepo;
 
-    private OrderService orderService;
+    private com.yellow.OrderService orderService;
     private PlaceOrderRequest validBuyRequest;
     private PlaceOrderRequest validSellRequest;
 

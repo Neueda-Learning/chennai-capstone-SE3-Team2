@@ -5,6 +5,7 @@ import com.yellow.entities.Account;
 import com.yellow.entities.Instrument;
 import com.yellow.entities.Order;
 import com.yellow.entities.Position;
+import com.yellow.exceptions.AccountNotActiveException;
 import com.yellow.exceptions.AccountNotFoundException;
 import com.yellow.repositories.AccountRepository;
 import com.yellow.repositories.InstrumentRepository;
@@ -33,6 +34,10 @@ public class OrderService {
         //account must exist
         Account account = accountRepo.findById(request.getAccountId())
                 .orElseThrow(AccountNotFoundException::new);
+
+        if (!account.isActive()) {
+            throw new AccountNotActiveException();
+        }
 
         return null;
     }
