@@ -5,14 +5,14 @@ import com.yellow.entities.Account;
 import com.yellow.entities.Instrument;
 import com.yellow.entities.Order;
 import com.yellow.entities.Position;
-import com.yellow.exceptions.AccountNotActiveException;
-import com.yellow.exceptions.AccountNotFoundException;
-import com.yellow.exceptions.InstrumentNotFoundException;
-import com.yellow.exceptions.InvalidOrderException;
+import com.yellow.enums.OrderSide;
+import com.yellow.exceptions.*;
 import com.yellow.repositories.AccountRepository;
 import com.yellow.repositories.InstrumentRepository;
 import com.yellow.repositories.OrderRepository;
 import com.yellow.repositories.PositionRepository;
+
+import java.math.BigDecimal;
 
 public class OrderService {
 
@@ -59,6 +59,16 @@ public class OrderService {
         //price is greater than zero
         if (request.getPrice() == null || request.getPrice().signum() <= 0) {
             throw new InvalidOrderException();
+        }
+
+        //Insufficient Funds
+        BigDecimal orderValue =
+                BigDecimal.valueOf(request.getQuantity())
+                        .multiply(request.getPrice());
+
+        if (request.getSide() == OrderSide.BUY
+                && !account.canAfford(orderValue)) {
+            throw new InsufficientFundsException();
         }
 
         return null;
