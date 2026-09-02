@@ -163,7 +163,7 @@ class OrderLogicTest {
         when(positionRepo.find(1L, 2L)).thenReturn(Optional.empty()); // No position
 
         TradeException ex = assertThrows(InsufficientHoldingsException.class, () -> orderService.placeOrder(validSellRequest));
-        assertEquals("POS-400", ex.catalogueCode());
+        assertEquals("ORD-409", ex.catalogueCode());
     }
 
     @Test
