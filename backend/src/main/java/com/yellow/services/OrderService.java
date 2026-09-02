@@ -8,6 +8,7 @@ import com.yellow.entities.Position;
 import com.yellow.exceptions.AccountNotActiveException;
 import com.yellow.exceptions.AccountNotFoundException;
 import com.yellow.exceptions.InstrumentNotFoundException;
+import com.yellow.exceptions.InvalidOrderException;
 import com.yellow.repositories.AccountRepository;
 import com.yellow.repositories.InstrumentRepository;
 import com.yellow.repositories.OrderRepository;
@@ -40,14 +41,19 @@ public class OrderService {
         if (!account.isActive()) {
             throw new AccountNotActiveException();
         }
-
-        //instrument must exist and be tradable
-        //Instrument is UNKNOWN
+//
+//        //instrument must exist and be tradable
+//        //Instrument is UNKNOWN
         Instrument instrument = instrumentRepo.findBySymbol(request.getSymbol())
                 .orElseThrow(InstrumentNotFoundException::new);
-        //Instrument is NOT TRADEABLE
-        if (!instrument.isTradable()) {
-            throw new InstrumentNotFoundException();
+//        //Instrument is NOT TRADEABLE
+            if (!instrument.isTradable()) {
+                throw new InstrumentNotFoundException();
+            }
+//
+//        //Quantity is positive
+        if (request.getQuantity() == null || request.getQuantity() <= 0) {
+            throw new InvalidOrderException();
         }
 
         return null;
