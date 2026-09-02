@@ -62,14 +62,25 @@ public class OrderService {
         }
 
         //Insufficient Funds
-        BigDecimal orderValue =
-                BigDecimal.valueOf(request.getQuantity())
-                        .multiply(request.getPrice());
-
+        BigDecimal orderValue = BigDecimal.valueOf(request.getQuantity()).multiply(request.getPrice());
         if (request.getSide() == OrderSide.BUY
                 && !account.canAfford(orderValue)) {
             throw new InsufficientFundsException();
         }
+
+        //Insufficient Holdings
+        if (request.getSide() == OrderSide.SELL) {
+            //Does accountId hold that instrument
+            Position position = positionRepo.find(
+                    account.accountId(),
+                    instrument.instrumentId()
+            ).orElseThrow(InsufficientHoldingsException::new);
+            //does account have enough quantity
+            if (!position.canSell(BigDecimal.valueOf(request.getQuantity()))) {
+                throw new InsufficientHoldingsException();
+            }
+        }
+
 
         return null;
     }
