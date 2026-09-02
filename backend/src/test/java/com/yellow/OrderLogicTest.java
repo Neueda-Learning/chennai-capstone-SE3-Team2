@@ -14,6 +14,7 @@ import com.yellow.repositories.AccountRepository;
 import com.yellow.repositories.InstrumentRepository;
 import com.yellow.repositories.OrderRepository;
 import com.yellow.repositories.PositionRepository;
+import com.yellow.services.OrderService;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,7 +36,7 @@ class OrderLogicTest {
     @Mock private PositionRepository positionRepo;
     @Mock private OrderRepository orderRepo;
 
-    private com.yellow.OrderService orderService;
+    private OrderService orderService;
     private PlaceOrderRequest validBuyRequest;
     private PlaceOrderRequest validSellRequest;
 
