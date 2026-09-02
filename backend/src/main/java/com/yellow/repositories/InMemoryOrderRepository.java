@@ -2,6 +2,7 @@ package com.yellow.repositories;
 
 
 import com.yellow.entities.Order;
+import com.yellow.exceptions.DuplicateOrderException;
 
 import java.util.List;
 import java.util.Map;
@@ -46,10 +47,7 @@ public class InMemoryOrderRepository implements OrderRepository {
                 Long previous = orderIdByKey.putIfAbsent(key, stored.orderId());
                 if (previous != null) {
                     // What the unique index does in production.
-                    throw new IllegalStateException(
-                            "idempotency key " + stored.idempotencyKey()
-                                    + " is already used by order " + previous
-                                    + " on account " + stored.accountId());
+                    throw new DuplicateOrderException();
                 }
             }
         }
