@@ -81,6 +81,13 @@ public class OrderService {
             }
         }
 
+        //Idempotency Check
+        if (orderRepo.existsByAccountAndKey(
+                account.accountId(),
+                request.getIdempotencyKey())) {
+            throw new DuplicateOrderException();
+        }
+
 
         return null;
     }
