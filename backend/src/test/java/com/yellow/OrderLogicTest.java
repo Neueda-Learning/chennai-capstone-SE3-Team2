@@ -86,7 +86,7 @@ class OrderLogicTest {
         Order order = orderService.placeOrder(validSellRequest);
 
         assertNotNull(order);
-        assertEquals(OrderStatus.NEW, order.getStatus());
+        assertEquals(OrderStatus.NEW, order.status());
     }
 
     @Test
