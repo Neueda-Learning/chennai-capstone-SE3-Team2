@@ -46,8 +46,8 @@ class OrderLogicTest {
     @BeforeEach
     void setUp() {
         orderService = new OrderService(accountRepo, instrumentRepo, positionRepo, orderRepo);
-        validBuyRequest = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, new BigDecimal("10"), new BigDecimal("100.00"), "key-1234");
-        validSellRequest = new PlaceOrderRequest(1L, "AAPL", OrderSide.SELL, new BigDecimal("10"), new BigDecimal("100.00"), "key-1234");
+        validBuyRequest = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, 10, new BigDecimal("100.00"), "key-1234");
+        validSellRequest = new PlaceOrderRequest(1L, "AAPL", OrderSide.SELL, 10, new BigDecimal("100.00"), "key-1234");
     }
 
     private void stubValidAccount() {
@@ -130,7 +130,7 @@ class OrderLogicTest {
     void rule4_shouldThrowInvalidOrder_whenQuantityIsInvalidAtTradeLevel() {
         stubValidAccount();
         stubValidInstrument();
-        PlaceOrderRequest badQty = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, BigDecimal.ZERO, new BigDecimal("100.00"), "key-1234");
+        PlaceOrderRequest badQty = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, 0, new BigDecimal("100.00"), "key-1234");
 
         TradeException ex = assertThrows(InvalidOrderException.class, () -> orderService.placeOrder(badQty));
         assertEquals("ORD-422", ex.catalogueCode());
@@ -140,7 +140,7 @@ class OrderLogicTest {
     void rule5_shouldThrowInvalidOrder_whenPriceIsInvalidAtTradeLevel() {
         stubValidAccount();
         stubValidInstrument();
-        PlaceOrderRequest badPrice = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, new BigDecimal("10"), BigDecimal.ZERO, "key-1234");
+        PlaceOrderRequest badPrice = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, 10, BigDecimal.ZERO, "key-1234");
 
         TradeException ex = assertThrows(InvalidOrderException.class, () -> orderService.placeOrder(badPrice));
         assertEquals("ORD-422", ex.catalogueCode());
