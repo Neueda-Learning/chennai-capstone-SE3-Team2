@@ -1,0 +1,257 @@
+```mermaid
+---
+title: Trading Domain — Class Diagram
+---
+classDiagram
+    direction TB
+
+    %% =================================================================
+    %% ENTITIES
+    %% =================================================================
+    class Account {
+        -Long accountId
+        -String accountReference
+        -String holderName
+        -BigDecimal balance
+        -String currency
+        -AccountStatus status
+        -int loadedVersion
+        +canAfford(BigDecimal amount) boolean
+        +isActive() boolean
+        +debit(BigDecimal amount) void
+        +credit(BigDecimal amount) void
+        +suspend() void
+        +reactivate() void
+        +close() void
+        +loadedVersion() int
+    }
+
+    class Instrument {
+        -Long instrumentId
+        -String symbol
+        -String displayName
+        -AssetClass assetClass
+        -String quoteCurrency
+        -boolean tradable
+        +isTradable() boolean
+        +delist() void
+        +relist() void
+    }
+
+    class Order {
+        -Long orderId
+        -Long accountId
+        -Long instrumentId
+        -OrderSide side
+        -BigDecimal quantity
+        -BigDecimal limitPrice
+        -BigDecimal executedPrice
+        -OrderStatus status
+        -String idempotencyKey
+        -Instant placedAt
+        -Instant resolvedAt
+        +transitionTo(OrderStatus next, Instant at) void
+        +fill(BigDecimal priceAchieved, Instant at) void
+        +reject(Instant at) void
+        +cancel(Instant at) void
+        +isTerminal() boolean
+        +isBuy() boolean
+        +notionalValue() BigDecimal
+    }
+
+    class Position {
+        -Long positionId
+        -Long accountId
+        -Long instrumentId
+        -BigDecimal quantity
+        -BigDecimal averagePrice
+        +canSell(BigDecimal quantity) boolean
+        +applyBuy(BigDecimal quantity, BigDecimal price) void
+        +applySell(BigDecimal quantity) void
+        +isClosed() boolean
+        +investedValue() BigDecimal
+    }
+
+    %% =================================================================
+    %% ENUMERATIONS
+    %% Contractual: these literals appear in contracts/trade-api.yaml,
+    %% the database stores the same strings, and Sprint 9 generates
+    %% Angular types from that file.
+    %% =================================================================
+    class AccountStatus {
+        <<enumeration>>
+        ACTIVE
+        SUSPENDED
+        CLOSED
+    }
+
+    class OrderSide {
+        <<enumeration>>
+        BUY
+        SELL
+    }
+
+    class OrderStatus {
+        <<enumeration>>
+        NEW
+        FILLED
+        REJECTED
+        CANCELLED
+    }
+
+    class AssetClass {
+        <<enumeration>>
+        EQUITY
+        ETF
+        MUTUAL_FUND
+    }
+
+    class Reason {
+        <<enumeration>>
+        UNKNOWN
+        NOT_TRADABLE
+    }
+
+    %% =================================================================
+    %% REQUEST DTO
+    %% Six fields, modelled on the PlaceOrderRequest schema in
+    %% contracts/trade-api.yaml, which is binding.
+    %% =================================================================
+    class PlaceOrderRequest {
+        <<DTO>>
+        -Long accountId
+        -String symbol
+        -OrderSide side
+        -BigDecimal quantity
+        -BigDecimal price
+        -String idempotencyKey
+    }
+
+    %% =================================================================
+    %% SERVICE + PORTS (the seam for rule 8)
+    %% =================================================================
+    class OrderService {
+        <<service>>
+        -AccountRepository accounts
+        -InstrumentRepository instruments
+        -PositionRepository positions
+        -OrderRepository orders
+        +placeOrder(PlaceOrderRequest request) Order
+    }
+
+    class AccountRepository {
+        <<interface>>
+        +findById(Long accountId) Optional~Account~
+    }
+
+    class InstrumentRepository {
+        <<interface>>
+        +findBySymbol(String symbol) Optional~Instrument~
+    }
+
+    class PositionRepository {
+        <<interface>>
+        +find(Long accountId, Long instrumentId) Optional~Position~
+    }
+
+    class OrderRepository {
+        <<interface>>
+        +existsByAccountAndKey(Long accountId, String key) boolean
+        +save(Order order) Order
+    }
+
+    %% =================================================================
+    %% EXCEPTION HIERARCHY
+    %% The base carries the catalogue code, NOT an HTTP status: Sprint 6
+    %% maps the code to a status in one place, Sprint 7 maps it to a
+    %% rejection reason on a Kafka event.
+    %% =================================================================
+    class DomainException {
+        <<abstract>>
+        #String catalogueCode
+        +catalogueCode() String
+        +getMessage() String
+    }
+
+    class AccountNotFoundException {
+        +String CODE = "ACC-404"
+        -Long requestedAccountId
+    }
+
+    class AccountNotActiveException {
+        +String CODE = "ACC-403"
+        -AccountStatus actualStatus
+    }
+
+    class InstrumentNotFoundException {
+        +String CODE = "INS-404"
+        -String requestedSymbol
+        -Reason reason
+    }
+
+    class InsufficientFundsException {
+        +String CODE = "ORD-400"
+        -BigDecimal required
+        -BigDecimal available
+    }
+
+    class InsufficientHoldingsException {
+        +String CODE = "ORD-409"
+        -BigDecimal requested
+        -BigDecimal held
+    }
+
+    class DuplicateOrderException {
+        +String CODE = "ORD-409"
+        -String idempotencyKey
+        -Long existingOrderId
+    }
+
+    class InvalidOrderException {
+        +String CODE = "VAL-422"
+        -String field
+        -String submittedValue
+    }
+
+    DomainException <|-- AccountNotFoundException
+    DomainException <|-- AccountNotActiveException
+    DomainException <|-- InstrumentNotFoundException
+    DomainException <|-- InsufficientFundsException
+    DomainException <|-- InsufficientHoldingsException
+    DomainException <|-- DuplicateOrderException
+    DomainException <|-- InvalidOrderException
+
+    %% =================================================================
+    %% RELATIONSHIPS
+    %% =================================================================
+    Account "1" --> "1" AccountStatus : has
+    Order "1" --> "1" OrderSide : has
+    Order "1" --> "1" OrderStatus : has
+    Instrument "1" --> "1" AssetClass : has
+    InstrumentNotFoundException "1" --> "1" Reason : has
+    PlaceOrderRequest "1" --> "1" OrderSide : carries
+
+    Account "1" --> "0..*" Order : places
+    Account "1" --> "0..*" Position : holds
+    Instrument "1" --> "0..*" Order : traded in
+    Instrument "1" --> "0..*" Position : held as
+
+    OrderService ..> PlaceOrderRequest : accepts
+    OrderService ..> Order : produces
+    OrderService ..> DomainException : throws
+    OrderService --> AccountRepository : uses
+    OrderService --> InstrumentRepository : uses
+    OrderService --> PositionRepository : uses
+    OrderService --> OrderRepository : uses
+
+    AccountRepository ..> Account : returns
+    InstrumentRepository ..> Instrument : returns
+    PositionRepository ..> Position : returns
+    OrderRepository ..> Order : returns
+
+    note "ORD-409 deliberately covers two cases: insufficient holdings and duplicate order. One code can mean two things, per the catalogue. The distinguishing detail is a typed field on the exception, logged on the server, never in the message: leaking internal detail in an error body is OWASP A05."
+
+    note "Account, Order and Position reference one another by id, not by object reference. Each is loaded and saved independently. The associations above show the business relationship, not a Java field."
+
+    note "PlaceOrderRequest constraints: accountId required and at least 1; symbol required, not blank, at most 20 characters; side required; quantity required, whole units, greater than zero; price required, greater than zero, at most two decimal places; idempotencyKey required, 8 to 100 characters. Quantity and price are checked here AND again as rules 4 and 5, because the Trade Executor replays an order having never run a validator."
+```
