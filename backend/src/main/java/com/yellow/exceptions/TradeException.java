@@ -7,7 +7,7 @@ public class TradeException extends RuntimeException {
         super(message);
         this.code = code;
     }
-    public String getCode() {
+    public String catalogueCode() {
         return code;
     }
 }

@@ -1,5 +1,18 @@
 package com.yellow;
 
+import com.yellow.entities.Account;
+import com.yellow.entities.Instrument;
+import com.yellow.entities.Order;
+import com.yellow.enums.OrderSide;
+import com.yellow.enums.AccountStatus;
+import com.yellow.enums.OrderStatus;
+import com.yellow.entities.Position;
+import com.yellow.enums.AssetClass;
+import com.yellow.exceptions.*;
+import com.yellow.repositories.AccountRepository;
+import com.yellow.repositories.InstrumentRepository;
+import com.yellow.repositories.OrderRepository;
+import com.yellow.repositories.PositionRepository;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -56,7 +69,7 @@ class OrderLogicTest {
         Order order = orderService.placeOrder(validBuyRequest);
 
         assertNotNull(order);
-        assertEquals(OrderStatus.NEW, order.getStatus());
+        assertEquals(OrderStatus.NEW, order.status());
         verify(orderRepo).save(any(Order.class));
     }
 
@@ -79,7 +92,7 @@ class OrderLogicTest {
     void rule1_shouldThrowAccountNotFound_whenAccountIdDoesNotExist() {
         when(accountRepo.findById(1L)).thenReturn(Optional.empty());
 
-        DomainException ex = assertThrows(AccountNotFoundException.class, () -> orderService.placeOrder(validBuyRequest));
+        TradeException ex = assertThrows(AccountNotFoundException.class, () -> orderService.placeOrder(validBuyRequest));
         assertEquals("ACC-404", ex.catalogueCode());
         verifyNoInteractions(instrumentRepo);
     }
@@ -89,7 +102,7 @@ class OrderLogicTest {
         Account suspended = new Account(1L, "REF-1", 100L, new BigDecimal("5000.00"), BigDecimal.ZERO, AccountStatus.SUSPENDED, 1);
         when(accountRepo.findById(1L)).thenReturn(Optional.of(suspended));
 
-        DomainException ex = assertThrows(AccountNotActiveException.class, () -> orderService.placeOrder(validBuyRequest));
+        TradeException ex = assertThrows(AccountNotActiveException.class, () -> orderService.placeOrder(validBuyRequest));
         assertEquals("ACC-403", ex.catalogueCode());
     }
 
@@ -98,7 +111,7 @@ class OrderLogicTest {
         stubValidAccount();
         when(instrumentRepo.findBySymbol("AAPL")).thenReturn(Optional.empty());
 
-        DomainException ex = assertThrows(InstrumentNotFoundException.class, () -> orderService.placeOrder(validBuyRequest));
+        TradeException ex = assertThrows(InstrumentNotFoundException.class, () -> orderService.placeOrder(validBuyRequest));
         assertEquals("INS-404", ex.catalogueCode());
     }
 
@@ -108,27 +121,27 @@ class OrderLogicTest {
         Instrument delisted = new Instrument(2L, "AAPL", "Apple Inc", AssetClass.EQUITY, "USD", false);
         when(instrumentRepo.findBySymbol("AAPL")).thenReturn(Optional.of(delisted));
 
-        DomainException ex = assertThrows(InstrumentNotFoundException.class, () -> orderService.placeOrder(validBuyRequest));
+        TradeException ex = assertThrows(InstrumentNotFoundException.class, () -> orderService.placeOrder(validBuyRequest));
         assertEquals("INS-404", ex.catalogueCode());
     }
 
     @Test
-    void rule4_shouldThrowInvalidOrder_whenQuantityIsInvalidAtDomainLevel() {
+    void rule4_shouldThrowInvalidOrder_whenQuantityIsInvalidAtTradeLevel() {
         stubValidAccount();
         stubValidInstrument();
         PlaceOrderRequest badQty = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, BigDecimal.ZERO, new BigDecimal("100.00"), "key-1234");
 
-        DomainException ex = assertThrows(InvalidOrderException.class, () -> orderService.placeOrder(badQty));
+        TradeException ex = assertThrows(InvalidOrderException.class, () -> orderService.placeOrder(badQty));
         assertEquals("ORD-422", ex.catalogueCode());
     }
 
     @Test
-    void rule5_shouldThrowInvalidOrder_whenPriceIsInvalidAtDomainLevel() {
+    void rule5_shouldThrowInvalidOrder_whenPriceIsInvalidAtTradeLevel() {
         stubValidAccount();
         stubValidInstrument();
         PlaceOrderRequest badPrice = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, new BigDecimal("10"), BigDecimal.ZERO, "key-1234");
 
-        DomainException ex = assertThrows(InvalidOrderException.class, () -> orderService.placeOrder(badPrice));
+        TradeException ex = assertThrows(InvalidOrderException.class, () -> orderService.placeOrder(badPrice));
         assertEquals("ORD-422", ex.catalogueCode());
     }
 
@@ -138,7 +151,7 @@ class OrderLogicTest {
         when(accountRepo.findById(1L)).thenReturn(Optional.of(poorAccount));
         stubValidInstrument();
 
-        DomainException ex = assertThrows(InsufficientFundsException.class, () -> orderService.placeOrder(validBuyRequest));
+        TradeException ex = assertThrows(InsufficientFundsException.class, () -> orderService.placeOrder(validBuyRequest));
         assertEquals("ORD-400", ex.catalogueCode());
     }
 
@@ -148,7 +161,7 @@ class OrderLogicTest {
         stubValidInstrument();
         when(positionRepo.find(1L, 2L)).thenReturn(Optional.empty()); // No position
 
-        DomainException ex = assertThrows(InsufficientHoldingsException.class, () -> orderService.placeOrder(validSellRequest));
+        TradeException ex = assertThrows(InsufficientHoldingsException.class, () -> orderService.placeOrder(validSellRequest));
         assertEquals("POS-400", ex.catalogueCode());
     }
 
@@ -158,7 +171,7 @@ class OrderLogicTest {
         stubValidInstrument();
         when(orderRepo.existsByAccountAndKey(1L, "key-1234")).thenReturn(true);
 
-        DomainException ex = assertThrows(DuplicateOrderException.class, () -> orderService.placeOrder(validBuyRequest));
+        TradeException ex = assertThrows(DuplicateOrderException.class, () -> orderService.placeOrder(validBuyRequest));
         assertEquals("ORD-409", ex.catalogueCode());
     }
 
@@ -166,7 +179,7 @@ class OrderLogicTest {
     void precedence_shouldFailRule1BeforeRule3_whenAccountNotFoundAndSymbolIsUnknown() {
         when(accountRepo.findById(1L)).thenReturn(Optional.empty());
 
-        DomainException ex = assertThrows(AccountNotFoundException.class, () -> orderService.placeOrder(validBuyRequest));
+        TradeException ex = assertThrows(AccountNotFoundException.class, () -> orderService.placeOrder(validBuyRequest));
         assertEquals("ACC-404", ex.catalogueCode());
         verifyNoInteractions(instrumentRepo);
     }
@@ -176,7 +189,7 @@ class OrderLogicTest {
         Account suspendedPoorAccount = new Account(1L, "REF-1", 100L, BigDecimal.ZERO, BigDecimal.ZERO, AccountStatus.SUSPENDED, 1);
         when(accountRepo.findById(1L)).thenReturn(Optional.of(suspendedPoorAccount));
 
-        DomainException ex = assertThrows(AccountNotActiveException.class, () -> orderService.placeOrder(validBuyRequest));
+        TradeException ex = assertThrows(AccountNotActiveException.class, () -> orderService.placeOrder(validBuyRequest));
         assertEquals("ACC-403", ex.catalogueCode());
         verifyNoInteractions(instrumentRepo);
     }
