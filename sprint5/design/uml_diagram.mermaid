@@ -1,0 +1,249 @@
+---
+title: Trading Domain — Class Diagram
+---
+classDiagram
+    direction TB
+
+    %% =================================================================
+    %% ENTITIES
+    %% =================================================================
+    class Account {
+        -Long accountId
+        -String accountReference
+        -Long clientId
+        -BigDecimal balance
+        -BigDecimal blockedFunds
+        -AccountStatus status
+        -int loadedVersion
+        +availableFunds() BigDecimal
+        +canAfford(BigDecimal amount) boolean
+        +isActive() boolean
+        +block(BigDecimal amount) void
+        +release(BigDecimal amount) void
+        +debit(BigDecimal amount) void
+        +credit(BigDecimal amount) void
+        +loadedVersion() int
+    }
+
+    class Instrument {
+        -Long instrumentId
+        -String symbol
+        -String displayName
+        -AssetClass assetClass
+        -String quoteCurrency
+        -boolean tradable
+        +isTradable() boolean
+    }
+
+    class Order {
+        -Long orderId
+        -Long accountId
+        -Long instrumentId
+        -OrderSide side
+        -BigDecimal quantity
+        -BigDecimal limitPrice
+        -BigDecimal executedPrice
+        -OrderStatus status
+        -String idempotencyKey
+        -Instant placedAt
+        -Instant resolvedAt
+        +transitionTo(OrderStatus next) void
+        +isTerminal() boolean
+        +isBuy() boolean
+    }
+
+    class Position {
+        -Long positionId
+        -Long accountId
+        -Long instrumentId
+        -BigDecimal quantity
+        -BigDecimal averagePrice
+        +canSell(BigDecimal quantity) boolean
+        +applyBuy(BigDecimal quantity, BigDecimal price) void
+        +applySell(BigDecimal quantity) void
+        +isClosed() boolean
+    }
+
+    %% =================================================================
+    %% ENUMERATIONS
+    %% =================================================================
+    class AccountStatus {
+        <<enumeration>>
+        ACTIVE
+        SUSPENDED
+        CLOSED
+    }
+
+    class OrderSide {
+        <<enumeration>>
+        BUY
+        SELL
+    }
+
+    class OrderStatus {
+        <<enumeration>>
+        NEW
+        FILLED
+        REJECTED
+        CANCELLED
+    }
+
+    class AssetClass {
+        <<enumeration>>
+        EQUITY
+        ETF
+        MUTUAL_FUND
+    }
+
+    class Reason {
+        <<enumeration>>
+        UNKNOWN
+        NOT_TRADABLE
+    }
+
+    %% =================================================================
+    %% REQUEST DTO
+    %% =================================================================
+    class PlaceOrderRequest {
+        <<DTO>>
+        -Long accountId
+        -String symbol
+        -OrderSide side
+        -BigDecimal quantity
+        -BigDecimal price
+        -String idempotencyKey
+    }
+
+    %% =================================================================
+    %% SERVICE + PORTS (the seam)
+    %% =================================================================
+    class OrderService {
+        <<service>>
+        -AccountRepository accounts
+        -InstrumentRepository instruments
+        -PositionRepository positions
+        -OrderRepository orders
+        +placeOrder(PlaceOrderRequest request) Order
+    }
+
+    class AccountRepository {
+        <<interface>>
+        +findById(Long accountId) Optional~Account~
+    }
+
+    class InstrumentRepository {
+        <<interface>>
+        +findBySymbol(String symbol) Optional~Instrument~
+    }
+
+    class PositionRepository {
+        <<interface>>
+        +find(Long accountId, Long instrumentId) Optional~Position~
+    }
+
+    class OrderRepository {
+        <<interface>>
+        +existsByAccountAndKey(Long accountId, String key) boolean
+        +save(Order order) Order
+    }
+
+    %% =================================================================
+    %% EXCEPTION HIERARCHY
+    %% =================================================================
+    class DomainException {
+        <<abstract>>
+        #String catalogueCode
+        +catalogueCode() String
+        +getMessage() String
+    }
+
+    class AccountNotFoundException {
+        +String CODE = "ACC-404"
+        -Long requestedAccountId
+    }
+
+    class AccountNotActiveException {
+        +String CODE = "ACC-403"
+        -AccountStatus actualStatus
+    }
+
+    class InstrumentNotFoundException {
+        +String CODE = "INS-404"
+        -String requestedSymbol
+        -Reason reason
+    }
+
+    class InsufficientFundsException {
+        +String CODE = "ORD-400"
+        -BigDecimal required
+        -BigDecimal available
+    }
+
+    class InsufficientHoldingsException {
+        +String CODE = "POS-400"
+        -BigDecimal requested
+        -BigDecimal held
+    }
+
+    class DuplicateOrderException {
+        +String CODE = "ORD-409"
+        -String idempotencyKey
+        -Long existingOrderId
+    }
+
+    class InvalidOrderException {
+        +String CODE = "ORD-422"
+        -String field
+        -String submittedValue
+    }
+
+    DomainException <|-- AccountNotFoundException
+    DomainException <|-- AccountNotActiveException
+    DomainException <|-- InstrumentNotFoundException
+    DomainException <|-- InsufficientFundsException
+    DomainException <|-- InsufficientHoldingsException
+    DomainException <|-- DuplicateOrderException
+    DomainException <|-- InvalidOrderException
+
+    %% =================================================================
+    %% RELATIONSHIPS
+    %% =================================================================
+    Account "1" --> "1" AccountStatus : has
+    Order "1" --> "1" OrderSide : has
+    Order "1" --> "1" OrderStatus : has
+    Instrument "1" --> "1" AssetClass : has
+    InstrumentNotFoundException "1" --> "1" Reason : has
+    PlaceOrderRequest "1" --> "1" OrderSide : carries
+
+    Account "1" --> "0..*" Order : places
+    Account "1" --> "0..*" Position : holds
+    Instrument "1" --> "0..*" Order : traded in
+    Instrument "1" --> "0..*" Position : held as
+
+    OrderService ..> PlaceOrderRequest : accepts
+    OrderService ..> Order : produces
+    OrderService ..> DomainException : throws
+    OrderService --> AccountRepository : uses
+    OrderService --> InstrumentRepository : uses
+    OrderService --> PositionRepository : uses
+    OrderService --> OrderRepository : uses
+
+    AccountRepository ..> Account : returns
+    InstrumentRepository ..> Instrument : returns
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
+    PositionRepository ..> Position : returns
+    OrderRepository ..> Order : returns
+
