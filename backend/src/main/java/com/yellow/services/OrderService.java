@@ -41,18 +41,23 @@ public class OrderService {
         if (!account.isActive()) {
             throw new AccountNotActiveException();
         }
-//
-//        //instrument must exist and be tradable
-//        //Instrument is UNKNOWN
+
+        //instrument must exist and be tradable
+        //Instrument is UNKNOWN
         Instrument instrument = instrumentRepo.findBySymbol(request.getSymbol())
                 .orElseThrow(InstrumentNotFoundException::new);
-//        //Instrument is NOT TRADEABLE
+        //Instrument is NOT TRADEABLE
             if (!instrument.isTradable()) {
                 throw new InstrumentNotFoundException();
             }
-//
-//        //Quantity is positive
+
+        //Quantity is positive
         if (request.getQuantity() == null || request.getQuantity() <= 0) {
+            throw new InvalidOrderException();
+        }
+
+        //price is greater than zero
+        if (request.getPrice() == null || request.getPrice().signum() <= 0) {
             throw new InvalidOrderException();
         }
 
