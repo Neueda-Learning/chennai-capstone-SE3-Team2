@@ -7,6 +7,7 @@ import com.yellow.entities.Order;
 import com.yellow.entities.Position;
 import com.yellow.exceptions.AccountNotActiveException;
 import com.yellow.exceptions.AccountNotFoundException;
+import com.yellow.exceptions.InstrumentNotFoundException;
 import com.yellow.repositories.AccountRepository;
 import com.yellow.repositories.InstrumentRepository;
 import com.yellow.repositories.OrderRepository;
@@ -35,8 +36,18 @@ public class OrderService {
         Account account = accountRepo.findById(request.getAccountId())
                 .orElseThrow(AccountNotFoundException::new);
 
+        //account must be active
         if (!account.isActive()) {
             throw new AccountNotActiveException();
+        }
+
+        //instrument must exist and be tradable
+        //Instrument is UNKNOWN
+        Instrument instrument = instrumentRepo.findBySymbol(request.getSymbol())
+                .orElseThrow(InstrumentNotFoundException::new);
+        //Instrument is NOT TRADEABLE
+        if (!instrument.isTradable()) {
+            throw new InstrumentNotFoundException();
         }
 
         return null;
