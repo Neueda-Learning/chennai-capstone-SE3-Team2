@@ -18,6 +18,7 @@ import com.yellow.services.OrderService;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -25,7 +26,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.*;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -44,7 +47,7 @@ class OrderLogicTest {
 
     @BeforeAll
     static void beforeAll() {
-        System.out.println("Initializing OrderLogicTest Suite for Rules 1-8...");
+        System.out.println("Initializing OrderLogicTest Suite...");
     }
 
     @BeforeEach
@@ -74,8 +77,8 @@ class OrderLogicTest {
 
         Order order = orderService.placeOrder(validBuyRequest);
 
-        assertNotNull(order);
-        assertEquals(OrderStatus.NEW, order.status());
+        assertThat(order, is(notNullValue()));
+        assertThat(order.status(), is(equalTo(OrderStatus.NEW)));
         verify(orderRepo).save(any(Order.class));
     }
 
@@ -91,8 +94,8 @@ class OrderLogicTest {
 
         Order order = orderService.placeOrder(validSellRequest);
 
-        assertNotNull(order);
-        assertEquals(OrderStatus.NEW, order.status());
+        assertThat(order, is(notNullValue()));
+        assertThat(order.status(), is(equalTo(OrderStatus.NEW)));
     }
 
     @Test
@@ -101,7 +104,7 @@ class OrderLogicTest {
         when(accountRepo.findById(1L)).thenReturn(Optional.empty());
 
         TradeException ex = assertThrows(AccountNotFoundException.class, () -> orderService.placeOrder(validBuyRequest));
-        assertEquals("ACC-404", ex.catalogueCode());
+        assertThat(ex.catalogueCode(), is(equalTo("ACC-404")));
         verifyNoInteractions(instrumentRepo);
     }
 
@@ -112,7 +115,7 @@ class OrderLogicTest {
         when(accountRepo.findById(1L)).thenReturn(Optional.of(suspended));
 
         TradeException ex = assertThrows(AccountNotActiveException.class, () -> orderService.placeOrder(validBuyRequest));
-        assertEquals("ACC-403", ex.catalogueCode());
+        assertThat(ex.catalogueCode(), is(equalTo("ACC-403")));
     }
 
     @Test
@@ -122,7 +125,7 @@ class OrderLogicTest {
         when(instrumentRepo.findBySymbol("AAPL")).thenReturn(Optional.empty());
 
         TradeException ex = assertThrows(InstrumentNotFoundException.class, () -> orderService.placeOrder(validBuyRequest));
-        assertEquals("INS-404", ex.catalogueCode());
+        assertThat(ex.catalogueCode(), is(equalTo("INS-404")));
     }
 
     @Test
@@ -133,7 +136,7 @@ class OrderLogicTest {
         when(instrumentRepo.findBySymbol("AAPL")).thenReturn(Optional.of(delisted));
 
         TradeException ex = assertThrows(InstrumentNotFoundException.class, () -> orderService.placeOrder(validBuyRequest));
-        assertEquals("INS-404", ex.catalogueCode());
+        assertThat(ex.catalogueCode(), is(equalTo("INS-404")));
     }
 
     @Test
@@ -144,7 +147,7 @@ class OrderLogicTest {
         PlaceOrderRequest badQty = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, 0, new BigDecimal("100.00"), "key-1234");
 
         TradeException ex = assertThrows(InvalidOrderException.class, () -> orderService.placeOrder(badQty));
-        assertEquals("ORD-422", ex.catalogueCode());
+        assertThat(ex.catalogueCode(), is(equalTo("ORD-422")));
     }
 
     @Test
@@ -155,7 +158,7 @@ class OrderLogicTest {
         PlaceOrderRequest badPrice = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, 10, BigDecimal.ZERO, "key-1234");
 
         TradeException ex = assertThrows(InvalidOrderException.class, () -> orderService.placeOrder(badPrice));
-        assertEquals("ORD-422", ex.catalogueCode());
+        assertThat(ex.catalogueCode(), is(equalTo("ORD-422")));
     }
 
     @Test
@@ -166,7 +169,7 @@ class OrderLogicTest {
         stubValidInstrument();
 
         TradeException ex = assertThrows(InsufficientFundsException.class, () -> orderService.placeOrder(validBuyRequest));
-        assertEquals("ORD-400", ex.catalogueCode());
+        assertThat(ex.catalogueCode(), is(equalTo("ORD-400")));
     }
 
     @Test
@@ -177,7 +180,7 @@ class OrderLogicTest {
         when(positionRepo.find(1L, 2L)).thenReturn(Optional.empty()); // No position
 
         TradeException ex = assertThrows(InsufficientHoldingsException.class, () -> orderService.placeOrder(validSellRequest));
-        assertEquals("ORD-409", ex.catalogueCode());
+        assertThat(ex.catalogueCode(), is(equalTo("ORD-409")));
     }
 
     @Test
@@ -188,7 +191,7 @@ class OrderLogicTest {
         when(orderRepo.existsByAccountAndKey(1L, "key-1234")).thenReturn(true);
 
         TradeException ex = assertThrows(DuplicateOrderException.class, () -> orderService.placeOrder(validBuyRequest));
-        assertEquals("ORD-409", ex.catalogueCode());
+        assertThat(ex.catalogueCode(), is(equalTo("ORD-409")));
     }
 
     @Test
@@ -197,7 +200,7 @@ class OrderLogicTest {
         when(accountRepo.findById(1L)).thenReturn(Optional.empty());
 
         TradeException ex = assertThrows(AccountNotFoundException.class, () -> orderService.placeOrder(validBuyRequest));
-        assertEquals("ACC-404", ex.catalogueCode());
+        assertThat(ex.catalogueCode(), is(equalTo("ACC-404")));
         verifyNoInteractions(instrumentRepo);
     }
 
@@ -208,7 +211,7 @@ class OrderLogicTest {
         when(accountRepo.findById(1L)).thenReturn(Optional.of(suspendedPoorAccount));
 
         TradeException ex = assertThrows(AccountNotActiveException.class, () -> orderService.placeOrder(validBuyRequest));
-        assertEquals("ACC-403", ex.catalogueCode());
+        assertThat(ex.catalogueCode(), is(equalTo("ACC-403")));
         verifyNoInteractions(instrumentRepo);
     }
 }
