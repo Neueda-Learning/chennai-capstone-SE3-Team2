@@ -20,13 +20,11 @@ class PlaceOrderRequestValidationTest {
 
     @BeforeAll
     static void beforeAll() {
-        // ValidatorFactory is expensive to build; do it exactly once per test class.
         factory = Validation.buildDefaultValidatorFactory();
     }
 
     @BeforeEach
     void setUp() {
-        // Fetch a validator instance for the current test
         validator = factory.getValidator();
     }
 
