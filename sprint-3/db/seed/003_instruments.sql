@@ -1,14 +1,5 @@
--- =====================================================================
 -- 003_instruments.sql
 -- 12 instruments: 7 STOCK, 2 ETF, 3 MF.
---
--- Every instrument gets exactly one subtype row, and the subtype's
--- instrument_type must match the parent's - the composite FK rejects
--- any disagreement.
---
--- Instrument 7 (Meridian Steel) is is_tradable = FALSE: delisted, so no
--- new orders, but client 3 still holds it and must still see it.
--- =====================================================================
 
 INSERT INTO instrument (instrument_type, name, isin, is_tradable) VALUES
     ('STOCK', 'Apex Industries Ltd',        'INE001A01011', TRUE),
@@ -24,10 +15,7 @@ INSERT INTO instrument (instrument_type, name, isin, is_tradable) VALUES
     ('MF',    'Flexi Cap Fund',             'INF011A01011', TRUE),
     ('MF',    'Liquid Fund',                'INF012A01012', TRUE);
 
--- Exchange-traded subtype: stocks and ETFs.
--- Apex is dual-listed, so it appears on both NSE and BSE... which is
--- exactly why the unique constraint is on (ticker, exchange_code)
--- rather than ticker alone.
+
 INSERT INTO equity (instrument_id, instrument_type, ticker, exchange_code, lot_size) VALUES
     ( 1, 'STOCK', 'APEX',     'NSE', 1),
     ( 2, 'STOCK', 'ORIONM',   'NSE', 1),
