@@ -21,8 +21,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
 import java.math.BigDecimal;
 import java.util.Optional;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -63,6 +65,7 @@ class OrderLogicTest {
     }
 
     @Test
+    @DisplayName("Should successfully place a buy order when all rules pass")
     void shouldSuccessfullyPlaceBuyOrderWhenAllRulesPass() {
         stubValidAccount();
         stubValidInstrument();
@@ -77,6 +80,7 @@ class OrderLogicTest {
     }
 
     @Test
+    @DisplayName("Should successfully place a sell order when holdings exist")
     void shouldSuccessfullyPlaceSellOrderWhenHoldingsExist() {
         stubValidAccount();
         stubValidInstrument();
@@ -92,6 +96,7 @@ class OrderLogicTest {
     }
 
     @Test
+    @DisplayName("Should throw AccountNotFound when account ID does not exist")
     void rule1_shouldThrowAccountNotFound_whenAccountIdDoesNotExist() {
         when(accountRepo.findById(1L)).thenReturn(Optional.empty());
 
@@ -101,6 +106,7 @@ class OrderLogicTest {
     }
 
     @Test
+    @DisplayName("Should throw AccountNotActive when account is suspended or closed")
     void rule2_shouldThrowAccountNotActive_whenAccountIsSuspendedOrClosed() {
         Account suspended = new Account(1L, "REF-1", 100L, new BigDecimal("5000.00"), BigDecimal.ZERO, AccountStatus.SUSPENDED, 1);
         when(accountRepo.findById(1L)).thenReturn(Optional.of(suspended));
@@ -110,6 +116,7 @@ class OrderLogicTest {
     }
 
     @Test
+    @DisplayName("Should throw InstrumentNotFound when symbol is unknown")
     void rule3_shouldThrowInstrumentNotFound_whenSymbolIsUnknown() {
         stubValidAccount();
         when(instrumentRepo.findBySymbol("AAPL")).thenReturn(Optional.empty());
@@ -119,6 +126,7 @@ class OrderLogicTest {
     }
 
     @Test
+    @DisplayName("Should throw InstrumentNotFound when instrument is not tradable")
     void rule3_shouldThrowInstrumentNotFound_whenInstrumentIsNotTradable() {
         stubValidAccount();
         Instrument delisted = new Instrument(2L, "AAPL", "Apple Inc", AssetClass.EQUITY, "USD", false);
@@ -129,6 +137,7 @@ class OrderLogicTest {
     }
 
     @Test
+    @DisplayName("Should throw InvalidOrder when quantity is invalid at trade level")
     void rule4_shouldThrowInvalidOrder_whenQuantityIsInvalidAtTradeLevel() {
         stubValidAccount();
         stubValidInstrument();
@@ -139,6 +148,7 @@ class OrderLogicTest {
     }
 
     @Test
+    @DisplayName("Should throw InvalidOrder when price is invalid at trade level")
     void rule5_shouldThrowInvalidOrder_whenPriceIsInvalidAtTradeLevel() {
         stubValidAccount();
         stubValidInstrument();
@@ -149,6 +159,7 @@ class OrderLogicTest {
     }
 
     @Test
+    @DisplayName("Should throw InsufficientFunds when buy order exceeds available balance")
     void rule6_shouldThrowInsufficientFunds_whenBuyOrderExceedsAvailableBalance() {
         Account poorAccount = new Account(1L, "REF-1", 100L, new BigDecimal("50.00"), BigDecimal.ZERO, AccountStatus.ACTIVE, 1);
         when(accountRepo.findById(1L)).thenReturn(Optional.of(poorAccount));
@@ -159,6 +170,7 @@ class OrderLogicTest {
     }
 
     @Test
+    @DisplayName("Should throw InsufficientHoldings when sell quantity exceeds position")
     void rule7_shouldThrowInsufficientHoldings_whenSellQuantityExceedsPosition() {
         stubValidAccount();
         stubValidInstrument();
@@ -169,6 +181,7 @@ class OrderLogicTest {
     }
 
     @Test
+    @DisplayName("Should throw DuplicateOrder when idempotency key has already been used")
     void rule8_shouldThrowDuplicateOrder_whenIdempotencyKeyHasAlreadyBeenUsed() {
         stubValidAccount();
         stubValidInstrument();
@@ -179,6 +192,7 @@ class OrderLogicTest {
     }
 
     @Test
+    @DisplayName("Should fail Rule 1 before Rule 3 when account not found and symbol is unknown")
     void precedence_shouldFailRule1BeforeRule3_whenAccountNotFoundAndSymbolIsUnknown() {
         when(accountRepo.findById(1L)).thenReturn(Optional.empty());
 
@@ -188,6 +202,7 @@ class OrderLogicTest {
     }
 
     @Test
+    @DisplayName("Should fail Rule 2 before Rule 6 when account is suspended and has no cash")
     void precedence_shouldFailRule2BeforeRule6_whenAccountIsSuspendedAndHasNoCash() {
         Account suspendedPoorAccount = new Account(1L, "REF-1", 100L, BigDecimal.ZERO, BigDecimal.ZERO, AccountStatus.SUSPENDED, 1);
         when(accountRepo.findById(1L)).thenReturn(Optional.of(suspendedPoorAccount));
