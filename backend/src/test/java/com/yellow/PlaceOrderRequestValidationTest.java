@@ -86,4 +86,17 @@ class PlaceOrderRequestValidationTest {
         PlaceOrderRequest req = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, 10, new BigDecimal("150.00"), longKey);
         assertFalse(validator.validate(req).isEmpty());
     }
+
+    @Test
+    void shouldPassValidationWhenIdempotencyKeyIsExactlyEightChars() {
+        PlaceOrderRequest req = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, 10, new BigDecimal("150.00"), "12345678");
+        assertTrue(validator.validate(req).isEmpty());
+    }
+
+    @Test
+    void shouldPassValidationWhenIdempotencyKeyIsExactlyHundredChars() {
+        String key = "a".repeat(100);
+        PlaceOrderRequest req = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, 10, new BigDecimal("150.00"), key);
+        assertTrue(validator.validate(req).isEmpty());
+    }
 }
