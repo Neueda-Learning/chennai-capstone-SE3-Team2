@@ -4,7 +4,9 @@ import com.yellow.entities.Account;
 import com.yellow.enums.AccountStatus;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
+
 import java.math.BigDecimal;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class AccountTest {
