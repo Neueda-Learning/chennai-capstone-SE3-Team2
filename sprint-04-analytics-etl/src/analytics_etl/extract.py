@@ -29,7 +29,7 @@ BASE_URL = os.getenv("FAUXNANCE_BASE_URL", "http://localhost:8000")
 API_KEY_ENV = "FAUXNANCE_API_KEY"
 
 CACHE_DIR = Path(os.getenv("ETL_CACHE_DIR", ".cache"))
-CACHE_TTL_SECONDS = int(os.getenv("ETL_CACHE_TTL_SECONDS", "3600"))
+CACHE_TTL_SECONDS = int(os.getenv("ETL_CACHE_TTL_SECONDS", "60"))
 
 MAX_RETRIES = 3
 INITIAL_BACKOFF = 1
