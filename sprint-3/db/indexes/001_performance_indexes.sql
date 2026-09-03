@@ -1,10 +1,5 @@
 -- =====================================================================
 -- 002_performance_indexes.sql
---
--- Pure read-path optimisation. Dropping any of these degrades query
--- speed but changes no behaviour and breaks no invariant.
---
--- Each index below exists for a named screen or job.
 -- =====================================================================
 
 -- Order book / "my orders" screen: a client's orders, newest first.
