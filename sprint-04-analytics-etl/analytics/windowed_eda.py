@@ -3,12 +3,8 @@ from datetime import timedelta
 import pandas as pd
 from load_candles import load_symbol
 
-# (window length in days, display label)
 WINDOW_CANDIDATES = [(7, "1 Week"), (30, "1 Month"), (365, "1 Year")]
 
-# Skip a window if the data's full span isn't at least this many times longer
-# than the window -- otherwise a symbol with 29 days of history would get a
-# "1 Month" section that's really just "all the data" wearing a fake label.
 DUPLICATE_BUFFER = 1.2
 
 
