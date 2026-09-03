@@ -145,16 +145,6 @@ def _read_header(path: Path) -> list[str] | None:
 
 
 def _append_csv(df: pd.DataFrame, path: Path, symbol: str) -> None:
-    """
-    Append a dataframe to a CSV.
-
-    The header is compared first: pandas will happily append columns in a
-    different order under an existing header, silently misaligning every
-    row from that point on.
-
-    The file length is recorded before writing, so a failed append can be
-    truncated away instead of leaving a partial row.
-    """
     existing_header = _read_header(path)
     incoming = list(df.columns)
 
