@@ -39,12 +39,6 @@ MIN_REDACTABLE_KEY = 8
 
 
 def extract(symbol: str) -> dict:
-    """
-    Extract a raw candles response for a symbol.
-
-    Cache is checked before making a network request.
-    Returns the raw API JSON unchanged.
-    """
     cache_path = _cache_path(symbol)
 
     # 1. Check cache
@@ -247,8 +241,6 @@ def _safe_body(response: requests.Response, api_key: str | None) -> str:
     except Exception:  # noqa: BLE001
         return "<unreadable body>"
 
-    # Only redact keys long enough to be real. A short test key like "k"
-    # would otherwise match inside ordinary words and mangle the message.
     if api_key and len(api_key) >= MIN_REDACTABLE_KEY:
         body = body.replace(api_key, "***REDACTED***")
 
@@ -265,12 +257,6 @@ def _cache_path(symbol: str) -> Path:
 
 
 def _read_cache(path: Path) -> dict | None:
-    """
-    Read a cached response if it exists and is still fresh.
-
-    Returns None when there is no cache, it is stale, or it cannot be
-    decoded. A broken cache never fails the run - it falls back to a fetch.
-    """
     if not path.exists():
         return None
 
@@ -286,12 +272,6 @@ def _read_cache(path: Path) -> dict | None:
 
 
 def _write_cache(path: Path, response: dict) -> None:
-    """
-    Persist a raw API response to the cache.
-
-    Written to a temp file then renamed, so an interrupted write cannot
-    leave a truncated file that later parses as a valid half-response.
-    """
     tmp_path = path.with_suffix(path.suffix + ".tmp")
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
