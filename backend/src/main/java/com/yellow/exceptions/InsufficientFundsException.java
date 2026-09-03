@@ -21,7 +21,4 @@ public class InsufficientFundsException extends TradeException {
         return available;
     }
 
-    public InsufficientFundsException() {
-        this(null, null);
-    }
 }

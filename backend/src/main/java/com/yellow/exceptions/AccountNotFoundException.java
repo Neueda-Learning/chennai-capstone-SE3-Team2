@@ -13,7 +13,4 @@ public class AccountNotFoundException extends TradeException {
         return requestedAccountId;
     }
 
-    public AccountNotFoundException() {
-        this(null);
-    }
 }

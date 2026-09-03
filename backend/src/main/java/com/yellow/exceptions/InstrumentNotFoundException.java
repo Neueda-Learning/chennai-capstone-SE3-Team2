@@ -21,7 +21,4 @@ public class InstrumentNotFoundException extends TradeException {
         return reason;
     }
 
-    public InstrumentNotFoundException() {
-        this(null, null);
-    }
 }

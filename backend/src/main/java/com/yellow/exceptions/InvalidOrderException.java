@@ -19,7 +19,4 @@ public class InvalidOrderException extends TradeException {
         return submittedValue;
     }
 
-    public InvalidOrderException() {
-        this(null, null);
-    }
 }

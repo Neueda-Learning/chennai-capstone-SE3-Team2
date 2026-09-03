@@ -6,6 +6,7 @@ import com.yellow.entities.Instrument;
 import com.yellow.entities.Order;
 import com.yellow.entities.Position;
 import com.yellow.enums.OrderSide;
+import com.yellow.enums.Reason;
 import com.yellow.exceptions.*;
 import com.yellow.repositories.AccountRepository;
 import com.yellow.repositories.InstrumentRepository;
@@ -35,49 +36,56 @@ public class OrderService {
 
         //account must exist
         Account account = accountRepo.findById(request.getAccountId())
-                .orElseThrow(AccountNotFoundException::new);
+                .orElseThrow(() -> new AccountNotFoundException(request.getAccountId()));
 
         //account must be active
         if (!account.isActive()) {
-            throw new AccountNotActiveException();
+            throw new AccountNotActiveException(account.status());
         }
 
         //instrument must exist and be tradable
         //Instrument is UNKNOWN
         Instrument instrument = instrumentRepo.findBySymbol(request.getSymbol())
-                .orElseThrow(InstrumentNotFoundException::new);
+                .orElseThrow(() -> new InstrumentNotFoundException(
+                        request.getSymbol(), Reason.UNKNOWN));
         //Instrument is NOT TRADEABLE
             if (!instrument.isTradable()) {
-                throw new InstrumentNotFoundException();
+                throw new InstrumentNotFoundException(
+                        request.getSymbol(), Reason.NOT_TRADABLE);
             }
 
         //Quantity is positive
         if (request.getQuantity() == null || request.getQuantity() <= 0) {
-            throw new InvalidOrderException();
+            throw new InvalidOrderException("quantity",
+                    String.valueOf(request.getQuantity()));
         }
 
         //price is greater than zero
         if (request.getPrice() == null || request.getPrice().signum() <= 0) {
-            throw new InvalidOrderException();
+            throw new InvalidOrderException("price",
+                    String.valueOf(request.getPrice()));
         }
 
         //Insufficient Funds
         BigDecimal orderValue = BigDecimal.valueOf(request.getQuantity()).multiply(request.getPrice());
         if (request.getSide() == OrderSide.BUY
                 && !account.canAfford(orderValue)) {
-            throw new InsufficientFundsException();
+            throw new InsufficientFundsException(orderValue, account.availableFunds());
         }
 
         //Insufficient Holdings
         if (request.getSide() == OrderSide.SELL) {
+            BigDecimal requestedQuantity = BigDecimal.valueOf(request.getQuantity());
             //Does accountId hold that instrument
             Position position = positionRepo.find(
                     account.accountId(),
                     instrument.instrumentId()
-            ).orElseThrow(InsufficientHoldingsException::new);
+            ).orElseThrow(() -> new InsufficientHoldingsException(
+                    requestedQuantity, BigDecimal.ZERO));
             //does account have enough quantity
-            if (!position.canSell(BigDecimal.valueOf(request.getQuantity()))) {
-                throw new InsufficientHoldingsException();
+            if (!position.canSell(requestedQuantity)) {
+                throw new InsufficientHoldingsException(
+                        requestedQuantity, position.quantity());
             }
         }
 
@@ -85,7 +93,7 @@ public class OrderService {
         if (orderRepo.existsByAccountAndKey(
                 account.accountId(),
                 request.getIdempotencyKey())) {
-            throw new DuplicateOrderException();
+            throw new DuplicateOrderException(request.getIdempotencyKey(), null);
         }
 
         Order order = Order.place(

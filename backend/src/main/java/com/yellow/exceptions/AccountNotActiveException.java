@@ -15,7 +15,4 @@ public class AccountNotActiveException extends TradeException {
         return actualStatus;
     }
 
-    public AccountNotActiveException() {
-        this(null);
-    }
 }

@@ -20,7 +20,4 @@ public class DuplicateOrderException extends TradeException {
         return existingOrderId;
     }
 
-    public DuplicateOrderException() {
-        this(null, null);
-    }
 }

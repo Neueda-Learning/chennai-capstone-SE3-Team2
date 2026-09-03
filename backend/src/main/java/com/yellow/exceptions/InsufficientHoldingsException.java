@@ -21,7 +21,4 @@ public class InsufficientHoldingsException extends TradeException {
         return held;
     }
 
-    public InsufficientHoldingsException() {
-        this(null, null);
-    }
 }

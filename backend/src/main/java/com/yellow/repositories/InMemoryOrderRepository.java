@@ -47,7 +47,8 @@ public class InMemoryOrderRepository implements OrderRepository {
                 Long previous = orderIdByKey.putIfAbsent(key, stored.orderId());
                 if (previous != null) {
                     // What the unique index does in production.
-                    throw new DuplicateOrderException();
+                    throw new DuplicateOrderException(
+                            stored.idempotencyKey(), previous);
                 }
             }
         }
