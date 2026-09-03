@@ -1,21 +1,7 @@
 -- =====================================================================
 -- 004_transactions.sql
--- 10 archived orders, 20 live orders, 12 positions, 12 fund transfers.
---
--- Archived orders take order_id 1-10; the identity sequence is then
--- advanced so live orders continue from 11 and order_id stays unique
--- across both tables - which the archival job depends on.
---
--- Constraints exercised:
---   LIMIT orders carry a price, MARKET orders do not
---   SUCCESS carries fill_price; FAILED and CANCELLED do not
---   resolved_at is NULL exactly when status = 'PENDING'
---   orders_history holds terminal statuses only
--- =====================================================================
-
--- ---------------------------------------------------------------------
 -- Archived orders (terminal only).
--- ---------------------------------------------------------------------
+
 INSERT INTO orders_history
     (order_id, client_id, instrument_id, side, order_type, product_type,
      price, quantity, fill_price, status, idempotency_key,
