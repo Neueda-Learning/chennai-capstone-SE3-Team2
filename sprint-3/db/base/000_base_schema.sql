@@ -1,17 +1,5 @@
 -- =====================================================================
 -- 000_base_schema.sql
--- Enterprise Trading Platform - Base schema (design v6)
--- Target: PostgreSQL
---
--- v6 changes over v5 (all from the story-2 normalisation review):
---   * EXCHANGE and AMC extracted as lookup relations, removing the
---     repeated-string modelling smells in EQUITY and MUTUAL_FUND.
---   * Subtype disjointness enforced with a composite FK, so an
---     instrument can no longer contradict its own type.
---   * fund_transfer.reference_id given a partial unique index.
---
--- Story-3 changes are applied separately in 001_*.sql.
--- Idempotent: safe to run against an existing database.
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
@@ -39,11 +27,6 @@ CREATE TABLE IF NOT EXISTS client_account (
 
 -- ---------------------------------------------------------------------
 -- CLIENT_PROFILE : personal / KYC-visible details. 1:1 with account.
---
--- address is deliberately kept as one opaque TEXT column. Splitting it
--- into city / state / pincode would introduce pincode -> city, state,
--- a transitive dependency requiring a ~19,000-row pincode reference
--- table. Not worth it until an address-driven requirement appears.
 -- Grain: one row per client.
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS client_profile (
@@ -58,7 +41,6 @@ CREATE TABLE IF NOT EXISTS client_profile (
 
 -- ---------------------------------------------------------------------
 -- CLIENT_AUTH : login credentials. 1:1 with account.
--- Password is stored only as a hash (bcrypt / argon2).
 -- Grain: one row per client.
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS client_auth (
@@ -70,13 +52,6 @@ CREATE TABLE IF NOT EXISTS client_auth (
 
 -- ---------------------------------------------------------------------
 -- FUND_TRANSFER : deposits and withdrawals via the payment gateway.
---
--- reference_id is the gateway's own payment identifier. Where present it
--- uniquely identifies a payment, so it is an alternate key - enforced
--- with a PARTIAL unique index, since the column is null until the
--- gateway responds. Without this, two transfers could claim the same
--- gateway payment: the double-credit that idempotency exists to stop,
--- arriving through a different door.
 -- Grain: one row per money-movement attempt.
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS fund_transfer (
@@ -99,10 +74,6 @@ CREATE TABLE IF NOT EXISTS fund_transfer (
 
 -- ---------------------------------------------------------------------
 -- EXCHANGE : trading venue reference data.
---
--- Natural key: the exchange code is the universally used identifier and
--- appears in every UI and every order. A surrogate integer would buy
--- nothing and force a join for display. The set is tiny and stable.
 -- Grain: one row per exchange.
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS exchange (
@@ -114,11 +85,6 @@ CREATE TABLE IF NOT EXISTS exchange (
 
 -- ---------------------------------------------------------------------
 -- AMC : asset management company (mutual fund house).
---
--- Surrogate key here, unlike EXCHANGE: the AMC set grows, names change
--- (mergers, rebrands), and amc_code is an external identifier we do not
--- control. Keeping the PK internal insulates every referencing row from
--- an external code change.
 -- Grain: one row per fund house.
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS amc (
@@ -153,13 +119,6 @@ CREATE TABLE IF NOT EXISTS instrument (
 -- ---------------------------------------------------------------------
 -- EQUITY : subtype of instrument for exchange-traded scrips
 -- (stocks and ETFs). PK is also FK to the parent.
---
--- instrument_type is carried here purely so the composite FK can pin it:
--- a row in this table forces the parent's type to be STOCK or ETF, which
--- makes it impossible for one instrument to hold both an equity and a
--- mutual_fund row. This is the disjointness guarantee.
--- (Completeness - every instrument having exactly one subtype row -
--- cannot be expressed with FKs and stays an application-layer rule.)
 -- Grain: one row per exchange-traded instrument.
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS equity (
@@ -248,8 +207,6 @@ CREATE TABLE IF NOT EXISTS orders (
 
 -- ---------------------------------------------------------------------
 -- ORDERS_HISTORY : archive of terminal orders.
--- Column-identical to orders, plus archived_at.
--- order_id is carried over, so it stays unique across both tables.
 -- Grain: one row per archived order.
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS orders_history (
@@ -281,10 +238,7 @@ CREATE TABLE IF NOT EXISTS orders_history (
 );
 
 -- ---------------------------------------------------------------------
--- POSITION : current holdings.
--- INTRADAY rows feed the Positions tab, DELIVERY rows the Holdings tab.
--- Deliberately has no FK to orders: a holding outlives the (archived)
--- order that created it.
+-- POSITION : current holdings. INTRADAY rows feed the Positions tab, DELIVERY rows the Holdings tab. Deliberately has no FK to orders: a holding outlives the (archived) order that created it.
 -- Grain: one row per client per instrument per position type.
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS position (
@@ -310,15 +264,6 @@ CREATE TABLE IF NOT EXISTS position (
 
 -- ---------------------------------------------------------------------
 -- Correctness constraint, not a performance index.
---
--- The payment gateway's own reference uniquely identifies a payment
--- where present, so two transfers must never claim the same one -
--- that is the double-credit idempotency exists to prevent, arriving
--- through a different door.
---
--- Partial, because the column is null until the gateway responds.
--- Lives here rather than in indexes/ because dropping it changes
--- behaviour; the files in indexes/ can be dropped freely.
 -- ---------------------------------------------------------------------
 CREATE UNIQUE INDEX IF NOT EXISTS uq_fund_transfer_reference_id
     ON fund_transfer (reference_id)
