@@ -1,4 +1,4 @@
-package com.yellow;
+package com.yellow.exceptions;
 
 import com.yellow.dto.PlaceOrderRequest;
 import com.yellow.entities.Account;

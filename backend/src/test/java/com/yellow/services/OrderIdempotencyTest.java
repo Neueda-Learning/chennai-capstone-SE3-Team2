@@ -1,4 +1,4 @@
-package com.yellow;
+package com.yellow.services;
 
 import com.yellow.dto.PlaceOrderRequest;
 import com.yellow.entities.Account;
