@@ -73,8 +73,6 @@ class AccountTest {
         assertThat(account.isActive(), is(expectedActive));
     }
 
-    // ---- fund-blocking and status lifecycle ----------------------------
-
     @Test
     @DisplayName("Should reduce available funds without reducing balance when funds are blocked")
     void shouldReduceAvailableFundsWithoutReducingBalanceWhenFundsAreBlocked() {

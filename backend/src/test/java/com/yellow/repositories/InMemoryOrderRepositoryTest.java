@@ -14,9 +14,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-// This tests the repository itself, in isolation from OrderService --
-// a different unit than what OrderLogicTest or OrderIdempotencyTest cover,
-// since neither of those exercises this class's own dedup logic directly.
 class InMemoryOrderRepositoryTest {
 
     private InMemoryOrderRepository repository;

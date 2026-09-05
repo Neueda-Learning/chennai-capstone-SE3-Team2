@@ -45,11 +45,6 @@ class OrderLogicTest {
     private PlaceOrderRequest validBuyRequest;
     private PlaceOrderRequest validSellRequest;
 
-    @BeforeAll
-    static void beforeAll() {
-        System.out.println("Initializing OrderLogicTest Suite...");
-    }
-
     @BeforeEach
     void setUp() {
         orderService = new OrderService(accountRepo, instrumentRepo, positionRepo, orderRepo);

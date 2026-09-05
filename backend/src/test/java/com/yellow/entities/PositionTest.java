@@ -27,7 +27,7 @@ class PositionTest {
 
         position.applyBuy(new BigDecimal("10"), new BigDecimal("200.00"));
 
-        // (10 units at 100) + (10 units at 200), over 20 units -> average of 150
+        // (10 units at 100) + (10 units at 200) = 20 units w/ average of 150
         assertThat(position.quantity(), is(equalTo(new BigDecimal("20.000000"))));
         assertThat(position.averagePrice(), is(equalTo(new BigDecimal("150.0000"))));
     }
@@ -77,9 +77,7 @@ class PositionTest {
     @DisplayName("Should compute invested value as quantity multiplied by average price")
     void shouldComputeInvestedValueAsQuantityMultipliedByAveragePrice() {
         Position position = Position.opening(1L, 2L, new BigDecimal("10"), new BigDecimal("100.00"));
-
-        // compareTo rather than equals() -- multiply() does not force a scale,
-        // so the raw result carries more decimal places than either operand.
+        
         assertThat(position.investedValue(), comparesEqualTo(new BigDecimal("1000")));
     }
 
