@@ -27,7 +27,7 @@ class PositionTest {
 
         position.applyBuy(new BigDecimal("10"), new BigDecimal("200.00"));
 
-        // (10 units @ 100) + (10 units @ 200), over 20 units -> average of 150
+        // (10 units at 100) + (10 units at 200), over 20 units -> average of 150
         assertThat(position.quantity(), is(equalTo(new BigDecimal("20.000000"))));
         assertThat(position.averagePrice(), is(equalTo(new BigDecimal("150.0000"))));
     }
@@ -81,5 +81,16 @@ class PositionTest {
         // compareTo rather than equals() -- multiply() does not force a scale,
         // so the raw result carries more decimal places than either operand.
         assertThat(position.investedValue(), comparesEqualTo(new BigDecimal("1000")));
+    }
+
+    @Test
+    @DisplayName("Should expose its positionId, accountId and instrumentId")
+    void shouldExposeItsPositionIdAccountIdAndInstrumentId() {
+        Position position = new Position(9L, 1L, 2L, new BigDecimal("10"), new BigDecimal("100.00"));
+
+        assertThat(position.positionId(), is(equalTo(9L)));
+        assertThat(position.accountId(), is(equalTo(1L)));
+        assertThat(position.instrumentId(), is(equalTo(2L)));
+        assertThat(position.toString(), containsString("account=1"));
     }
 }

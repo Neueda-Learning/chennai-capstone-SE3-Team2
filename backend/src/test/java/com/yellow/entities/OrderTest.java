@@ -95,4 +95,41 @@ class OrderTest {
 
         assertThat(order.notionalValue(), is(equalTo(new BigDecimal("999.90"))));
     }
+
+    @Test
+    @DisplayName("Should refuse a NEW order that already carries a resolved time")
+    void shouldRefuseNewOrderThatAlreadyCarriesResolvedTime() {
+        assertThrows(IllegalArgumentException.class, () -> new Order(
+                null, 1L, 2L, OrderSide.BUY, new BigDecimal("10"), new BigDecimal("100.00"),
+                null, OrderStatus.NEW, "key-1234", Instant.now(), Instant.now()));
+    }
+
+    @Test
+    @DisplayName("Should refuse a terminal-status order with no resolved time")
+    void shouldRefuseTerminalStatusOrderWithNoResolvedTime() {
+        assertThrows(IllegalArgumentException.class, () -> new Order(
+                1L, 1L, 2L, OrderSide.BUY, new BigDecimal("10"), new BigDecimal("100.00"),
+                new BigDecimal("100.00"), OrderStatus.FILLED, "key-1234", Instant.now(), null));
+    }
+
+    @Test
+    @DisplayName("Should refuse a FILLED order with no executed price")
+    void shouldRefuseFilledOrderWithNoExecutedPrice() {
+        assertThrows(IllegalArgumentException.class, () -> new Order(
+                1L, 1L, 2L, OrderSide.BUY, new BigDecimal("10"), new BigDecimal("100.00"),
+                null, OrderStatus.FILLED, "key-1234", Instant.now(), Instant.now()));
+    }
+
+    @Test
+    @DisplayName("Should expose account id, instrument id, idempotency key and placed time")
+    void shouldExposeAccountInstrumentIdempotencyKeyAndPlacedTime() {
+        Order order = Order.place(1L, 2L, OrderSide.BUY, new BigDecimal("10"),
+                new BigDecimal("100.00"), "key-1234");
+
+        assertThat(order.accountId(), is(equalTo(1L)));
+        assertThat(order.instrumentId(), is(equalTo(2L)));
+        assertThat(order.idempotencyKey(), is(equalTo("key-1234")));
+        assertThat(order.placedAt(), is(notNullValue()));
+        assertThat(order.toString(), containsString("BUY"));
+    }
 }

@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.*;
 
 class InstrumentTest {
 
@@ -24,7 +24,7 @@ class InstrumentTest {
         instrument.delist();
 
         assertThat(instrument.isTradable(), is(false));
-        assertThat("delisting is a flag, not a deleted row thus identity must survive",
+        assertThat("delisting is a flag, not a deleted row -- identity must survive",
                 instrument.instrumentId(), is(1L));
     }
 
@@ -36,5 +36,21 @@ class InstrumentTest {
         instrument.relist();
 
         assertThat(instrument.isTradable(), is(true));
+    }
+
+    @Test
+    @DisplayName("Should expose descriptive fields, and be equal by instrumentId alone")
+    void shouldExposeDescriptiveFieldsAndBeEqualByInstrumentIdAlone() {
+        Instrument instrument = new Instrument(1L, "AAPL", "Apple Inc", AssetClass.EQUITY, "USD", true);
+        Instrument sameId = new Instrument(1L, "MSFT", "Microsoft", AssetClass.EQUITY, "USD", false);
+        Instrument differentId = new Instrument(2L, "AAPL", "Apple Inc", AssetClass.EQUITY, "USD", true);
+
+        assertThat(instrument.displayName(), is(equalTo("Apple Inc")));
+        assertThat(instrument.assetClass(), is(equalTo(AssetClass.EQUITY)));
+        assertThat(instrument.quoteCurrency(), is(equalTo("USD")));
+        assertThat(instrument, is(equalTo(sameId)));
+        assertThat(instrument.hashCode(), is(equalTo(sameId.hashCode())));
+        assertThat(instrument, is(not(equalTo(differentId))));
+        assertThat(instrument.toString(), containsString("AAPL"));
     }
 }

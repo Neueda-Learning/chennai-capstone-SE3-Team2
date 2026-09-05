@@ -112,4 +112,37 @@ class PlaceOrderRequestValidationTest {
         PlaceOrderRequest req = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, 10, new BigDecimal("150.00"), key);
         assertThat(validator.validate(req), is(empty()));
     }
+
+    @Test
+    @DisplayName("Should expose every field supplied through the constructor")
+    void shouldExposeEveryFieldSuppliedThroughConstructor() {
+        PlaceOrderRequest request = validRequest();
+
+        assertThat(request.getAccountId(), is(equalTo(1L)));
+        assertThat(request.getSymbol(), is(equalTo("AAPL")));
+        assertThat(request.getSide(), is(equalTo(OrderSide.BUY)));
+        assertThat(request.getQuantity(), is(equalTo(10)));
+        assertThat(request.getPrice(), is(equalTo(new BigDecimal("150.00"))));
+        assertThat(request.getIdempotencyKey(), is(equalTo("idemp-key-123")));
+    }
+
+    @Test
+    @DisplayName("Should allow every field to be replaced through its setter")
+    void shouldAllowEveryFieldToBeReplacedThroughItsSetter() {
+        PlaceOrderRequest request = validRequest();
+
+        request.setAccountId(2L);
+        request.setSymbol("MSFT");
+        request.setSide(OrderSide.SELL);
+        request.setQuantity(5);
+        request.setPrice(new BigDecimal("50.00"));
+        request.setIdempotencyKey("idemp-key-456");
+
+        assertThat(request.getAccountId(), is(equalTo(2L)));
+        assertThat(request.getSymbol(), is(equalTo("MSFT")));
+        assertThat(request.getSide(), is(equalTo(OrderSide.SELL)));
+        assertThat(request.getQuantity(), is(equalTo(5)));
+        assertThat(request.getPrice(), is(equalTo(new BigDecimal("50.00"))));
+        assertThat(request.getIdempotencyKey(), is(equalTo("idemp-key-456")));
+    }
 }

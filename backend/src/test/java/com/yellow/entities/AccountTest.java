@@ -67,7 +67,7 @@ class AccountTest {
         assertThat(new Account(3L, "R3", 100L, BigDecimal.ZERO, BigDecimal.ZERO, AccountStatus.CLOSED, 1).isActive(), is(false));
     }
 
-    // --- fund blocking and status transitions ---------
+    // ---- fund-blocking and status transition ----
 
     @Test
     @DisplayName("Should reduce available funds without reducing balance when funds are blocked")
@@ -124,5 +124,20 @@ class AccountTest {
         account.block(new BigDecimal("50.00"));
 
         assertThrows(IllegalStateException.class, account::close);
+    }
+
+    @Test
+    @DisplayName("Should expose accountReference and clientId, and be equal by accountId alone")
+    void shouldExposeIdentityFieldsAndBeEqualByAccountIdAlone() {
+        Account account = new Account(1L, "REF-1", 100L, BigDecimal.ZERO, BigDecimal.ZERO, AccountStatus.ACTIVE, 1);
+        Account sameId = new Account(1L, "REF-2", 200L, new BigDecimal("500.00"), BigDecimal.ZERO, AccountStatus.SUSPENDED, 2);
+        Account differentId = new Account(2L, "REF-1", 100L, BigDecimal.ZERO, BigDecimal.ZERO, AccountStatus.ACTIVE, 1);
+
+        assertThat(account.accountReference(), is(equalTo("REF-1")));
+        assertThat(account.clientId(), is(equalTo(100L)));
+        assertThat(account, is(equalTo(sameId)));
+        assertThat(account.hashCode(), is(equalTo(sameId.hashCode())));
+        assertThat(account, is(not(equalTo(differentId))));
+        assertThat(account.toString(), containsString("REF-1"));
     }
 }
