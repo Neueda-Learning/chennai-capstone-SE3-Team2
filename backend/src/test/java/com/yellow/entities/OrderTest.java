@@ -4,6 +4,8 @@ import com.yellow.enums.OrderSide;
 import com.yellow.enums.OrderStatus;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -75,16 +77,16 @@ class OrderTest {
         assertThrows(IllegalStateException.class, () -> order.cancel(Instant.now()));
     }
 
-    @Test
-    @DisplayName("Should identify BUY and SELL sides correctly")
-    void shouldIdentifyBuyAndSellSidesCorrectly() {
-        Order buyOrder = Order.place(1L, 2L, OrderSide.BUY, new BigDecimal("10"),
-                new BigDecimal("100.00"), "key-1234");
-        Order sellOrder = Order.place(1L, 2L, OrderSide.SELL, new BigDecimal("10"),
-                new BigDecimal("100.00"), "key-5678");
 
-        assertThat(buyOrder.isBuy(), is(true));
-        assertThat(sellOrder.isBuy(), is(false));
+    @ParameterizedTest(name = "isBuy() should be {1} for side {0}")
+    @DisplayName("Should identify BUY and SELL sides correctly")
+    @CsvSource({
+            "BUY,  true",
+            "SELL, false"
+    })
+    void shouldIdentifyBuyAndSellSidesCorrectly(OrderSide side, boolean expectedIsBuy) {
+        Order order = Order.place(1L, 2L, side, new BigDecimal("10"), new BigDecimal("100.00"), "key-1234");
+        assertThat(order.isBuy(), is(expectedIsBuy));
     }
 
     @Test

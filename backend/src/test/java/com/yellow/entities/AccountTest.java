@@ -3,6 +3,8 @@ package com.yellow.entities;
 import com.yellow.enums.AccountStatus;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.math.BigDecimal;
 
@@ -59,15 +61,19 @@ class AccountTest {
         assertThat(account.availableFunds(), is(equalTo(new BigDecimal("70.00")))); // assert
     }
 
-    @Test
+    @ParameterizedTest(name = "isActive() should be {1} for status {0}")
     @DisplayName("Should correctly identify active versus suspended or closed status")
-    void shouldCorrectlyIdentifyActiveVersusSuspendedOrClosedStatus() {
-        assertThat(new Account(1L, "R1", 100L, BigDecimal.ZERO, BigDecimal.ZERO, AccountStatus.ACTIVE, 1).isActive(), is(true));
-        assertThat(new Account(2L, "R2", 100L, BigDecimal.ZERO, BigDecimal.ZERO, AccountStatus.SUSPENDED, 1).isActive(), is(false));
-        assertThat(new Account(3L, "R3", 100L, BigDecimal.ZERO, BigDecimal.ZERO, AccountStatus.CLOSED, 1).isActive(), is(false));
+    @CsvSource({
+            "ACTIVE,    true",
+            "SUSPENDED, false",
+            "CLOSED,    false"
+    })
+    void shouldCorrectlyIdentifyActiveVersusSuspendedOrClosedStatus(AccountStatus status, boolean expectedActive) {
+        Account account = new Account(1L, "REF-1", 100L, BigDecimal.ZERO, BigDecimal.ZERO, status, 1);
+        assertThat(account.isActive(), is(expectedActive));
     }
 
-    // ---- fund-blocking and status transition ----
+    // ---- fund-blocking and status lifecycle ----------------------------
 
     @Test
     @DisplayName("Should reduce available funds without reducing balance when funds are blocked")
