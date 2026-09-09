@@ -1,5 +1,8 @@
 package com.yellow.services;
 
+import java.time.Instant;
+import java.util.UUID;
+
 import com.yellow.dto.PlaceOrderRequest;
 import com.yellow.entities.Account;
 import com.yellow.entities.Instrument;
@@ -110,5 +113,18 @@ public class OrderService {
 
 
 
+    }
+    
+    public Order cancelOrder(UUID orderId) {
+    Order order = orderRepo.findById(orderId)
+            .orElseThrow(() -> new OrderNotFoundException(orderId));
+
+    if (order.isTerminal()) {
+        throw new OrderNotCancellableException(order.status());
+    }
+
+    order.cancel(Instant.now());
+
+    return orderRepo.save(order);
     }
 }
