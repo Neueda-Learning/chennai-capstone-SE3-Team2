@@ -2,8 +2,14 @@ package com.yellow.repositories;
 
 import com.yellow.entities.Order;
 
-public interface OrderRepository {
-	boolean existsByAccountAndKey(Long accountId, String idempotencyKey);
+import java.util.Optional;
+import java.util.UUID;
 
-	Order save(Order order);
+public interface OrderRepository {
+    boolean existsByAccountAndKey(Long accountId, String idempotencyKey);
+
+    Order save(Order order);
+
+    // Needed for cancelOrder
+    Optional<Order> findById(UUID orderId);
 }

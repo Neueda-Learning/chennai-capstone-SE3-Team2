@@ -10,6 +10,8 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+
 public class Order {
 
     private static final int MONEY_SCALE = 2;
@@ -24,7 +26,7 @@ public class Order {
             OrderStatus.CANCELLED, Collections.emptySet()
     );
 
-    private final Long orderId;
+    private final UUID orderId;
     private final Long accountId;
     private final Long instrumentId;
     private final OrderSide side;
@@ -40,7 +42,7 @@ public class Order {
 
     private Instant resolvedAt;
 
-    public Order(Long orderId,
+    public Order(UUID orderId,
                  Long accountId,
                  Long instrumentId,
                  OrderSide side,
@@ -52,7 +54,7 @@ public class Order {
                  Instant placedAt,
                  Instant resolvedAt) {
 
-        this.orderId = orderId;
+        this.orderId = java.util.Objects.requireNonNull(orderId, "orderId");
         this.accountId = java.util.Objects.requireNonNull(accountId, "accountId");
         this.instrumentId =
                 java.util.Objects.requireNonNull(instrumentId, "instrumentId");
@@ -88,7 +90,7 @@ public class Order {
                               BigDecimal quantity,
                               BigDecimal limitPrice,
                               String idempotencyKey) {
-        return new Order(null, accountId, instrumentId, side, quantity,
+        return new Order(UUID.randomUUID(), accountId, instrumentId, side, quantity,
                 limitPrice, null, OrderStatus.NEW, idempotencyKey,
                 Instant.now(), null);
     }
@@ -133,7 +135,7 @@ public class Order {
         return money(quantity.multiply(limitPrice));
     }
 
-    public Long orderId()               { return orderId; }
+    public UUID orderId()               { return orderId; }
     public Long accountId()             { return accountId; }
     public Long instrumentId()          { return instrumentId; }
     public OrderSide side()             { return side; }
@@ -164,6 +166,4 @@ public class Order {
         return "Order{" + side + " " + quantity + " of instrument "
                 + instrumentId + " @ " + limitPrice + ", " + status + "}";
     }
-
-
 }
