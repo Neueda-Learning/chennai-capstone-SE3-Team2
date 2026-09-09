@@ -17,7 +17,7 @@ public interface PositionMapper {
 
     @Select("SELECT position_id, account_id, instrument_id, quantity, average_price " +
             "FROM position WHERE account_id = #{accountId} AND quantity > 0")
-    List<Position> selectByAccountId(@Param("accountId") Long accountId);
+    List<Position> findByAccountId(@Param("accountId") Long accountId);
 
     @Select("SELECT position_id, account_id, instrument_id, quantity, average_price " +
             "FROM position WHERE account_id = #{accountId} AND instrument_id = #{instrumentId}")

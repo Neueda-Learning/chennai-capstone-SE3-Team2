@@ -20,5 +20,5 @@ public interface InstrumentMapper {
 
     @Select("SELECT instrument_id, ticker, isin, trading_status " +
             "FROM instrument WHERE instrument_id = #{instrumentId}")
-    Instrument selectById(@Param("instrumentId") Long instrumentId);
+    Instrument findSymbolById(@Param("instrumentId") Long instrumentId);
 }

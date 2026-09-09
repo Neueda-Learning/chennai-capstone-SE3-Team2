@@ -13,7 +13,7 @@ public interface AccountMapper {
     @Select("SELECT account_id, holder_name, email, phone_number, demat_id, pan, " +
             "balance, account_state, version, created_at, updated_at " +
             "FROM account WHERE account_id = #{accountId}")
-    Account selectById(@Param("accountId") Long accountId);
+    Account requireAccount(@Param("accountId") Long accountId);
 
     // Optimistic-locked write, used by order placement (Story 5) and nowhere else.
     // Names the version the row was read at, in the same statement as the write.
