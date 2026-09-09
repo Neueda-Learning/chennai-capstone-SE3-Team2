@@ -9,6 +9,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.UUID;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
@@ -102,7 +103,7 @@ class OrderTest {
     @DisplayName("Should refuse a NEW order that already carries a resolved time")
     void shouldRefuseNewOrderThatAlreadyCarriesResolvedTime() {
         assertThrows(IllegalArgumentException.class, () -> new Order(
-                null, 1L, 2L, OrderSide.BUY, new BigDecimal("10"), new BigDecimal("100.00"),
+                UUID.randomUUID(), 1L, 2L, OrderSide.BUY, new BigDecimal("10"), new BigDecimal("100.00"),
                 null, OrderStatus.NEW, "key-1234", Instant.now(), Instant.now()));
     }
 
@@ -110,7 +111,7 @@ class OrderTest {
     @DisplayName("Should refuse a terminal-status order with no resolved time")
     void shouldRefuseTerminalStatusOrderWithNoResolvedTime() {
         assertThrows(IllegalArgumentException.class, () -> new Order(
-                1L, 1L, 2L, OrderSide.BUY, new BigDecimal("10"), new BigDecimal("100.00"),
+                UUID.randomUUID(), 1L, 2L, OrderSide.BUY, new BigDecimal("10"), new BigDecimal("100.00"),
                 new BigDecimal("100.00"), OrderStatus.FILLED, "key-1234", Instant.now(), null));
     }
 
@@ -118,7 +119,7 @@ class OrderTest {
     @DisplayName("Should refuse a FILLED order with no executed price")
     void shouldRefuseFilledOrderWithNoExecutedPrice() {
         assertThrows(IllegalArgumentException.class, () -> new Order(
-                1L, 1L, 2L, OrderSide.BUY, new BigDecimal("10"), new BigDecimal("100.00"),
+                UUID.randomUUID(), 1L, 2L, OrderSide.BUY, new BigDecimal("10"), new BigDecimal("100.00"),
                 null, OrderStatus.FILLED, "key-1234", Instant.now(), Instant.now()));
     }
 

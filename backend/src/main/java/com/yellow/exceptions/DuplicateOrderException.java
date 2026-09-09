@@ -1,11 +1,13 @@
 package com.yellow.exceptions;
 
+import java.util.UUID;
+
 public class DuplicateOrderException extends TradeException {
 
     private final String idempotencyKey;
-    private final Long existingOrderId;
+    private final UUID existingOrderId;
 
-    public DuplicateOrderException(String idempotencyKey, Long existingOrderId) {
+    public DuplicateOrderException(String idempotencyKey, UUID existingOrderId) {
         super("ORD-409", "Duplicate order");
         this.idempotencyKey = idempotencyKey;
         this.existingOrderId = existingOrderId;
@@ -16,8 +18,7 @@ public class DuplicateOrderException extends TradeException {
     }
 
     /** Null when the duplicate was caught by the pre-check, which reads no id. */
-    public Long existingOrderId() {
+    public UUID existingOrderId() {
         return existingOrderId;
     }
-
 }

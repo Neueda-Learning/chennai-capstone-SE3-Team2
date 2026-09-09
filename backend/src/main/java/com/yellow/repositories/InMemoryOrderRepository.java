@@ -1,6 +1,5 @@
 package com.yellow.repositories;
 
-
 import com.yellow.entities.Order;
 import com.yellow.exceptions.DuplicateOrderException;
 
@@ -8,8 +7,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 public class InMemoryOrderRepository implements OrderRepository {
@@ -21,9 +20,8 @@ public class InMemoryOrderRepository implements OrderRepository {
         }
     }
 
-    private final Map<Long, Order> byId = new ConcurrentHashMap<>();
-    private final Map<Key, Long> orderIdByKey = new ConcurrentHashMap<>();
-    private final AtomicLong nextId = new AtomicLong(1);
+    private final Map<UUID, Order> byId = new ConcurrentHashMap<>();
+    private final Map<Key, UUID> orderIdByKey = new ConcurrentHashMap<>();
 
     @Override
     public boolean existsByAccountAndKey(Long accountId, String idempotencyKey) {
@@ -37,42 +35,25 @@ public class InMemoryOrderRepository implements OrderRepository {
     public Order save(Order order) {
         Objects.requireNonNull(order, "order");
 
-        Order stored = order;
+        // The order already carries its own UUID from Order.place() -- no id
+        // assignment needed here anymore, only the duplicate-key bookkeeping.
+        boolean isFirstSaveOfThisOrder = !byId.containsKey(order.orderId());
 
-        if (order.orderId() == null) {
-            stored = withId(order, nextId.getAndIncrement());
-
-            if (stored.idempotencyKey() != null) {
-                Key key = new Key(stored.accountId(), stored.idempotencyKey());
-                Long previous = orderIdByKey.putIfAbsent(key, stored.orderId());
-                if (previous != null) {
-                    // What the unique index does in production.
-                    throw new DuplicateOrderException(
-                            stored.idempotencyKey(), previous);
-                }
+        if (isFirstSaveOfThisOrder && order.idempotencyKey() != null) {
+            Key key = new Key(order.accountId(), order.idempotencyKey());
+            UUID previous = orderIdByKey.putIfAbsent(key, order.orderId());
+            if (previous != null) {
+                // What the unique index does in production.
+                throw new DuplicateOrderException(order.idempotencyKey(), previous);
             }
         }
 
-        byId.put(stored.orderId(), stored);
-        return stored;
+        byId.put(order.orderId(), order);
+        return order;
     }
 
-    private static Order withId(Order order, Long orderId) {
-        return new Order(
-                orderId,
-                order.accountId(),
-                order.instrumentId(),
-                order.side(),
-                order.quantity(),
-                order.limitPrice(),
-                order.executedPrice(),
-                order.status(),
-                order.idempotencyKey(),
-                order.placedAt(),
-                order.resolvedAt());
-    }
-
-    public Optional<Order> findById(Long orderId) {
+    @Override
+    public Optional<Order> findById(UUID orderId) {
         if (orderId == null) {
             return Optional.empty();
         }
@@ -83,7 +64,7 @@ public class InMemoryOrderRepository implements OrderRepository {
         if (accountId == null || idempotencyKey == null) {
             return Optional.empty();
         }
-        Long orderId = orderIdByKey.get(new Key(accountId, idempotencyKey));
+        UUID orderId = orderIdByKey.get(new Key(accountId, idempotencyKey));
         return orderId == null ? Optional.empty() : findById(orderId);
     }
 
@@ -104,6 +85,5 @@ public class InMemoryOrderRepository implements OrderRepository {
     public void clear() {
         byId.clear();
         orderIdByKey.clear();
-        nextId.set(1);
     }
 }
