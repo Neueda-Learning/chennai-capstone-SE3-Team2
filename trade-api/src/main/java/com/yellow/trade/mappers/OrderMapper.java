@@ -1,38 +1,49 @@
-
-//import com.yellow.enums.OrderStatus;
-//
-//import java.time.Instant;
-//import java.util.List;
-//
-//public interface OrderMapper {
-//    List<OrderHistoryRow> findByAccountId(Long accountId, OrderStatus status, Instant from, Instant to);
-//}
-
 package com.yellow.trade.mappers;
 
-import com.yellow.entities.Order;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
+/**
+ * orders. Statements live in src/main/resources/mapper/OrderMapper.xml.
+ *
+ * XML rather than annotations for this one mapper because the history query
+ * takes three optional filters, and <if> reads better than a string built in
+ * Java -- which is also how a concatenated filter turns into an injection.
+ * Every value is still bound as a parameter; the XML uses no interpolation.
+ */
 @Mapper
 public interface OrderMapper {
 
-    // Implemented in OrderMapper.xml — dynamic filters don't read well as annotations.
-    int insertOrder(Order order);
+    /**
+     * Returns the affected row count. One means inserted. The unique index
+     * uq_orders_client_idempotency_key can refuse the row instead, which
+     * surfaces as a DuplicateKeyException the service turns into ORD-409 --
+     * that constraint, not a read-then-write check, is the authority on
+     * rule 8, because two concurrent requests carrying one key both pass a
+     * read.
+     */
+    int insert(OrderRow row);
 
-    Order selectByIdempotencyKey(@Param("idempotencyKey") String idempotencyKey);
+    OrderRow findById(@Param("orderId") UUID orderId);
 
-    List<Order> selectByAccountId(@Param("accountId") Long accountId,
-                                  @Param("status") String status,
-                                  @Param("from") Instant from,
-                                  @Param("to") Instant to);
+    List<OrderRow> findByAccountId(@Param("accountId") Long accountId,
+                                   @Param("status") String status,
+                                   @Param("from") Instant from,
+                                   @Param("to") Instant to);
 
-    // Guarded state transition, used by cancel (Story 5). Returns 0 if the order
-    // was not in expectedStatus when the write ran — refuse with ORD-409, don't retry.
-    int updateStatusConditional(@Param("idempotencyKey") String idempotencyKey,
-                                @Param("newStatus") String newStatus,
-                                @Param("expectedStatus") String expectedStatus);
+    /**
+     * Cancels in one statement, conditional on the status the caller expects.
+     *
+     * Reading the status and then writing it would let the executor fill the
+     * order in between, and the cancel would overwrite a fill. Naming NEW in
+     * the WHERE clause makes the database decide: one row affected means this
+     * caller cancelled it, zero means somebody else got there first and the
+     * answer is ORD-409.
+     */
+    int cancelIfNew(@Param("orderId") UUID orderId,
+                    @Param("resolvedAt") Instant resolvedAt);
 }

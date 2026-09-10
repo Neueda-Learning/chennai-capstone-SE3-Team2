@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<!--
+  Statements for com.yellow.trade.mappers.OrderMapper.
+
+  PARAMETERISATION. Every value that arrives from outside is bound with #{},
+  which becomes a JDBC bind parameter. No statement below uses MyBatis's
+  interpolating form, the one that substitutes a value into the statement
+  text before the driver ever sees it. The outside values here are an account
+  key, a status filter and two timestamps, and a status of  NEW' OR '1'='1
+  substituted into the text would return whichever account's orders the caller
+  asked for. The <if> tests decide whether a clause is present; they never
+  build one out of a caller's text.
+-->
+<mapper namespace="com.yellow.trade.mappers.OrderMapper">
+
+    <resultMap id="orderRow" type="com.yellow.trade.mappers.OrderRow">
+        <id     property="orderId"        column="order_id"/>
+        <result property="clientId"       column="client_id"/>
+        <result property="instrumentId"   column="instrument_id"/>
+        <result property="symbol"         column="symbol"/>
+        <result property="side"           column="side"/>
+        <result property="orderType"      column="order_type"/>
+        <result property="productType"    column="product_type"/>
+        <result property="price"          column="price"/>
+        <result property="quantity"       column="quantity"/>
+        <result property="fillPrice"      column="fill_price"/>
+        <result property="status"         column="status"/>
+        <result property="idempotencyKey" column="idempotency_key"/>
+        <result property="datePlaced"     column="date_placed"/>
+        <result property="resolvedAt"     column="resolved_at"/>
+    </resultMap>
+
+    <!--
+      The symbol lives on whichever subtype the instrument has: equity.ticker
+      for a stock or ETF, mutual_fund.scheme_code for a fund. Both joins are
+      left joins and COALESCE picks the one that exists.
+    -->
+    <sql id="selectColumns">
+        SELECT o.order_id,
+               o.client_id,
+               o.instrument_id,
+               COALESCE(e.ticker, m.scheme_code) AS symbol,
+               o.side,
+               o.order_type,
+               o.product_type,
+               o.price,
+               o.quantity,
+               o.fill_price,
+               o.status,
+               o.idempotency_key,
+               o.date_placed,
+               o.resolved_at
+        FROM orders o
+        JOIN instrument   i ON i.instrument_id = o.instrument_id
+        LEFT JOIN equity      e ON e.instrument_id = o.instrument_id
+        LEFT JOIN mutual_fund m ON m.instrument_id = o.instrument_id
+    </sql>
+
+    <!--
+      order_id is supplied, never generated: the domain minted it in
+      Order.place() before this statement ran. order_type and product_type are
+      left to their column defaults (MARKET, CNC) because PlaceOrderRequest
+      has no field for either; see migration 002_api_alignment.sql.
+    -->
+    <insert id="insert" parameterType="com.yellow.trade.mappers.OrderRow">
+        INSERT INTO orders (order_id,
+                            client_id,
+                            instrument_id,
+                            side,
+                            price,
+                            quantity,
+                            fill_price,
+                            status,
+                            idempotency_key,
+                            date_placed,
+                            resolved_at)
+        VALUES (#{orderId},
+                #{clientId},
+                #{instrumentId},
+                #{side},
+                #{price},
+                #{quantity},
+                #{fillPrice},
+                #{status},
+                #{idempotencyKey},
+                #{datePlaced},
+                #{resolvedAt})
+    </insert>
+
+    <select id="findById" resultMap="orderRow">
+        <include refid="selectColumns"/>
+        WHERE o.order_id = #{orderId}
+    </select>
+
+    <!--
+      Newest first, which is what the Orders screen shows. The three filters
+      are optional and independent; a null one contributes no clause at all
+      rather than a clause that matches everything, so the planner still uses
+      ix_orders_client_placed.
+    -->
+    <select id="findByAccountId" resultMap="orderRow">
+        <include refid="selectColumns"/>
+        <where>
+            o.client_id = #{accountId}
+            <if test="status != null">
+                AND o.status = #{status}
+            </if>
+            <if test="from != null">
+                AND o.date_placed &gt;= #{from}
+            </if>
+            <if test="to != null">
+                AND o.date_placed &lt; #{to}
+            </if>
+        </where>
+        ORDER BY o.date_placed DESC
+    </select>
+
+    <!--
+      One statement, conditional on the state expected. See the interface for
+      why this is not a read followed by a write.
+    -->
+    <update id="cancelIfNew">
+        UPDATE orders
+           SET status      = 'CANCELLED',
+               resolved_at = #{resolvedAt}
+         WHERE order_id = #{orderId}
+           AND status   = 'NEW'
+    </update>
+
+</mapper>

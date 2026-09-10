@@ -1,41 +1,59 @@
-// contract: positions with quantity 0 are not returned -- filtering that is
-// the service's job (below), not this query's job
-//public interface PositionMapper {
-//    List<PositionRow> findByAccountId(Long accountId);
-//}
-
 package com.yellow.trade.mappers;
 
-import com.yellow.entities.Position; // adjust to your actual Sprint 5 domain class
-import org.apache.ibatis.annotations.*;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 
-import java.math.BigDecimal;
 import java.util.List;
 
+/**
+ * position, joined to each holding's instrument symbol.
+ *
+ * Read-only this sprint. A holding changes when an order FILLS, and filling
+ * is the Trade Executor's job in Sprint 7 -- placing an order blocks cash and
+ * records the order, and moves no stock. Write statements for a fill belong
+ * with the code that fills, not here as dead methods nothing calls.
+ */
 @Mapper
 public interface PositionMapper {
 
-    @Select("SELECT position_id, account_id, instrument_id, quantity, average_price " +
-            "FROM position WHERE account_id = #{accountId} AND quantity > 0")
-    List<Position> findByAccountId(@Param("accountId") Long accountId);
+    String SELECT_COLUMNS = """
+            SELECT p.position_id,
+                   p.client_id,
+                   p.instrument_id,
+                   COALESCE(e.ticker, m.scheme_code) AS symbol,
+                   p.position_type,
+                   p.quantity,
+                   p.average_price
+            FROM position p
+            JOIN instrument   i ON i.instrument_id = p.instrument_id
+            LEFT JOIN equity      e ON e.instrument_id = p.instrument_id
+            LEFT JOIN mutual_fund m ON m.instrument_id = p.instrument_id
+            """;
 
-    @Select("SELECT position_id, account_id, instrument_id, quantity, average_price " +
-            "FROM position WHERE account_id = #{accountId} AND instrument_id = #{instrumentId}")
-    Position selectByAccountAndInstrument(@Param("accountId") Long accountId,
-                                          @Param("instrumentId") Long instrumentId);
+    /**
+     * No quantity filter: ck_position_quantity_positive already guarantees
+     * every row is a real holding, and a position is deleted when it closes
+     * rather than zeroed. Filtering here would imply the schema allows a state
+     * it does not.
+     *
+     * Ordered so the response is stable between calls -- an unordered read of
+     * the same rows in a different order looks like a change to a client
+     * diffing them.
+     */
+    @Select(SELECT_COLUMNS + " WHERE p.client_id = #{accountId} ORDER BY symbol, p.position_type")
+    List<PositionRow> findByAccountId(@Param("accountId") Long accountId);
 
-    @Insert("INSERT INTO position (account_id, instrument_id, quantity, average_price) " +
-            "VALUES (#{accountId}, #{instrumentId}, #{quantity}, #{averagePrice})")
-    int insertPosition(@Param("accountId") Long accountId,
-                       @Param("instrumentId") Long instrumentId,
-                       @Param("quantity") Integer quantity,
-                       @Param("averagePrice") BigDecimal averagePrice);
-
-    @Update("UPDATE position " +
-            "SET quantity = #{quantity}, average_price = #{averagePrice} " +
-            "WHERE account_id = #{accountId} AND instrument_id = #{instrumentId}")
-    int updatePosition(@Param("accountId") Long accountId,
-                       @Param("instrumentId") Long instrumentId,
-                       @Param("quantity") Integer quantity,
-                       @Param("averagePrice") BigDecimal averagePrice);
+    /**
+     * The natural key is (client_id, instrument_id, position_type), so all
+     * three are needed to name one row. Rule 7 asks about a specific holding.
+     */
+    @Select(SELECT_COLUMNS + """
+             WHERE p.client_id     = #{accountId}
+               AND p.instrument_id = #{instrumentId}
+               AND p.position_type = #{positionType}
+            """)
+    PositionRow findOne(@Param("accountId") Long accountId,
+                        @Param("instrumentId") Long instrumentId,
+                        @Param("positionType") String positionType);
 }

@@ -1,0 +1,96 @@
+# =====================================================================
+# Trade REST API configuration.
+#
+# Every value that differs between a laptop and a container comes from
+# the environment, with a local default after the colon so that a fresh
+# clone runs without a .env file. JWT_SECRET is the exception and has no
+# default on purpose: a default signing secret is a signing secret that
+# ships to production, and the application refuses to start without one
+# rather than silently accepting forged tokens.
+# =====================================================================
+
+spring:
+  application:
+    name: trade-api
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:trading}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      # Room for the concurrent-order demonstration without letting a
+      # slow query exhaust the pool unnoticed.
+      maximum-pool-size: ${DB_POOL_MAX:10}
+      connection-timeout: 5000
+      pool-name: trade-api-pool
+
+  # Fail on an unknown JSON property rather than ignoring it: the
+  # contract declares additionalProperties false, and a client sending a
+  # field we do not know about has misread it.
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+    default-property-inclusion: always
+
+server:
+  port: ${SERVER_PORT:8080}
+  error:
+    # No whitelabel page, ever. Every failure leaves through the
+    # @ControllerAdvice as the error envelope; these switches make sure
+    # nothing escapes around it carrying internals.
+    whitelabel:
+      enabled: false
+    include-stacktrace: never
+    include-message: never
+    include-binding-errors: never
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  # PostgreSQL's uuid is not a JDBC-spec type, so its handler is declared
+  # rather than inferred -- registered in MyBatisTypeHandlerConfig rather than
+  # by package scan, which finds nothing inside a fat jar.
+  configuration:
+    # order_id -> orderId without a per-column alias in every statement.
+    map-underscore-to-camel-case: true
+    # Surfaces a mapper method that silently matched no statement.
+    default-executor-type: simple
+    jdbc-type-for-null: 'NULL'
+
+security:
+  jwt:
+    # No default. Resolution fails at startup if the environment does
+    # not supply it, which is the intended behaviour.
+    secret: ${JWT_SECRET}
+    # Tokens asking for any other algorithm are refused before a claim
+    # is read. Listing it here rather than trusting the token's own
+    # header is what stops an alg:none forgery.
+    algorithm: HS256
+    # The route prefix the token filter guards. Sprint 10 adds routes
+    # under the same prefix and inherits the protection.
+    protected-path-prefix: /api/v1/
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # Health only. The orchestrator needs to know the service is
+        # ready; nothing else belongs on an unauthenticated port.
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+  health:
+    db:
+      enabled: true
+
+logging:
+  level:
+    root: INFO
+    com.yellow: ${LOG_LEVEL:INFO}
+  pattern:
+    # A request id would come from a filter in a larger system; for now
+    # the thread name is what correlates the lines of one request.
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"
