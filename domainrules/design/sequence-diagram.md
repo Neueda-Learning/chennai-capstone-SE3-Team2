@@ -130,3 +130,69 @@ sequenceDiagram
 
     Note over Svc,OrdRepo: RULES 9 and 10 carry no code and are not countable this sprint,<br/>but room is left for them: cash and position move together or<br/>neither moves, and every order is recorded including a rejected<br/>one. Nothing has been debited here — the order is returned NEW.
 ```
+
+## What Sprint 6 wraps around this
+
+The diagram above is the domain, unchanged. Sprint 6 added a transport
+around it and nothing inside it, which is the point: Sprint 7's Trade
+Executor calls the same `placeOrder` with no HTTP request in sight and
+gets the same eight answers.
+
+What the Trade REST API adds, in order, around one call to the flow above:
+
+```mermaid
+---
+title: Sprint 6 — the transport around the rules
+---
+sequenceDiagram
+    autonumber
+    actor Client
+    participant F as JwtAuthenticationFilter
+    participant C as OrderController
+    participant S as trade.OrderService
+    participant D as domain.OrderService
+    participant M as AccountMapper
+    participant DB as PostgreSQL
+
+    Client->>F: POST /api/v1/orders  (Bearer token)
+    Note right of F: Signature, then expiry, then algorithm —<br/>before any claim is read. All four failures<br/>answer AUTH-401 with one identical body.
+    alt token missing, malformed, expired or forged
+        F-->>Client: 401 {errorCode AUTH-401}
+    end
+
+    F->>C: request, with the verified accountId attached
+    C->>S: placeOrder(PlaceOrderRequest)
+
+    rect rgb(232, 240, 248)
+    Note over S,DB: ONE TRANSACTION — the order row and the cash it commits
+    S->>M: findById(accountId)
+    M-->>S: AccountRow (carrying the version it was read at)
+    alt no such account
+        S-->>Client: 404 {ACC-404}
+    else token does not reach this account
+        S-->>Client: 403 {ACC-403}
+    end
+
+    S->>D: placeOrder(request)
+    Note right of D: Rules 1 to 8, exactly as drawn above.<br/>A refusal throws and the transaction rolls back:<br/>no order row, no cash moved.
+    D-->>S: Order (status NEW)
+
+    S->>M: blockFunds(accountId, notional, versionRead)
+    Note right of M: UPDATE ... SET blocked_funds = blocked_funds + ?,<br/>version = version + 1 WHERE client_id = ? AND version = ?<br/>The version is part of the write, not a check before it.
+    M-->>S: affected row count
+    alt zero rows affected
+        Note right of S: Somebody else wrote first. Zero is not success.
+        S-->>Client: 409 {ORD-409}
+    end
+    end
+
+    S-->>C: OrderResponse
+    C-->>Client: 201 Created, Location: /api/v1/orders/{uuid}
+```
+
+Two things this drawing is meant to settle at the review. The transaction
+encloses the order row and the cash and nothing else — not the token
+check above it, not the response built below it. And the version column
+is named *inside* the write rather than read and compared beforehand,
+which is what makes the database, rather than the application, the thing
+that serialises two customers spending the same money at the same moment.

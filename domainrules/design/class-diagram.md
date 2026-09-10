@@ -39,7 +39,7 @@ classDiagram
     }
 
     class Order {
-        -Long orderId
+        -UUID orderId
         -Long accountId
         -Long instrumentId
         -OrderSide side
@@ -122,7 +122,7 @@ classDiagram
         -Long accountId
         -String symbol
         -OrderSide side
-        -BigDecimal quantity
+        -Integer quantity
         -BigDecimal price
         -String idempotencyKey
     }
@@ -137,6 +137,7 @@ classDiagram
         -PositionRepository positions
         -OrderRepository orders
         +placeOrder(PlaceOrderRequest request) Order
+        +cancelOrder(UUID orderId) Order
     }
 
     class AccountRepository {
@@ -158,6 +159,7 @@ classDiagram
         <<interface>>
         +existsByAccountAndKey(Long accountId, String key) boolean
         +save(Order order) Order
+        +findById(UUID orderId) Optional~Order~
     }
 
     %% =================================================================
@@ -166,7 +168,7 @@ classDiagram
     %% maps the code to a status in one place, Sprint 7 maps it to a
     %% rejection reason on a Kafka event.
     %% =================================================================
-    class DomainException {
+    class TradeException {
         <<abstract>>
         #String catalogueCode
         +catalogueCode() String
@@ -204,7 +206,7 @@ classDiagram
     class DuplicateOrderException {
         +String CODE = "ORD-409"
         -String idempotencyKey
-        -Long existingOrderId
+        -UUID existingOrderId
     }
 
     class InvalidOrderException {
@@ -213,13 +215,38 @@ classDiagram
         -String submittedValue
     }
 
-    DomainException <|-- AccountNotFoundException
-    DomainException <|-- AccountNotActiveException
-    DomainException <|-- InstrumentNotFoundException
-    DomainException <|-- InsufficientFundsException
-    DomainException <|-- InsufficientHoldingsException
-    DomainException <|-- DuplicateOrderException
-    DomainException <|-- InvalidOrderException
+    %% Added in Sprint 6. The brief permits types beyond the six,
+    %% provided they descend from the same base.
+    class OrderNotFoundException {
+        +String CODE = "ORD-409"
+        -UUID requestedOrderId
+    }
+
+    class OrderNotCancellableException {
+        +String CODE = "ORD-409"
+        -OrderStatus actualStatus
+    }
+
+    %% Raised when an optimistic-locked update affects zero rows: the
+    %% balance the order was judged against is stale. A separate type
+    %% from DuplicateOrderException so the log does not claim an
+    %% idempotency key was involved when none was.
+    class StaleAccountVersionException {
+        +String CODE = "ORD-409"
+        -Long accountId
+        -int expectedVersion
+    }
+
+    TradeException <|-- AccountNotFoundException
+    TradeException <|-- AccountNotActiveException
+    TradeException <|-- InstrumentNotFoundException
+    TradeException <|-- InsufficientFundsException
+    TradeException <|-- InsufficientHoldingsException
+    TradeException <|-- DuplicateOrderException
+    TradeException <|-- InvalidOrderException
+    TradeException <|-- OrderNotFoundException
+    TradeException <|-- OrderNotCancellableException
+    TradeException <|-- StaleAccountVersionException
 
     %% =================================================================
     %% RELATIONSHIPS
@@ -238,7 +265,7 @@ classDiagram
 
     OrderService ..> PlaceOrderRequest : accepts
     OrderService ..> Order : produces
-    OrderService ..> DomainException : throws
+    OrderService ..> TradeException : throws
     OrderService --> AccountRepository : uses
     OrderService --> InstrumentRepository : uses
     OrderService --> PositionRepository : uses
