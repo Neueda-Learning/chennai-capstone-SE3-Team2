@@ -11,6 +11,7 @@ import com.yellow.trade.mappers.AccountMapper;
 import com.yellow.trade.mappers.AccountRow;
 import com.yellow.trade.mappers.OrderMapper;
 import com.yellow.trade.mappers.OrderRow;
+import com.yellow.trade.OrderIdentifier;
 import com.yellow.trade.PlatformConstants;
 import com.yellow.trade.mappers.PositionMapper;
 import com.yellow.trade.security.CallerAccount;
@@ -84,10 +85,13 @@ public class AccountService {
     public AccountResponse getAccount(Long accountId) {
         AccountRow row = requireReachableAccount(accountId);
         return new AccountResponse(
-                row.getAccountRef(),      // the string business reference
+                row.getClientId(),        // `id`: the numeric key
+                row.getAccountRef(),      // `accountId`: the string business reference
                 row.getHolderName(),
+                row.availableFunds(),
                 row.getStatus(),
-                row.getCreatedAt());
+                row.getVersion(),
+                row.getUpdatedAt());
     }
 
     @Transactional(readOnly = true)
@@ -95,8 +99,8 @@ public class AccountService {
         AccountRow row = requireReachableAccount(accountId);
         return new BalanceResponse(
                 row.getClientId(),
-                row.getBalance(),
-                row.getBlockedFunds(),
+                // "available cash only": balance minus what is committed to
+                // pending orders, which is the figure rule 6 judges a buy by.
                 row.availableFunds(),
                 PlatformConstants.QUOTE_CURRENCY,
                 Instant.now(clock));
@@ -109,7 +113,6 @@ public class AccountService {
                 .map(row -> new PositionResponse(
                         row.getClientId(),
                         row.getSymbol(),
-                        row.getPositionType(),
                         row.getQuantity(),
                         row.getAveragePrice()))
                 .toList();
@@ -131,7 +134,7 @@ public class AccountService {
 
     private static OrderHistoryEntry toHistoryEntry(OrderRow row) {
         return new OrderHistoryEntry(
-                row.getOrderId(),
+                OrderIdentifier.display(row.getOrderId()),
                 row.getClientId(),
                 row.getSymbol(),
                 row.getSide(),
@@ -140,7 +143,6 @@ public class AccountService {
                 row.getFillPrice(),
                 row.getStatus(),
                 row.getIdempotencyKey(),
-                row.getDatePlaced(),
-                row.getResolvedAt());
+                row.getDatePlaced());
     }
 }

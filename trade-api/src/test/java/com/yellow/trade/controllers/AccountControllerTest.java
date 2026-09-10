@@ -42,42 +42,46 @@ class AccountControllerTest {
     @DisplayName("the account body carries the string reference under accountId")
     void accountBodyMatchesTheContract() throws Exception {
         when(accountService.getAccount(3L)).thenReturn(
-                new AccountResponse("ACC-000003", "Rohan Nair", AccountStatus.ACTIVE, NOW));
+                new AccountResponse(3L, "ACC-000003", "Rohan Nair",
+                        new BigDecimal("530000.0000"), AccountStatus.ACTIVE, 7, NOW));
 
         mockMvc.perform(get("/api/v1/accounts/3"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(3))
                 .andExpect(jsonPath("$.accountId").value("ACC-000003"))
                 .andExpect(jsonPath("$.holderName").value("Rohan Nair"))
                 .andExpect(jsonPath("$.status").value("ACTIVE"))
-                // Money belongs to /balance, and the lock version is internal.
-                .andExpect(jsonPath("$.cashBalance").doesNotExist())
-                .andExpect(jsonPath("$.version").doesNotExist());
+                .andExpect(jsonPath("$.version").value(7))
+                .andExpect(jsonPath("$.lastUpdated").exists());
     }
 
     @Test
     @DisplayName("the balance body carries cash, blocked and available")
     void balanceBodyMatchesTheContract() throws Exception {
         when(accountService.getBalance(3L)).thenReturn(new BalanceResponse(
-                3L, new BigDecimal("750000.0000"), new BigDecimal("220000.0000"),
-                new BigDecimal("530000.0000"), "INR", NOW));
+                3L, new BigDecimal("530000.0000"), "INR", NOW));
 
         mockMvc.perform(get("/api/v1/accounts/3/balance"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accountId").value(3))
-                .andExpect(jsonPath("$.availableFunds").value(530000.0000))
-                .andExpect(jsonPath("$.currency").value("INR"));
+                .andExpect(jsonPath("$.cashBalance").value(530000.0000))
+                .andExpect(jsonPath("$.currency").value("INR"))
+                // additionalProperties: false -- the split must not leak here.
+                .andExpect(jsonPath("$.blockedFunds").doesNotExist())
+                .andExpect(jsonPath("$.availableFunds").doesNotExist());
     }
 
     @Test
-    @DisplayName("a holding keeps its position type and its fractional quantity")
+    @DisplayName("a holding keeps its fractional quantity and its average cost")
     void positionsKeepTypeAndFraction() throws Exception {
         when(accountService.getPositions(5L)).thenReturn(List.of(new PositionResponse(
-                5L, "SCH100002", "DELIVERY", new BigDecimal("240.117000"), new BigDecimal("41.6500"))));
+                5L, "SCH100002", new BigDecimal("240.117000"), new BigDecimal("41.6500"))));
 
         mockMvc.perform(get("/api/v1/accounts/5/positions"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].positionType").value("DELIVERY"))
+                .andExpect(jsonPath("$[0].averageCost").value(41.6500))
                 // A mutual fund allotment is not a whole number of units.
+                // See contracts/DEVIATIONS.md.
                 .andExpect(jsonPath("$[0].quantity").value(240.117000));
     }
 

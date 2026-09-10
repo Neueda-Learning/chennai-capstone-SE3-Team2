@@ -37,18 +37,18 @@ public class AccountController {
         this.accountService = accountService;
     }
 
-    @GetMapping("/{accountId}")
-    public AccountResponse getAccount(@PathVariable @Min(1) Long accountId) {
+    @GetMapping("/{id}")
+    public AccountResponse getAccount(@PathVariable("id") @Min(1) Long accountId) {
         return accountService.getAccount(accountId);
     }
 
-    @GetMapping("/{accountId}/balance")
-    public BalanceResponse getBalance(@PathVariable @Min(1) Long accountId) {
+    @GetMapping("/{id}/balance")
+    public BalanceResponse getBalance(@PathVariable("id") @Min(1) Long accountId) {
         return accountService.getBalance(accountId);
     }
 
-    @GetMapping("/{accountId}/positions")
-    public List<PositionResponse> getPositions(@PathVariable @Min(1) Long accountId) {
+    @GetMapping("/{id}/positions")
+    public List<PositionResponse> getPositions(@PathVariable("id") @Min(1) Long accountId) {
         return accountService.getPositions(accountId);
     }
 
@@ -57,9 +57,9 @@ public class AccountController {
      * text. An unparseable status or timestamp is refused by Spring before
      * this method runs and leaves as VAL-422 -- it never reaches a statement.
      */
-    @GetMapping("/{accountId}/orders")
-    public List<OrderHistoryEntry> getOrderHistory(
-            @PathVariable @Min(1) Long accountId,
+    @GetMapping("/{id}/orders")
+    public List<OrderHistoryEntry> getOrders(
+            @PathVariable("id") @Min(1) Long accountId,
             @RequestParam(required = false) OrderStatus status,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,

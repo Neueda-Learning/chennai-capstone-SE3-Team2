@@ -24,6 +24,7 @@ public class AccountRow {
     private BigDecimal blockedFunds;
     private int version;
     private Instant createdAt;
+    private Instant updatedAt;
 
     public Long getClientId() { return clientId; }
     public void setClientId(Long clientId) { this.clientId = clientId; }
@@ -49,6 +50,10 @@ public class AccountRow {
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+
+    /** Maintained by a database trigger on every write. See migration 003. */
+    public Instant getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
 
     /** Derived, never stored: what rule 6 tests a buy against. */
     public BigDecimal availableFunds() {

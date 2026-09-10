@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Date;
 import java.util.List;
+import java.util.UUID;
 import java.util.Map;
 
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -33,17 +34,19 @@ import static org.mockito.Mockito.verify;
  */
 class JwtAuthenticationFilterTest {
 
+    private static final String ISSUER = "auth-service";
     private static final String SECRET = "a-test-signing-secret-of-at-least-32-bytes";
     private static final SecretKey KEY = Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8));
 
     private final JwtAuthenticationFilter filter = new JwtAuthenticationFilter(
-            new JwtTokenVerifier(new JwtProperties(SECRET, "HS256", "/api/v1/")),
+            new JwtTokenVerifier(new JwtProperties(SECRET, "HS256", ISSUER, "/api/v1/")),
             new ObjectMapper());
 
     private static String signed(long accountId, Instant expiry, SecretKey key) {
         return Jwts.builder()
-                .subject(String.valueOf(accountId))
-                .claims(Map.of("accountId", accountId))
+                .subject(UUID.randomUUID().toString())
+                .issuer(ISSUER)
+                .claims(Map.of("accountId", accountId, "roles", List.of("CUSTOMER")))
                 .expiration(Date.from(expiry))
                 .signWith(key)
                 .compact();

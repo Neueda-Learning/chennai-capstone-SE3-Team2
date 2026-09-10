@@ -66,6 +66,7 @@ class AccountServiceTest {
         row.setBlockedFunds(new BigDecimal("220000.0000"));
         row.setVersion(7);
         row.setCreatedAt(NOW);
+        row.setUpdatedAt(NOW);
         return row;
     }
 
@@ -76,12 +77,26 @@ class AccountServiceTest {
     }
 
     @Test
-    @DisplayName("available funds is balance minus blocked, computed not stored")
-    void availableFundsIsDerived() {
+    @DisplayName("the balance is available cash: the total minus what pending orders hold")
+    void balanceIsAvailableCash() {
         BalanceResponse balance = service.getBalance(3L);
 
-        assertThat(balance.availableFunds(), comparesEqualTo(new BigDecimal("530000.0000")));
+        // 750,000 held, 220,000 committed. The contract says "available cash
+        // only", and this is the figure rule 6 judges the next buy against.
+        assertThat(balance.cashBalance(), comparesEqualTo(new BigDecimal("530000.0000")));
+        assertThat(balance.currency(), is("INR"));
         assertThat(balance.asOf(), is(NOW));
+    }
+
+    @Test
+    @DisplayName("the account body carries both identifiers, and they are not interchangeable")
+    void bothIdentifiersArePresent() {
+        var account = service.getAccount(3L);
+
+        assertThat(account.id(), is(3L));                    // the numeric key
+        assertThat(account.accountId(), is("ACC-000003"));   // the business reference
+        assertThat(account.version(), is(7));
+        assertThat(account.lastUpdated(), is(NOW));
     }
 
     @Test

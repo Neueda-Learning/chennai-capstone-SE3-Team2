@@ -9,6 +9,8 @@ import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Date;
+import java.util.List;
+import java.util.UUID;
 import java.util.Map;
 
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -25,18 +27,20 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  */
 class JwtTokenVerifierTest {
 
+    private static final String ISSUER = "auth-service";
     private static final String SECRET = "a-test-signing-secret-of-at-least-32-bytes";
     private static final SecretKey KEY =
             Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8));
 
     private final JwtTokenVerifier verifier =
-            new JwtTokenVerifier(new JwtProperties(SECRET, "HS256", "/api/v1/"));
+            new JwtTokenVerifier(new JwtProperties(SECRET, "HS256", ISSUER, "/api/v1/"));
 
     /** The team-owned fixture. It follows auth-api.yaml and is never deployed. */
     private static String mint(SecretKey key, long accountId, Instant expiry) {
         return Jwts.builder()
-                .subject(String.valueOf(accountId))
-                .claims(Map.of("accountId", accountId, "email", "client@example.com"))
+                .subject(UUID.randomUUID().toString())
+                .issuer(ISSUER)
+                .claims(Map.of("accountId", accountId, "roles", List.of("CUSTOMER")))
                 .issuedAt(Date.from(Instant.now().minusSeconds(1)))
                 .expiration(Date.from(expiry))
                 .signWith(key)
@@ -82,8 +86,9 @@ class JwtTokenVerifierTest {
         // verifier to take its word for the algorithm. A verifier that decoded
         // the payload first would already have believed this.
         String unsigned = Jwts.builder()
-                .subject("3")
-                .claims(Map.of("accountId", 3L))
+                .subject(UUID.randomUUID().toString())
+                .issuer(ISSUER)
+                .claims(Map.of("accountId", 3L, "roles", List.of("CUSTOMER")))
                 .expiration(Date.from(Instant.now().plusSeconds(600)))
                 .compact();
 
@@ -95,7 +100,8 @@ class JwtTokenVerifierTest {
     @DisplayName("a token with no accountId claim is refused")
     void missingAccountClaimIsRefused() {
         String noClaim = Jwts.builder()
-                .subject("3")
+                .subject(UUID.randomUUID().toString())
+                .issuer(ISSUER)
                 .expiration(Date.from(Instant.now().plusSeconds(600)))
                 .signWith(KEY)
                 .compact();
@@ -128,6 +134,6 @@ class JwtTokenVerifierTest {
     @DisplayName("a secret too short for HS256 fails at construction, not per request")
     void shortSecretFailsFast() {
         assertThrows(IllegalStateException.class,
-                () -> new JwtTokenVerifier(new JwtProperties("too-short", "HS256", "/api/v1/")));
+                () -> new JwtTokenVerifier(new JwtProperties("too-short", "HS256", ISSUER, "/api/v1/")));
     }
 }

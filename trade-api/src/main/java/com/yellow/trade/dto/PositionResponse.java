@@ -5,17 +5,20 @@ import java.math.BigDecimal;
 /**
  * contracts/trade-api.yaml -> PositionResponse.
  *
- * quantity is decimal, not an int: mutual fund allotments are fractional, and
- * a holding of 240.117 units is an ordinary row in this schema.
+ * quantity is decimal rather than the contract's int32. That is the one
+ * deviation in this service and it is recorded in contracts/DEVIATIONS.md:
+ * a mutual fund allotment is money divided by that day's NAV, our schema
+ * types it NUMERIC(18,6) for that reason, and the seeded data holds real
+ * fractional positions. Reading 152.386000 into an int throws; rounding it
+ * reports a holding the client does not have.
  *
- * positionType is carried because it is part of the natural key. Without it
- * the same scrip held intraday and as delivery arrives as two entries a
- * client cannot tell apart.
+ * averageCost is the weighted average cost basis. A buy recalculates it; a
+ * sell reduces the quantity and leaves it alone, which is what makes realised
+ * profit and loss computable at the point of sale.
  */
 public record PositionResponse(
         Long accountId,
         String symbol,
-        String positionType,
         BigDecimal quantity,
-        BigDecimal averagePrice) {
+        BigDecimal averageCost) {
 }

@@ -32,11 +32,12 @@ services:
       - ./sprint-3/db/base/000_base_schema.sql:/docker-entrypoint-initdb.d/01-base.sql:ro
       - ./sprint-3/db/migrations/001_schema_migrations.sql:/docker-entrypoint-initdb.d/02-migration-001.sql:ro
       - ./sprint-3/db/migrations/002_api_alignment.sql:/docker-entrypoint-initdb.d/03-migration-002.sql:ro
-      - ./sprint-3/db/indexes/001_performance_indexes.sql:/docker-entrypoint-initdb.d/04-indexes.sql:ro
-      - ./sprint-3/db/seed/001_reference_data.sql:/docker-entrypoint-initdb.d/05-seed-reference.sql:ro
-      - ./sprint-3/db/seed/002_clients.sql:/docker-entrypoint-initdb.d/06-seed-clients.sql:ro
-      - ./sprint-3/db/seed/003_instruments.sql:/docker-entrypoint-initdb.d/07-seed-instruments.sql:ro
-      - ./sprint-3/db/seed/004_transactions.sql:/docker-entrypoint-initdb.d/08-seed-transactions.sql:ro
+      - ./sprint-3/db/migrations/003_account_last_updated.sql:/docker-entrypoint-initdb.d/04-migration-003.sql:ro
+      - ./sprint-3/db/indexes/001_performance_indexes.sql:/docker-entrypoint-initdb.d/05-indexes.sql:ro
+      - ./sprint-3/db/seed/001_reference_data.sql:/docker-entrypoint-initdb.d/06-seed-reference.sql:ro
+      - ./sprint-3/db/seed/002_clients.sql:/docker-entrypoint-initdb.d/07-seed-clients.sql:ro
+      - ./sprint-3/db/seed/003_instruments.sql:/docker-entrypoint-initdb.d/08-seed-instruments.sql:ro
+      - ./sprint-3/db/seed/004_transactions.sql:/docker-entrypoint-initdb.d/09-seed-transactions.sql:ro
     networks: [trading-net]
     healthcheck:
       # -U and -d matter: the default probes the "postgres" database as

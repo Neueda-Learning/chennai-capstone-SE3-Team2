@@ -1,9 +1,13 @@
 package com.yellow.trade.mappers;
 
+import org.apache.ibatis.annotations.Delete;
+import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 /**
@@ -56,4 +60,47 @@ public interface PositionMapper {
     PositionRow findOne(@Param("accountId") Long accountId,
                         @Param("instrumentId") Long instrumentId,
                         @Param("positionType") String positionType);
+
+    /**
+     * Opens a holding that did not exist. Returns the affected row count, so
+     * the caller can tell an insert that happened from one that did not.
+     */
+    @Insert("""
+            INSERT INTO position (client_id, instrument_id, position_type, quantity, average_price)
+            VALUES (#{accountId}, #{instrumentId}, #{positionType}, #{quantity}, #{averagePrice})
+            """)
+    int insertPosition(@Param("accountId") Long accountId,
+                       @Param("instrumentId") Long instrumentId,
+                       @Param("positionType") String positionType,
+                       @Param("quantity") BigDecimal quantity,
+                       @Param("averagePrice") BigDecimal averagePrice);
+
+    /**
+     * Moves an existing holding. The whole natural key is in the WHERE clause,
+     * because two thirds of it identifies more than one row.
+     */
+    @Update("""
+            UPDATE position
+               SET quantity      = #{quantity},
+                   average_price = #{averagePrice}
+             WHERE client_id     = #{accountId}
+               AND instrument_id = #{instrumentId}
+               AND position_type = #{positionType}
+            """)
+    int updatePosition(@Param("accountId") Long accountId,
+                       @Param("instrumentId") Long instrumentId,
+                       @Param("positionType") String positionType,
+                       @Param("quantity") BigDecimal quantity,
+                       @Param("averagePrice") BigDecimal averagePrice);
+
+    /** Removes a holding that has been sold in full. */
+    @Delete("""
+            DELETE FROM position
+             WHERE client_id     = #{accountId}
+               AND instrument_id = #{instrumentId}
+               AND position_type = #{positionType}
+            """)
+    int deletePosition(@Param("accountId") Long accountId,
+                       @Param("instrumentId") Long instrumentId,
+                       @Param("positionType") String positionType);
 }

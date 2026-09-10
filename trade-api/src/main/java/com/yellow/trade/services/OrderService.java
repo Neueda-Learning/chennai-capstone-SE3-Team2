@@ -2,12 +2,16 @@ package com.yellow.trade.services;
 
 import com.yellow.dto.PlaceOrderRequest;
 import com.yellow.entities.Order;
+import com.yellow.entities.Position;
 import com.yellow.enums.OrderSide;
 import com.yellow.enums.OrderStatus;
 import com.yellow.exceptions.AccountNotActiveException;
 import com.yellow.exceptions.AccountNotFoundException;
-import com.yellow.exceptions.StaleAccountVersionException;
 import com.yellow.exceptions.OrderNotCancellableException;
+import com.yellow.exceptions.OrderNotFoundException;
+import com.yellow.exceptions.StaleAccountVersionException;
+import com.yellow.trade.OrderIdentifier;
+import com.yellow.trade.PlatformConstants;
 import com.yellow.trade.dto.OrderResponse;
 import com.yellow.trade.mappers.AccountMapper;
 import com.yellow.trade.mappers.AccountRow;
@@ -15,6 +19,8 @@ import com.yellow.trade.mappers.InstrumentMapper;
 import com.yellow.trade.mappers.InstrumentRow;
 import com.yellow.trade.mappers.OrderMapper;
 import com.yellow.trade.mappers.OrderRow;
+import com.yellow.trade.mappers.PositionMapper;
+import com.yellow.trade.mappers.PositionRow;
 import com.yellow.trade.security.CallerAccount;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,6 +28,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
@@ -29,40 +36,42 @@ import java.util.UUID;
 /**
  * Order placement and cancellation.
  *
- * This class decides nothing about whether a trade is allowed. Rules 1 to 8
- * are evaluated by the domain's own OrderService, against the same objects the
- * Sprint 7 executor will use, and this class does three things around them:
- * it answers whether the caller may reach the account, it holds the
- * transaction, and it takes the lock.
+ * This class decides nothing about whether a trade is allowed. Rules 1 to 8 are
+ * evaluated by the domain's own OrderService, against the same objects the
+ * Sprint 7 executor will use. What this class owns is the three things the
+ * domain deliberately does not: whether the caller may reach the account, the
+ * transaction, and the lock.
  *
- * WHAT PLACEMENT MOVES, and why it is not a debit.
+ * SYNCHRONOUS EXECUTION, and why.
  *
- * A placed order is NEW. It has not filled -- filling is the Trade Executor's
- * job against a live quote in Sprint 7, and until then nobody knows what it
- * costs. So placement does not take the cash; it BLOCKS it. balance is
- * unchanged, blocked_funds rises, and available funds -- balance minus blocked
- * -- falls, which is the figure rule 6 tests the next buy against.
+ * The contract is explicit that in Sprint 6 there is no Trade Executor, so
+ * POST /api/v1/orders "validates, fills and persists inside one request". That
+ * is what makes rules 9 and 10 real rather than aspirational: cash and position
+ * move together, in one transaction, or neither moves.
  *
- * That is what the schema was built for: blocked_funds is documented as "the
- * subset of balance held against pending orders". The concurrency behaviour
- * the brief asks about is identical either way. Two buys of 20,000 against a
- * balance of 25,000: the first blocks 20,000 and leaves 5,000 available, and
- * the second is refused -- by rule 6 if it read the row afterwards, and by the
- * version check below if it read the row at the same moment. Neither one
- * silently overwrites the other.
+ * From Sprint 7 the same endpoint records the order NEW, publishes it to Kafka
+ * and returns immediately, and the executor does the work below in another
+ * process against a live quote. The contract permits both responses and tells
+ * clients to handle an order that is still NEW when the response arrives. When
+ * that happens, the fill moves out of this method and nothing else here changes.
+ *
+ * Because Sprint 6 has no live quote, an order fills at the price the customer
+ * submitted. The executed price is still recorded separately from the limit
+ * price, because from Sprint 7 the two genuinely differ.
  */
 @Service
 public class OrderService {
 
     private static final Logger log = LoggerFactory.getLogger(OrderService.class);
 
-    /** NUMERIC(18,4) on client_account.balance and blocked_funds. */
+    /** NUMERIC(18,4) on client_account.balance and orders.price. */
     private static final int MONEY_SCALE = 4;
 
     private final com.yellow.services.OrderService domainOrderService;
     private final AccountMapper accountMapper;
     private final InstrumentMapper instrumentMapper;
     private final OrderMapper orderMapper;
+    private final PositionMapper positionMapper;
     private final CallerAccount caller;
     private final Clock clock;
 
@@ -70,27 +79,28 @@ public class OrderService {
                         AccountMapper accountMapper,
                         InstrumentMapper instrumentMapper,
                         OrderMapper orderMapper,
+                        PositionMapper positionMapper,
                         CallerAccount caller,
                         Clock clock) {
         this.domainOrderService = domainOrderService;
         this.accountMapper = accountMapper;
         this.instrumentMapper = instrumentMapper;
         this.orderMapper = orderMapper;
+        this.positionMapper = positionMapper;
         this.caller = caller;
         this.clock = clock;
     }
 
     /**
-     * Places an order.
+     * Places an order and, this sprint, fills it.
      *
      * The transaction encloses exactly the work that has to succeed or fail
-     * together -- the order row and the cash it commits -- and no more. The
+     * together -- the order row, the cash and the holding -- and no more. The
      * reachability check above it needs no transaction, and the response is
      * built after it.
      *
-     * Everything inside rolls back together. An order recorded without its
-     * cash blocked would let the same money be spent twice; cash blocked
-     * without an order recorded would strand it with nothing to release it.
+     * An order recorded without its cash moved would let the same money be
+     * spent twice; cash moved without a holding would lose the stock it bought.
      */
     @Transactional
     public OrderResponse placeOrder(PlaceOrderRequest request) {
@@ -109,55 +119,112 @@ public class OrderService {
             throw new AccountNotActiveException(account.getStatus());
         }
 
-        // Rules 1 to 8, in the domain, against MyBatis-backed repositories.
-        // The order row is inserted by MyBatisOrderRepository.save() inside
-        // this transaction. A refusal throws, and everything below is skipped.
+        // Rules 1 to 8, in the domain, against MyBatis-backed repositories. The
+        // order row is inserted by MyBatisOrderRepository.save() inside this
+        // transaction. A refusal throws, and everything below is skipped.
         Order order = domainOrderService.placeOrder(request);
 
-        // Rule 9's other half: the cash that this order commits.
-        if (order.side() == OrderSide.BUY) {
-            blockFunds(account, order);
+        BigDecimal fillPrice = order.limitPrice();
+        BigDecimal consideration = money(order.quantity().multiply(fillPrice));
+
+        moveCash(account, order.side(), consideration);
+        movePosition(order, fillPrice);
+
+        int filled = orderMapper.fillIfNew(order.orderId(), fillPrice, Instant.now(clock));
+        if (filled == 0) {
+            // Unreachable while placement fills in the transaction that
+            // recorded the order. It stops being unreachable in Sprint 7.
+            throw new OrderNotCancellableException(OrderStatus.NEW);
         }
-        // A SELL commits no cash. It commits stock, and the schema has no
-        // blocked-quantity column -- rule 7 checked the holding is there, and
-        // the holding moves when the order fills in Sprint 7.
 
         InstrumentRow instrument = instrumentMapper.findById(order.instrumentId());
-        log.info("order {} placed: account={} {} {} of {} at {}",
+        log.info("order {} filled: account={} {} {} of {} at {}",
                 order.orderId(), accountId, order.side(), order.quantity(),
-                instrument == null ? order.instrumentId() : instrument.getSymbol(), order.limitPrice());
+                instrument == null ? order.instrumentId() : instrument.getSymbol(), fillPrice);
 
-        return toResponse(order, instrument);
+        return new OrderResponse(
+                OrderIdentifier.display(order.orderId()),
+                OrderStatus.FILLED,
+                messageFor(OrderStatus.FILLED),
+                instrument == null ? null : instrument.getSymbol(),
+                order.side(),
+                order.quantity(),
+                order.limitPrice());
     }
 
     /**
-     * The optimistic lock, and the only place cash is committed.
+     * The optimistic lock, and the only place cash moves.
      *
-     * The version the row was read at is named in the UPDATE and incremented
-     * by it, so two writers racing on one account are serialised by the
-     * database: the first affects one row, the second affects none. Zero rows
-     * affected is NOT success -- it means somebody else wrote between our read
-     * and our write, and the balance we based this order on is stale.
+     * The version the row was read at is named in the UPDATE and incremented by
+     * it, so two writers racing on one account are serialised by the database:
+     * the first affects one row, the second affects none. Zero rows affected is
+     * NOT success -- it means somebody else wrote between our read and our
+     * write, and the balance this order was judged against is stale.
      *
      * The answer is to refuse, not to retry. A retry would re-run rule 6
-     * against the new balance and might succeed, which is defensible -- but it
-     * would also mean a customer's single click can spend money they saw a
-     * different figure for. ORD-409 tells the client to read the balance again
-     * and decide.
+     * against the new balance and might succeed, which would mean a customer's
+     * single click spent money they saw a different figure for.
      */
-    private void blockFunds(AccountRow account, Order order) {
-        BigDecimal notional = order.notionalValue();
-
-        int affected = accountMapper.blockFunds(
-                account.getClientId(), notional, account.getVersion());
+    private void moveCash(AccountRow account, OrderSide side, BigDecimal consideration) {
+        int affected = side == OrderSide.BUY
+                ? accountMapper.debitBalance(account.getClientId(), consideration, account.getVersion())
+                : accountMapper.creditBalance(account.getClientId(), consideration, account.getVersion());
 
         if (affected == 0) {
-            log.warn("ORD-409: optimistic lock lost on account {} at version {} for order {}",
-                    account.getClientId(), account.getVersion(), order.orderId());
-            // Rolls back the order row inserted moments ago, which is the
-            // point of the transaction: the two move together or neither does.
+            log.warn("ORD-409: optimistic lock lost on account {} at version {}",
+                    account.getClientId(), account.getVersion());
             throw new StaleAccountVersionException(account.getClientId(), account.getVersion());
         }
+    }
+
+    /**
+     * Moves the holding, using the domain's own average-cost arithmetic rather
+     * than repeating it in SQL.
+     *
+     * The asymmetry belongs to the domain and is worth not losing: a buy
+     * recalculates the average across the old holding and the new units; a sell
+     * reduces the quantity and leaves the average alone, which is what makes
+     * realised profit and loss computable at the point of sale.
+     */
+    private void movePosition(Order order, BigDecimal fillPrice) {
+        Long accountId = order.accountId();
+        Long instrumentId = order.instrumentId();
+        String type = PlatformConstants.DEFAULT_POSITION_TYPE;
+
+        PositionRow existing = positionMapper.findOne(accountId, instrumentId, type);
+
+        if (order.isBuy()) {
+            if (existing == null) {
+                Position opened = Position.opening(accountId, instrumentId, order.quantity(), fillPrice);
+                positionMapper.insertPosition(accountId, instrumentId, type,
+                        opened.quantity(), opened.averagePrice());
+                return;
+            }
+            Position held = held(existing, accountId, instrumentId);
+            held.applyBuy(order.quantity(), fillPrice);
+            positionMapper.updatePosition(accountId, instrumentId, type,
+                    held.quantity(), held.averagePrice());
+            return;
+        }
+
+        // Rule 7 already established the holding is there and large enough, so
+        // a missing row here would be a defect rather than a customer error.
+        Position held = held(existing, accountId, instrumentId);
+        held.applySell(order.quantity());
+
+        if (held.isClosed()) {
+            // Deleted rather than zeroed: ck_position_quantity_positive says a
+            // row is a real holding, and how it got there lives in the orders.
+            positionMapper.deletePosition(accountId, instrumentId, type);
+        } else {
+            positionMapper.updatePosition(accountId, instrumentId, type,
+                    held.quantity(), held.averagePrice());
+        }
+    }
+
+    private static Position held(PositionRow row, Long accountId, Long instrumentId) {
+        return new Position(row.getPositionId(), accountId, instrumentId,
+                row.getQuantity(), row.getAveragePrice());
     }
 
     /**
@@ -167,17 +234,21 @@ public class OrderService {
      * by a write: reading the status, deciding, and then writing would let the
      * executor fill the order in between, and the cancel would overwrite the
      * fill. Naming NEW in the WHERE clause makes the database arbitrate.
+     *
+     * Nothing is cancellable while Sprint 6 fills synchronously -- every order
+     * is terminal by the time the response leaves. The path exists because the
+     * contract fixes it, and Sprint 7 makes it reachable.
      */
     @Transactional
     public OrderResponse cancelOrder(UUID orderId) {
         OrderRow existing = orderMapper.findById(orderId);
 
-        // An unknown id and an already-terminal order answer identically. The
-        // catalogue has no ORD-404, and a distinct answer would let a caller
-        // with a valid token discover which order ids exist.
         if (existing == null) {
-            log.warn("ORD-409: cancel requested for unknown order {}", orderId);
-            throw new OrderNotCancellableException(null);
+            // The contract pairs a 404 status with the ORD-409 code here,
+            // because the catalogue has no ORD-404. The handler owns the
+            // pairing; this only says which case it is.
+            log.warn("cancel requested for unknown order {}", orderId);
+            throw new OrderNotFoundException(orderId);
         }
         if (!caller.canReach(existing.getClientId())) {
             log.warn("ACC-403: token for account {} tried to cancel order {} on account {}",
@@ -185,73 +256,27 @@ public class OrderService {
             throw new AccountNotActiveException(null);
         }
 
-        Instant now = Instant.now(clock);
-        int affected = orderMapper.cancelIfNew(orderId, now);
+        int affected = orderMapper.cancelIfNew(orderId, Instant.now(clock));
         if (affected == 0) {
             log.warn("ORD-409: order {} was {} when cancel ran", orderId, existing.getStatus());
             throw new OrderNotCancellableException(existing.getStatus());
-        }
-
-        // Releasing the blocked cash is part of the same transaction, under
-        // the same lock. A cancel that freed the order but not the money would
-        // leave the customer unable to spend funds no order is holding.
-        if (existing.getSide() == OrderSide.BUY) {
-            releaseFunds(existing);
         }
 
         InstrumentRow instrument = instrumentMapper.findById(existing.getInstrumentId());
         log.info("order {} cancelled on account {}", orderId, existing.getClientId());
 
         return new OrderResponse(
-                existing.getOrderId(),
-                existing.getClientId(),
+                OrderIdentifier.display(existing.getOrderId()),
+                OrderStatus.CANCELLED,
+                messageFor(OrderStatus.CANCELLED),
                 instrument == null ? null : instrument.getSymbol(),
                 existing.getSide(),
                 existing.getQuantity(),
-                existing.getPrice(),
-                OrderStatus.CANCELLED,
-                messageFor(OrderStatus.CANCELLED),
-                existing.getDatePlaced());
+                existing.getPrice());
     }
 
-    private void releaseFunds(OrderRow order) {
-        if (order.getPrice() == null) {
-            // A MARKET order with no limit price blocked no cash when it was
-            // placed -- it did not come through this service, which requires
-            // a price on every request. Releasing an amount we never blocked
-            // would credit the customer funds that were never held.
-            return;
-        }
-        AccountRow account = accountMapper.findById(order.getClientId());
-        // Scaled to the column's four places rather than left at the ten the
-        // raw product carries: the amount released has to be the amount that
-        // was blocked, to the digit, or blocked_funds drifts a fraction of a
-        // paisa every cancel and stops reconciling.
-        BigDecimal notional = order.getPrice()
-                .multiply(order.getQuantity())
-                .setScale(MONEY_SCALE, java.math.RoundingMode.HALF_UP);
-
-        int affected = accountMapper.releaseFunds(
-                account.getClientId(), notional, account.getVersion());
-
-        if (affected == 0) {
-            log.warn("ORD-409: could not release {} on account {} at version {}",
-                    notional, account.getClientId(), account.getVersion());
-            throw new OrderNotCancellableException(order.getStatus());
-        }
-    }
-
-    private OrderResponse toResponse(Order order, InstrumentRow instrument) {
-        return new OrderResponse(
-                order.orderId(),
-                order.accountId(),
-                instrument == null ? null : instrument.getSymbol(),
-                order.side(),
-                order.quantity(),
-                order.limitPrice(),
-                order.status(),
-                messageFor(order.status()),
-                order.placedAt());
+    private static BigDecimal money(BigDecimal amount) {
+        return amount.setScale(MONEY_SCALE, RoundingMode.HALF_UP);
     }
 
     /** Display only, per the contract. Never branch on this string. */

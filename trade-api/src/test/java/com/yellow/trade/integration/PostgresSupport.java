@@ -16,6 +16,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Date;
 import java.util.List;
+import java.util.UUID;
 import java.util.Map;
 
 /**
@@ -34,6 +35,7 @@ import java.util.Map;
  */
 abstract class PostgresSupport {
 
+    private static final String ISSUER = "auth-service";
     private static final String SECRET = "an-integration-test-secret-of-32-plus-bytes";
     private static final SecretKey KEY = Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8));
 
@@ -78,6 +80,7 @@ abstract class PostgresSupport {
             "base/000_base_schema.sql",
             "migrations/001_schema_migrations.sql",
             "migrations/002_api_alignment.sql",
+            "migrations/003_account_last_updated.sql",
             "indexes/001_performance_indexes.sql",
             "seed/001_reference_data.sql",
             "seed/002_clients.sql",
@@ -97,6 +100,7 @@ abstract class PostgresSupport {
             registry.add("spring.datasource.password", db::getPassword);
         }
         registry.add("security.jwt.secret", () -> SECRET);
+        registry.add("security.jwt.issuer", () -> ISSUER);
     }
 
     /**
@@ -126,8 +130,9 @@ abstract class PostgresSupport {
      */
     static HttpHeaders tokenFor(long accountId) {
         String jwt = Jwts.builder()
-                .subject(String.valueOf(accountId))
-                .claims(Map.of("accountId", accountId, "email", "client" + accountId + "@example.com"))
+                .subject(UUID.randomUUID().toString())
+                .issuer(ISSUER)
+                .claims(Map.of("accountId", accountId, "roles", List.of("CUSTOMER")))
                 .issuedAt(Date.from(Instant.now().minusSeconds(1)))
                 .expiration(Date.from(Instant.now().plusSeconds(600)))
                 .signWith(KEY)

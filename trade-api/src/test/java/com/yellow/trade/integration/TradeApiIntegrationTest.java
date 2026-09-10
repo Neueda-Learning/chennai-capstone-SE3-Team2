@@ -87,9 +87,8 @@ class TradeApiIntegrationTest extends PostgresSupport {
         BalanceResponse balance =
                 get(ACTIVE_ACCOUNT, "/api/v1/accounts/3/balance", BalanceResponse.class).getBody();
 
-        assertThat(balance.cashBalance(), comparesEqualTo(new BigDecimal("750000.0000")));
-        assertThat(balance.blockedFunds(), comparesEqualTo(new BigDecimal("220000.0000")));
-        assertThat(balance.availableFunds(), comparesEqualTo(new BigDecimal("530000.0000")));
+        // "available cash only": 750,000 held less 220,000 committed.
+        assertThat(balance.cashBalance(), comparesEqualTo(new BigDecimal("530000.0000")));
         assertThat(balance.currency(), is("INR"));
     }
 
@@ -100,8 +99,6 @@ class TradeApiIntegrationTest extends PostgresSupport {
                 get(ACTIVE_ACCOUNT, "/api/v1/accounts/3/positions", PositionResponse[].class).getBody();
 
         assertThat(positions, arrayWithSize(3));
-        // Records expose components, not bean getters, so assert directly.
-        assertThat(List.of(positions).stream().allMatch(p -> "DELIVERY".equals(p.positionType())), is(true));
         // MERSTL is is_tradable = FALSE. No new orders, but the holding stays
         // visible -- which is the whole reason delisting is a flag.
         assertThat(List.of(positions).stream().anyMatch(p -> p.symbol().equals("MERSTL")), is(true));
@@ -185,9 +182,13 @@ class TradeApiIntegrationTest extends PostgresSupport {
                          "price":1450.00,"idempotencyKey":"integration-key-01"}
                         """, tokenFor(ACTIVE_ACCOUNT)), OrderResponse.class);
 
-        assertThat(response.getStatusCode(), is(HttpStatus.CREATED));
-        UUID orderId = response.getBody().orderId();
-        assertThat(orderId, is(notNullValue()));
+        assertThat(response.getStatusCode(), is(HttpStatus.OK));
+        assertThat(response.getBody().status().name(), is("FILLED"));
+
+        // The response carries the display form; the row is keyed by the UUID.
+        String displayed = response.getBody().orderId();
+        assertThat(displayed, org.hamcrest.Matchers.startsWith("ORD-"));
+        UUID orderId = UUID.fromString(displayed.substring("ORD-".length()));
 
         // The row, with the defaults migration 002 supplies.
         var row = jdbc.queryForMap(
@@ -196,14 +197,21 @@ class TradeApiIntegrationTest extends PostgresSupport {
         assertThat(row.get("client_id"), is(3));
         assertThat(row.get("order_type"), is("MARKET"));
         assertThat(row.get("product_type"), is("CNC"));
-        assertThat(row.get("status"), is("NEW"));
-        assertThat(row.get("resolved_at"), is(nullValue()));
+        assertThat(row.get("status"), is("FILLED"));
+        assertThat(row.get("resolved_at"), is(notNullValue()));
 
-        // Cash committed with it, under the lock: 10 x 1450.00 = 14,500.
+        // Cash moved with it, under the lock: 10 x 1450.00 = 14,500 debited.
         var account = jdbc.queryForMap(
-                "SELECT blocked_funds, version FROM client_account WHERE client_id = 3");
-        assertThat((BigDecimal) account.get("blocked_funds"), comparesEqualTo(new BigDecimal("234500.0000")));
+                "SELECT balance, version FROM client_account WHERE client_id = 3");
+        assertThat((BigDecimal) account.get("balance"), comparesEqualTo(new BigDecimal("735500.0000")));
         assertThat(account.get("version"), is(8));
+
+        // And the holding moved in the same transaction. Rule 9.
+        assertThat(jdbc.queryForObject(
+                "SELECT quantity FROM position WHERE client_id = 3 AND instrument_id = "
+                        + "(SELECT instrument_id FROM equity WHERE ticker = 'APEX') "
+                        + "AND position_type = 'DELIVERY'", BigDecimal.class),
+                comparesEqualTo(new BigDecimal("10.000000")));
     }
 
     @Test
@@ -219,15 +227,15 @@ class TradeApiIntegrationTest extends PostgresSupport {
                 "SELECT count(*) FROM orders WHERE idempotency_key = ?", Integer.class,
                 "integration-key-02"), is(0));
         assertThat(jdbc.queryForObject(
-                "SELECT blocked_funds FROM client_account WHERE client_id = 3", BigDecimal.class),
-                comparesEqualTo(new BigDecimal("220000.0000")));
+                "SELECT balance FROM client_account WHERE client_id = 3", BigDecimal.class),
+                comparesEqualTo(new BigDecimal("750000.0000")));
     }
 
     @Test
     @DisplayName("the unique index refuses a reused idempotency key")
     void reusedIdempotencyKeyIsRefused() {
         assertThat(place(ACTIVE_ACCOUNT, "APEX", "BUY", 1, "100.00", "integration-key-03")
-                .getStatusCode(), is(HttpStatus.CREATED));
+                .getStatusCode(), is(HttpStatus.OK));
 
         ResponseEntity<String> replay =
                 place(ACTIVE_ACCOUNT, "APEX", "BUY", 1, "100.00", "integration-key-03");
@@ -253,30 +261,40 @@ class TradeApiIntegrationTest extends PostgresSupport {
     // ----------------------------------------------------------- cancel
 
     @Test
-    @DisplayName("cancelling releases the cash, and cancelling twice is ORD-409")
-    void cancelReleasesCashAndIsNotRepeatable() {
-        UUID orderId = rest.exchange("/api/v1/orders", HttpMethod.POST,
+    @DisplayName("an order that already filled cannot be cancelled")
+    void aFilledOrderIsNotCancellable() {
+        // Sprint 6 fills inside the request, so every order is terminal by the
+        // time the response arrives and nothing is cancellable. From Sprint 7
+        // an order sits NEW until the executor resolves it, and this path
+        // starts mattering.
+        String displayed = rest.exchange("/api/v1/orders", HttpMethod.POST,
                 new HttpEntity<>("""
                         {"accountId":3,"symbol":"APEX","side":"BUY","quantity":10,
                          "price":1450.00,"idempotencyKey":"integration-key-05"}
                         """, tokenFor(ACTIVE_ACCOUNT)), OrderResponse.class).getBody().orderId();
 
-        ResponseEntity<OrderResponse> cancelled = rest.exchange(
-                "/api/v1/orders/" + orderId, HttpMethod.DELETE,
-                new HttpEntity<>(tokenFor(ACTIVE_ACCOUNT)), OrderResponse.class);
+        String orderId = displayed.substring("ORD-".length());
 
-        assertThat(cancelled.getStatusCode(), is(HttpStatus.OK));
-        assertThat(cancelled.getBody().status().name(), is("CANCELLED"));
-        assertThat(jdbc.queryForObject(
-                "SELECT blocked_funds FROM client_account WHERE client_id = 3", BigDecimal.class),
-                comparesEqualTo(new BigDecimal("220000.0000")));
-
-        ResponseEntity<ErrorResponse> again = rest.exchange(
+        ResponseEntity<ErrorResponse> refused = rest.exchange(
                 "/api/v1/orders/" + orderId, HttpMethod.DELETE,
                 new HttpEntity<>(tokenFor(ACTIVE_ACCOUNT)), ErrorResponse.class);
 
-        assertThat(again.getStatusCode(), is(HttpStatus.CONFLICT));
-        assertThat(again.getBody().errorCode(), is("ORD-409"));
+        assertThat(refused.getStatusCode(), is(HttpStatus.CONFLICT));
+        assertThat(refused.getBody().errorCode(), is("ORD-409"));
+        assertThat(refused.getBody().message(), is("Order is not cancellable"));
+    }
+
+    @Test
+    @DisplayName("an unknown order id is 404 carrying ORD-409, which is what the contract states")
+    void unknownOrderPairs404WithOrd409() {
+        ResponseEntity<ErrorResponse> response = rest.exchange(
+                "/api/v1/orders/" + UUID.randomUUID(), HttpMethod.DELETE,
+                new HttpEntity<>(tokenFor(ACTIVE_ACCOUNT)), ErrorResponse.class);
+
+        // The catalogue has no ORD-404, so the status and the code disagree in
+        // shape here. It is exactly why clients branch on errorCode.
+        assertThat(response.getStatusCode(), is(HttpStatus.NOT_FOUND));
+        assertThat(response.getBody().errorCode(), is("ORD-409"));
     }
 
     // ------------------------------------------------------ concurrency
@@ -299,7 +317,7 @@ class TradeApiIntegrationTest extends PostgresSupport {
 
         long created = 0;
         for (Future<ResponseEntity<String>> future : results) {
-            if (future.get().getStatusCode() == HttpStatus.CREATED) {
+            if (future.get().getStatusCode() == HttpStatus.OK) {
                 created++;
             }
         }
@@ -308,13 +326,20 @@ class TradeApiIntegrationTest extends PostgresSupport {
         // would pass rule 6, and every one would write its own figure back.
         assertThat(created, is(1L));
 
-        BigDecimal blocked = jdbc.queryForObject(
-                "SELECT blocked_funds FROM client_account WHERE client_id = 4", BigDecimal.class);
-        BigDecimal committed = jdbc.queryForObject(
+        BigDecimal balance = jdbc.queryForObject(
+                "SELECT balance FROM client_account WHERE client_id = 4", BigDecimal.class);
+        BigDecimal spent = jdbc.queryForObject(
                 "SELECT coalesce(sum(price * quantity), 0) FROM orders "
                         + "WHERE client_id = 4 AND idempotency_key LIKE 'race-key-%'", BigDecimal.class);
 
-        // The reconciliation somebody would otherwise do the next morning.
-        assertThat(blocked, comparesEqualTo(new BigDecimal("1200.0000").add(committed)));
+        // The reconciliation somebody would otherwise do the next morning:
+        // the cash that left equals the notional of every order recorded.
+        assertThat(balance, comparesEqualTo(new BigDecimal("9200.7500").subtract(spent)));
+
+        // And the holding is there exactly once, for the one order that won.
+        assertThat(jdbc.queryForObject(
+                "SELECT coalesce(sum(quantity), 0) FROM position WHERE client_id = 4 "
+                        + "AND instrument_id = (SELECT instrument_id FROM equity WHERE ticker = 'APEX')",
+                BigDecimal.class), comparesEqualTo(new BigDecimal("5.000000")));
     }
 }

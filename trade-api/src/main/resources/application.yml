@@ -66,6 +66,10 @@ security:
     # is read. Listing it here rather than trusting the token's own
     # header is what stops an alg:none forgery.
     algorithm: HS256
+    # auth-api.yaml: "Consumers must validate the configured issuer."
+    # Without this, any service sharing the signing secret could mint a
+    # trading credential.
+    issuer: ${JWT_ISSUER:auth-service}
     # The route prefix the token filter guards. Sprint 10 adds routes
     # under the same prefix and inherits the protection.
     protected-path-prefix: /api/v1/

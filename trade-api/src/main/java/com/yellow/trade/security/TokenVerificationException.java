@@ -9,7 +9,7 @@ package com.yellow.trade.security;
  */
 public class TokenVerificationException extends RuntimeException {
 
-    public enum Reason { MISSING, MALFORMED, EXPIRED, BAD_SIGNATURE, BAD_ALGORITHM, NO_ACCOUNT_CLAIM }
+    public enum Reason { MISSING, MALFORMED, EXPIRED, BAD_SIGNATURE, BAD_ALGORITHM, WRONG_ISSUER, NO_ACCOUNT_CLAIM }
 
     private final transient Reason reason;
 

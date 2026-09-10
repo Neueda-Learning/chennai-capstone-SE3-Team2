@@ -130,4 +130,19 @@
            AND status   = 'NEW'
     </update>
 
+    <!--
+      Same guarded-transition shape as the cancel above. In Sprint 6 the
+      service fills in the same transaction that recorded the order, so this
+      always finds it NEW; from Sprint 7 the Trade Executor runs it from
+      another process and the guard is what stops it overwriting a cancel.
+    -->
+    <update id="fillIfNew">
+        UPDATE orders
+           SET status      = 'FILLED',
+               fill_price  = #{fillPrice},
+               resolved_at = #{resolvedAt}
+         WHERE order_id = #{orderId}
+           AND status   = 'NEW'
+    </update>
+
 </mapper>

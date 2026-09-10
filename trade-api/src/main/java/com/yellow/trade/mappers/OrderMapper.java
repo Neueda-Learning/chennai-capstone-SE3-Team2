@@ -46,4 +46,14 @@ public interface OrderMapper {
      */
     int cancelIfNew(@Param("orderId") UUID orderId,
                     @Param("resolvedAt") Instant resolvedAt);
+
+    /**
+     * Marks a working order as filled, at the price it filled at.
+     *
+     * Conditional on NEW for the same reason cancelIfNew is: two writers must
+     * not both believe they resolved the same order.
+     */
+    int fillIfNew(@Param("orderId") UUID orderId,
+                  @Param("fillPrice") java.math.BigDecimal fillPrice,
+                  @Param("resolvedAt") Instant resolvedAt);
 }

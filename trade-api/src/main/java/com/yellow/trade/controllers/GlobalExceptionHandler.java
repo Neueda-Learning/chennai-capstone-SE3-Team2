@@ -113,15 +113,18 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Kept for callers inside the platform. The HTTP surface never raises it:
-     * cancelling an unknown order answers ORD-409, identically to cancelling a
-     * filled one, so that a valid token cannot be used to discover which order
-     * ids exist.
+     * 404 with the ORD-409 code, which is what the contract states and is not a
+     * typo: the catalogue has no ORD-404, so an order that does not exist
+     * borrows the conflict code while answering the not-found status.
+     *
+     * This is the one place a status and a code disagree in shape, and it is
+     * why the contract insists clients branch on errorCode rather than on the
+     * status alone.
      */
     @ExceptionHandler(OrderNotFoundException.class)
     public ResponseEntity<ErrorResponse> handle(OrderNotFoundException e) {
-        log.warn("ORD-409: no order with id {}", e.requestedOrderId());
-        return envelope(HttpStatus.CONFLICT, e);
+        log.warn("order not found: {}", e.requestedOrderId());
+        return envelope(HttpStatus.NOT_FOUND, e);
     }
 
     // ---------------------------------------------------------------- 422

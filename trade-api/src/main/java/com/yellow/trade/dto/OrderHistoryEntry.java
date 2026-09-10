@@ -5,20 +5,22 @@ import com.yellow.enums.OrderStatus;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.UUID;
 
 /**
  * contracts/trade-api.yaml -> OrderHistoryEntry.
  *
- * Includes rejected orders: the order table is the audit trail, and an order
- * is recorded when it is received, before anyone knows whether it will
- * succeed.
+ * Every order recorded against the account, newest first, including rejected
+ * and cancelled ones. This is the audit trail and it is never filtered by
+ * default.
  *
  * executedPrice is null until the order is FILLED -- a REJECTED or CANCELLED
- * order never has one. resolvedAt is null exactly when the status is NEW.
+ * order never has one.
+ *
+ * quantity is decimal rather than int32, the single deviation recorded in
+ * contracts/DEVIATIONS.md.
  */
 public record OrderHistoryEntry(
-        UUID orderId,
+        String orderId,
         Long accountId,
         String symbol,
         OrderSide side,
@@ -27,6 +29,5 @@ public record OrderHistoryEntry(
         BigDecimal executedPrice,
         OrderStatus status,
         String idempotencyKey,
-        Instant placedAt,
-        Instant resolvedAt) {
+        Instant createdOn) {
 }

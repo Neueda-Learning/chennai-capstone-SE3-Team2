@@ -1,321 +1,370 @@
-openapi: 3.0.3
-
-# =====================================================================
-# Trade REST API — the contract.
-#
-# This file is the specification, not documentation of something built.
-# Sprint 6 implements it; Sprint 9 generates a typed Angular client from
-# it without reading any Java.
-#
-# PROVENANCE
-# ----------
-# No contract was supplied to the team, so this file was authored by
-# Team 2 from what the sprint briefs already fix in prose: the six
-# operations, the error envelope, the seven catalogue codes, the three
-# enumerations, and the six PlaceOrderRequest fields with their
-# constraints. Those parts are transcription, not invention.
-#
-# Where the briefs are silent, a decision was taken and recorded here
-# as a "DECISION:" comment so the review can see it was a choice.
-# If an official contract is issued later it supersedes this file.
-#
-# MONEY AND QUANTITY
-# ------------------
-# Every monetary and quantity value is an exact decimal, declared as
-# `type: number` with NO `format`, deliberately: `format: double` would
-# commit the platform to binary floating point, and a balance out by a
-# hundredth of a penny after a thousand trades is a defect an auditor
-# finds first. Servers serialise these from BigDecimal; clients must
-# read them into a decimal type, never a binary float.
-#   money    — scale 4 in the database, presented at scale 2
-#   quantity — scale 6 in the database; mutual fund units are fractional
-# =====================================================================
+openapi: 3.1.0
 
 info:
   title: Trade REST API
   version: 1.0.0
-  description: >-
-    Order placement, cancellation and account reads for the trading
-    platform. The service owns transport and persistence only: business
-    rules live in the domain package it hosts, and pricing belongs to
-    the Trade Executor.
+  summary: Order placement, order cancellation and account queries for the Enterprise Trading Platform.
+  description: |
+    Binding contract for the Sprint 6 Spring Boot service. Implement it exactly. The Angular UI
+    generates its typed client from this file, so a field renamed here is a compile error there.
+
+    ## Identifiers
+
+    `accountId` means the numeric surrogate key `ACCOUNTS.id` everywhere in this contract: in the
+    path parameter, in the order request body, and in the JWT `accountId` claim. The string business
+    identifier lives on `ACCOUNTS.account_id` and is returned as `AccountResponse.accountId`, which
+    is the one place the name carries the other meaning. Where any other material uses the name
+    loosely, this contract is the one that binds.
+
+    ## Order lifecycle and the Sprint 7 change
+
+    In Sprint 6 there is no Trade Executor, so `POST /api/v1/orders` validates, fills and persists
+    inside one request and returns `FILLED` or `REJECTED`.
+
+    From Sprint 7 execution is asynchronous. The endpoint validates, persists the order with status
+    `NEW`, publishes it to the `orders` Kafka topic and returns `NEW`. The Trade Executor consumes
+    the order, prices it against a live Fauxnance quote, applies the fill rules, updates the order,
+    the cash balance and the position in one database transaction, and publishes the outcome to
+    `trade-events`.
+
+    Both behaviours are valid responses under this contract. Clients must handle an order that is
+    still `NEW` when the response arrives.
+
+    ## Business rules
+
+    Enforced in the order given. The first failure wins and no later rule is evaluated.
+
+    | # | Rule | Error |
+    |---|---|---|
+    | 1 | The account must exist | `ACC-404`, 404 |
+    | 2 | The account must be `ACTIVE` | `ACC-403`, 403 |
+    | 3 | The instrument must exist and be tradable | `INS-404`, 404 |
+    | 4 | Quantity must be greater than zero | `VAL-422`, 422 |
+    | 5 | Price must be greater than zero | `VAL-422`, 422 |
+    | 6 | BUY: cash balance must be at least quantity multiplied by price | `ORD-400`, 400 |
+    | 7 | SELL: held quantity must be at least the order quantity | `ORD-409`, 409 |
+    | 8 | The idempotency key must be unique | `ORD-409`, 409 |
+
+    Rules 9 and 10 have no error code. Cash and position update atomically, in one transaction.
+    Every order is recorded, including rejected ones, because the order table is the audit trail.
+
+    Rule 8 is enforced by the unique constraint on `orders.idempotency_key`, not by a read followed
+    by a write. A read-then-write check has a race that two concurrent requests will find.
+
+    ## Authentication
+
+    Every `/api/v1/**` route requires a valid signed JWT in the `Authorization` header. A missing,
+    malformed, expired or wrongly signed token is `AUTH-401`, 401. A valid token whose `accountId`
+    claim does not match the account being addressed is `ACC-403`, 403: a token proves who you are,
+    not what you may reach.
+  contact:
+    name: Enterprise Trading Platform, programme materials
+  license:
+    name: Instructional use only
 
 servers:
   - url: http://localhost:8080
-    description: Local orchestration (docker compose, platform profile)
+    description: Local development, run from Docker Compose
+  - url: http://trade-api:8080
+    description: Service name inside the Docker Compose network
 
 tags:
-  - name: Accounts
-    description: Read-only views of one account, its cash, its holdings and its orders.
   - name: Orders
     description: Placing and cancelling orders.
+  - name: Accounts
+    description: Account details, cash balance, holdings and order history.
 
-# ---------------------------------------------------------------------
-# Every route under /api/v1/ is answered for token validity once, before
-# any controller runs. Applied globally here rather than per-operation
-# so that a route added in Sprint 10 is protected by default.
-# ---------------------------------------------------------------------
 security:
   - bearerAuth: []
 
 paths:
-
-  # -------------------------------------------------------------------
-  /api/v1/accounts/{accountId}:
-    parameters:
-      - $ref: '#/components/parameters/AccountIdPath'
-    get:
-      tags: [Accounts]
-      operationId: getAccount
-      summary: Account details
-      description: >-
-        Identity and lifecycle state for one account. Money is not
-        returned here; see /balance. A SUSPENDED account can be read
-        and cannot trade, so this endpoint answers 200 for it.
-      responses:
-        '200':
-          description: The account.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AccountResponse'
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/AccountForbidden' }
-        '404': { $ref: '#/components/responses/AccountNotFound' }
-        '422': { $ref: '#/components/responses/ValidationFailed' }
-
-  # -------------------------------------------------------------------
-  /api/v1/accounts/{accountId}/balance:
-    parameters:
-      - $ref: '#/components/parameters/AccountIdPath'
-    get:
-      tags: [Accounts]
-      operationId: getBalance
-      summary: Cash balance
-      description: >-
-        Cash only — no holdings value and no profit and loss. Valuation
-        is the Sprint 10 extension service, which is separate.
-      responses:
-        '200':
-          description: The cash position.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BalanceResponse'
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/AccountForbidden' }
-        '404': { $ref: '#/components/responses/AccountNotFound' }
-        '422': { $ref: '#/components/responses/ValidationFailed' }
-
-  # -------------------------------------------------------------------
-  /api/v1/accounts/{accountId}/positions:
-    parameters:
-      - $ref: '#/components/parameters/AccountIdPath'
-    get:
-      tags: [Accounts]
-      operationId: getPositions
-      summary: Current holdings
-      description: >-
-        One entry per instrument per position type. The same scrip held
-        both intraday and as delivery is two entries, not one: one is
-        squared off tonight and one sits in the demat account. An
-        account holding nothing returns an empty array, not 404.
-      responses:
-        '200':
-          description: The holdings. Empty array when nothing is held.
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/PositionResponse'
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/AccountForbidden' }
-        '404': { $ref: '#/components/responses/AccountNotFound' }
-        '422': { $ref: '#/components/responses/ValidationFailed' }
-
-  # -------------------------------------------------------------------
-  /api/v1/accounts/{accountId}/orders:
-    parameters:
-      - $ref: '#/components/parameters/AccountIdPath'
-    get:
-      tags: [Accounts]
-      operationId: getOrderHistory
-      summary: Order history
-      description: >-
-        Orders placed by this account, newest first, including rejected
-        ones — the order table is the audit trail.
-
-        DECISION: not paginated. Live orders are archived seven days
-        after reaching a terminal status, so this collection is small by
-        design. If Sprint 10 needs the archive, that is a new operation
-        over orders_history rather than a page parameter here.
-      parameters:
-        - name: status
-          in: query
-          required: false
-          description: Return only orders in this status.
-          schema:
-            $ref: '#/components/schemas/OrderStatus'
-        - name: from
-          in: query
-          required: false
-          description: Only orders placed at or after this instant.
-          schema:
-            type: string
-            format: date-time
-          example: '2026-09-01T00:00:00Z'
-        - name: to
-          in: query
-          required: false
-          description: Only orders placed strictly before this instant.
-          schema:
-            type: string
-            format: date-time
-          example: '2026-09-30T00:00:00Z'
-      responses:
-        '200':
-          description: The matching orders, newest first.
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/OrderHistoryEntry'
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/AccountForbidden' }
-        '404': { $ref: '#/components/responses/AccountNotFound' }
-        '422': { $ref: '#/components/responses/ValidationFailed' }
-
-  # -------------------------------------------------------------------
   /api/v1/orders:
     post:
       tags: [Orders]
       operationId: placeOrder
       summary: Place an order
-      description: >-
-        Records an order against one account after the eight business
-        rules pass. Cash and position move together with the insert or
-        neither moves.
+      description: |
+        Validates the request against business rules 1 to 8 and records the order. Returns `NEW`
+        once the Trade Executor exists, or the terminal status when the service fills synchronously
+        in Sprint 6.
 
-        The order is recorded in status NEW; it is the Trade Executor in
-        Sprint 7 that fills or rejects it against a live quote. Retrying
-        with the same idempotencyKey is refused with ORD-409 rather than
-        duplicating the trade.
-
-        DECISION: 201 with a Location header, because this creates a
-        resource that is addressable at DELETE /api/v1/orders/{orderId}.
+        Retrying with the same `idempotencyKey` is not a way to poll for status. It returns
+        `ORD-409`. Poll `GET /api/v1/accounts/{id}/orders` instead.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PlaceOrderRequest'
+            examples:
+              buy:
+                summary: Buy 100 shares
+                value:
+                  accountId: 1
+                  symbol: ACME
+                  side: BUY
+                  quantity: 100
+                  price: 25.50
+                  idempotencyKey: 6f2b1c2a-6a1e-4a4f-9c0d-2f7a1b3c4d5e
       responses:
-        '201':
-          description: The order was accepted and recorded.
-          headers:
-            Location:
-              description: The created order.
-              schema:
-                type: string
-              example: /api/v1/orders/6f9619ff-8b86-d011-b42d-00c04fc964ff
+        '200':
+          description: Order accepted and recorded.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrderResponse'
+              examples:
+                accepted:
+                  summary: Sprint 7 onwards, asynchronous execution
+                  value:
+                    orderId: ORD-6f2b1c2a-6a1e-4a4f-9c0d-2f7a1b3c4d5e
+                    status: NEW
+                    message: Order accepted
+                    symbol: ACME
+                    side: BUY
+                    quantity: 100
+                    price: 25.50
+                filled:
+                  summary: Sprint 6 only, synchronous execution
+                  value:
+                    orderId: ORD-6f2b1c2a-6a1e-4a4f-9c0d-2f7a1b3c4d5e
+                    status: FILLED
+                    message: Order executed
+                    symbol: ACME
+                    side: BUY
+                    quantity: 100
+                    price: 25.50
         '400':
-          description: |
-            ORD-400 — a buy costs more than the available cash.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                errorCode: ORD-400
-                message: Insufficient funds
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/AccountForbidden' }
+          $ref: '#/components/responses/InsufficientFunds'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/AccountNotActive'
         '404':
-          description: |
-            ACC-404 — no account exists with that key.
-            INS-404 — the instrument is unknown or no longer tradable.
-            Branch on errorCode, never on the status alone.
+          description: The account or the instrument does not exist.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               examples:
-                accountNotFound:
-                  value: { errorCode: ACC-404, message: Account not found }
-                instrumentNotFound:
-                  value: { errorCode: INS-404, message: Instrument not found }
+                accountMissing:
+                  value:
+                    errorCode: ACC-404
+                    message: Account not found
+                instrumentMissing:
+                  value:
+                    errorCode: INS-404
+                    message: Instrument not found
         '409':
-          description: |
-            ORD-409 — insufficient holdings on a sell, or a reused
-            idempotency key. Branch on errorCode, never on the status.
+          description: Insufficient holdings for a sell, or the idempotency key has been used.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               examples:
-                insufficientHoldings:
-                  value: { errorCode: ORD-409, message: Insufficient holdings }
-                duplicateOrder:
-                  value: { errorCode: ORD-409, message: Duplicate order }
-        '422': { $ref: '#/components/responses/ValidationFailed' }
+                holdings:
+                  value:
+                    errorCode: ORD-409
+                    message: Insufficient holdings
+                duplicate:
+                  value:
+                    errorCode: ORD-409
+                    message: Duplicate order
+        '422':
+          $ref: '#/components/responses/InvalidInput'
 
-  # -------------------------------------------------------------------
-  /api/v1/orders/{orderId}:
-    parameters:
-      - name: orderId
-        in: path
-        required: true
-        description: The order identifier returned by placeOrder.
-        schema:
-          type: string
-          format: uuid
-        example: 6f9619ff-8b86-d011-b42d-00c04fc964ff
+  /api/v1/orders/{id}:
     delete:
       tags: [Orders]
       operationId: cancelOrder
-      summary: Cancel an order
-      description: >-
-        Cancels an order that is still NEW. The transition is made
-        conditional on the status the caller expects, in one statement,
-        so a race with the executor is refused rather than lost.
+      summary: Cancel a working order
+      description: |
+        Cancels an order that is still `NEW` and returns the updated order. An order that is already
+        `FILLED`, `REJECTED` or `CANCELLED` cannot be cancelled and returns `ORD-409`.
 
-        DECISION: 200 with the cancelled order as the body rather than
-        204, because the client needs the resulting status to update the
-        screen without a second request.
+        The cancellation is a state transition guarded inside the database transaction. Checking the
+        status, then updating it, without a guarded transition, races the Trade Executor.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The order UUID, without the `ORD-` display prefix.
+          schema:
+            type: string
+            format: uuid
       responses:
         '200':
-          description: The order, now CANCELLED.
+          description: Order cancelled.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrderResponse'
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/AccountForbidden' }
-        '409':
-          description: |
-            ORD-409 — the order does not exist, or is already FILLED,
-            REJECTED or CANCELLED and cannot be cancelled.
-
-            DECISION: an unknown order id answers ORD-409 with the same
-            body a terminal order gets. The catalogue has no ORD-404,
-            and answering 404 here would let a caller holding a valid
-            token enumerate which order ids exist.
+              examples:
+                cancelled:
+                  value:
+                    orderId: ORD-6f2b1c2a-6a1e-4a4f-9c0d-2f7a1b3c4d5e
+                    status: CANCELLED
+                    message: Order cancelled
+                    symbol: ACME
+                    side: BUY
+                    quantity: 100
+                    price: 25.50
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/AccountNotActive'
+        '404':
+          description: No order exists with that identifier.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-              example:
-                errorCode: ORD-409
-                message: Order cannot be cancelled
-        '422': { $ref: '#/components/responses/ValidationFailed' }
+              examples:
+                notFound:
+                  value:
+                    errorCode: ORD-409
+                    message: Order not found
+        '409':
+          description: The order is not in a cancellable state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                alreadyFilled:
+                  value:
+                    errorCode: ORD-409
+                    message: Order is not cancellable
 
-# =====================================================================
+  /api/v1/accounts/{id}:
+    get:
+      tags: [Accounts]
+      operationId: getAccount
+      summary: Get account details
+      parameters:
+        - $ref: '#/components/parameters/AccountIdPath'
+      responses:
+        '200':
+          description: Account details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/AccountNotActive'
+        '404':
+          $ref: '#/components/responses/AccountNotFound'
+
+  /api/v1/accounts/{id}/balance:
+    get:
+      tags: [Accounts]
+      operationId: getBalance
+      summary: Get cash balance
+      description: |
+        Returns available cash only. It does not include the market value of holdings. Portfolio
+        valuation is the Sprint 10 Portfolio and P&L extension, contracted separately.
+      parameters:
+        - $ref: '#/components/parameters/AccountIdPath'
+      responses:
+        '200':
+          description: Cash balance.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/AccountNotActive'
+        '404':
+          $ref: '#/components/responses/AccountNotFound'
+
+  /api/v1/accounts/{id}/positions:
+    get:
+      tags: [Accounts]
+      operationId: getPositions
+      summary: Get holdings
+      description: |
+        Net held quantity and average cost per instrument. Positions with a net quantity of zero are
+        not returned. Market value is not calculated here; it needs a live quote and belongs to the
+        Portfolio and P&L extension.
+      parameters:
+        - $ref: '#/components/parameters/AccountIdPath'
+      responses:
+        '200':
+          description: Holdings for the account.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PositionResponse'
+              examples:
+                holdings:
+                  value:
+                    - accountId: 1
+                      symbol: ACME
+                      quantity: 100
+                      averageCost: 25.50
+                    - accountId: 1
+                      symbol: INFY.NS
+                      quantity: 40
+                      averageCost: 1580.25
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/AccountNotActive'
+        '404':
+          $ref: '#/components/responses/AccountNotFound'
+
+  /api/v1/accounts/{id}/orders:
+    get:
+      tags: [Accounts]
+      operationId: getOrders
+      summary: Get order history
+      description: |
+        Every order recorded against the account, newest first, including rejected and cancelled
+        ones. This is the audit trail and it is never filtered by default.
+      parameters:
+        - $ref: '#/components/parameters/AccountIdPath'
+        - name: status
+          in: query
+          required: false
+          description: Restrict to one order status.
+          schema:
+            $ref: '#/components/schemas/OrderStatus'
+        - name: from
+          in: query
+          required: false
+          description: Include orders created on or after this instant.
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: false
+          description: Include orders created on or before this instant.
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Order history for the account.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrderHistoryEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/AccountNotActive'
+        '404':
+          $ref: '#/components/responses/AccountNotFound'
+
 components:
 
   securitySchemes:
@@ -323,454 +372,328 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: >-
-        A signed token as defined by auth-api.yaml. Verification checks
-        the signature, the expiry and the requested algorithm, in that
-        order, before any claim is read. Whether the caller holds a
-        valid token is answered once for every route under /api/v1/;
-        whether that caller may reach the addressed account is answered
-        where the account key is known, and answers ACC-403.
+      description: |
+        A JWT issued by the auth service. The claims contract is defined in `auth-api.yaml`.
 
   parameters:
     AccountIdPath:
-      name: accountId
+      name: id
       in: path
       required: true
-      description: >-
-        The numeric account key. Everywhere in this contract except
-        AccountResponse.accountId, "accountId" means this numeric key —
-        it is the value on every order and in the JWT claim.
+      description: The numeric account key, `ACCOUNTS.id`.
       schema:
         type: integer
         format: int64
         minimum: 1
-      example: 3
+      example: 1
 
-  # -------------------------------------------------------------------
-  # The error envelope. Every failure leaves as exactly this shape and
-  # nothing else: no whitelabel page, no stack trace, no bare status
-  # with an empty body. Sprint 9 has one error handler because there is
-  # one envelope.
-  # -------------------------------------------------------------------
   responses:
-    Unauthorized:
-      description: |
-        AUTH-401 — the token is missing, malformed, expired or wrongly
-        signed. All four answer identically: a more specific message
-        tells an attacker which of the four they got.
+    Unauthorised:
+      description: Missing, malformed, expired or wrongly signed token.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
-          example:
-            errorCode: AUTH-401
-            message: Authentication failed
-
-    AccountForbidden:
-      description: |
-        ACC-403 — the account is not ACTIVE, or the token does not reach
-        it. Both answer with the identical message, so that nobody can
-        enumerate account keys by reading the difference.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorResponse'
-          example:
-            errorCode: ACC-403
-            message: Account not active
-
+          examples:
+            unauthorised:
+              value:
+                errorCode: AUTH-401
+                message: Unauthorised
     AccountNotFound:
-      description: ACC-404 — no account exists with that key.
+      description: No account exists with that key.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
-          example:
-            errorCode: ACC-404
-            message: Account not found
-
-    ValidationFailed:
-      description: VAL-422 — the request failed field validation.
+          examples:
+            notFound:
+              value:
+                errorCode: ACC-404
+                message: Account not found
+    AccountNotActive:
+      description: The account is SUSPENDED or CLOSED, or the token does not grant access to it.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
-          example:
-            errorCode: VAL-422
-            message: Invalid input
+          examples:
+            notActive:
+              value:
+                errorCode: ACC-403
+                message: Account not active
+    InsufficientFunds:
+      description: A buy order costs more than the available cash balance.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            funds:
+              value:
+                errorCode: ORD-400
+                message: Insufficient funds
+    InvalidInput:
+      description: The request failed field validation.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            invalid:
+              value:
+                errorCode: VAL-422
+                message: Invalid input
 
-  # -------------------------------------------------------------------
   schemas:
-
-    ErrorResponse:
-      type: object
-      additionalProperties: false
-      required: [errorCode, message]
-      description: >-
-        The one body shape every failure returns. Clients branch on
-        errorCode, never on the status alone, because 404 and 409 each
-        carry more than one code.
-      properties:
-        errorCode:
-          type: string
-          description: The catalogue code. This is what clients branch on.
-          enum:
-            - ACC-404
-            - ACC-403
-            - INS-404
-            - ORD-400
-            - ORD-409
-            - VAL-422
-            - AUTH-401
-        message:
-          type: string
-          description: >-
-            Written for a human reading a screen. Never a class name, a
-            SQL fragment, an account key or an internal identifier —
-            what an investigation needs is logged on the server.
-          maxLength: 200
-          example: Insufficient funds
-
-    # -----------------------------------------------------------------
-    # The three enumerations are fixed. The same literals appear in the
-    # domain package, in the database, and in the types Sprint 9
-    # generates from this file, so a renamed or extra literal breaks
-    # three places at once. CANCELLED is spelled with two Ls.
-    # -----------------------------------------------------------------
-    AccountStatus:
-      type: string
-      description: >-
-        ACTIVE accounts trade. SUSPENDED accounts can be read and cannot
-        trade, reversibly. CLOSED accounts never trade again and are
-        never deleted.
-      enum: [ACTIVE, SUSPENDED, CLOSED]
 
     OrderSide:
       type: string
       enum: [BUY, SELL]
+      description: Direction of the order.
 
     OrderStatus:
       type: string
-      description: >-
-        NEW is the working state; the other three are terminal. There is
-        no partial-fill literal, which is why the Trade Executor fills
-        in full or rejects.
       enum: [NEW, FILLED, REJECTED, CANCELLED]
+      description: |
+        `NEW` is the working state, held from acceptance until the Trade Executor resolves it.
+        `FILLED`, `REJECTED` and `CANCELLED` are terminal. There is no partial-fill state, so the
+        Trade Executor fills an order in full or rejects it.
 
-    PositionType:
+    AccountStatus:
       type: string
-      description: >-
-        INTRADAY feeds the Positions tab and is squared off tonight;
-        DELIVERY feeds the Holdings tab and sits in the demat account.
-      enum: [INTRADAY, DELIVERY]
+      enum: [ACTIVE, SUSPENDED, CLOSED]
+      description: Only an ACTIVE account may place or cancel orders.
 
-    # -----------------------------------------------------------------
-    AccountResponse:
-      type: object
-      additionalProperties: false
-      required: [accountId, holderName, status, openedOn]
-      description: >-
-        DECISION: money is not repeated here — /balance owns it, so
-        there is one place a cash figure comes from. The optimistic-lock
-        version is not exposed either: no operation in this contract
-        takes it from a client, and it is internal machinery.
-      properties:
-        accountId:
-          type: string
-          description: >-
-            The string business reference a support call quotes. This is
-            the ONE place in the platform where "accountId" means the
-            string reference rather than the numeric key.
-          maxLength: 20
-          example: ACC-000003
-        holderName:
-          type: string
-          description: The account holder's full legal name.
-          maxLength: 120
-          example: Priya Menon
-        status:
-          $ref: '#/components/schemas/AccountStatus'
-        openedOn:
-          type: string
-          format: date-time
-          description: When the account was created.
-          example: '2026-07-04T09:15:00Z'
-
-    # -----------------------------------------------------------------
-    BalanceResponse:
-      type: object
-      additionalProperties: false
-      required: [accountId, cashBalance, blockedFunds, availableFunds, currency, asOf]
-      description: >-
-        Cash only. availableFunds is derived, never stored:
-        availableFunds = cashBalance - blockedFunds. It is the figure
-        rule 6 tests a buy against, so it is returned rather than left
-        for the client to compute and get subtly wrong.
-      properties:
-        accountId:
-          type: integer
-          format: int64
-          description: The numeric account key.
-          example: 3
-        cashBalance:
-          type: number
-          description: Total cash held, including funds blocked against pending orders.
-          minimum: 0
-          example: 25000.0000
-        blockedFunds:
-          type: number
-          description: The subset of cashBalance held against pending orders.
-          minimum: 0
-          example: 5000.0000
-        availableFunds:
-          type: number
-          description: cashBalance minus blockedFunds. Derived, never stored.
-          minimum: 0
-          example: 20000.0000
-        currency:
-          type: string
-          description: >-
-            ISO 4217 currency of the cash balance.
-
-            DECISION: constant "INR" this sprint. The schema holds no
-            currency column because the platform trades one market;
-            the field exists so that adding a second does not change
-            the response shape.
-          minLength: 3
-          maxLength: 3
-          example: INR
-        asOf:
-          type: string
-          format: date-time
-          description: When this balance was read.
-          example: '2026-09-09T10:31:07Z'
-
-    # -----------------------------------------------------------------
-    PositionResponse:
-      type: object
-      additionalProperties: false
-      required: [accountId, symbol, positionType, quantity, averagePrice]
-      description: >-
-        One current holding. A position is deleted when it closes, so a
-        zero-quantity entry is never returned.
-      properties:
-        accountId:
-          type: integer
-          format: int64
-          example: 3
-        symbol:
-          type: string
-          description: The instrument's exchange symbol.
-          maxLength: 20
-          example: INFY
-        positionType:
-          $ref: '#/components/schemas/PositionType'
-        quantity:
-          type: number
-          description: >-
-            Units currently held, always greater than zero. Fractional:
-            mutual fund units are not whole numbers.
-          exclusiveMinimum: true
-          minimum: 0
-          example: 152.386000
-        averagePrice:
-          type: number
-          description: >-
-            Average cost per unit. A buy recalculates it across the old
-            holding and the new units; a sell reduces the quantity and
-            leaves it alone, which is what makes realised profit and
-            loss computable at the point of sale.
-          exclusiveMinimum: true
-          minimum: 0
-          example: 1448.5000
-
-    # -----------------------------------------------------------------
     PlaceOrderRequest:
       type: object
       additionalProperties: false
       required: [accountId, symbol, side, quantity, price, idempotencyKey]
-      description: >-
-        Six fields. These are business constraints rather than transport
-        constraints, which is why they are also enforced in the domain:
-        the rules have to hold for the Trade Executor replaying an order
-        without ever running a validator.
       properties:
         accountId:
           type: integer
           format: int64
-          description: The numeric account key the order is placed against.
           minimum: 1
-          example: 3
+          description: The numeric account key, `ACCOUNTS.id`. Must match the token's `accountId` claim.
+          example: 1
         symbol:
           type: string
-          description: The instrument's exchange symbol. Must be tradable.
           minLength: 1
           maxLength: 20
-          example: INFY
+          description: |
+            Instrument symbol, matching `INSTRUMENTS.symbol` and the Fauxnance symbol scheme:
+            a plain ticker for US equities, a `.NS` or `.BO` suffix for NSE or BSE, `FX:` for a
+            currency pair, `X:` for crypto.
+          examples: [ACME, AAPL, INFY.NS, 'FX:EURUSD']
         side:
           $ref: '#/components/schemas/OrderSide'
         quantity:
           type: integer
           format: int32
-          description: >-
-            Whole units, greater than zero.
-
-            Note the asymmetry with PositionResponse.quantity, which is
-            fractional: this API accepts orders in whole units only,
-            while a holding can be fractional because mutual fund
-            allotments are.
           minimum: 1
-          example: 50
+          description: Whole units. Must be greater than zero, business rule 4.
+          example: 100
         price:
           type: number
-          description: >-
-            The price the customer submitted, greater than zero, at most
-            two decimal places. It is a ceiling on a buy and a floor on
-            a sell — the executed price is what the Trade Executor
-            achieves against a live quote in Sprint 7, and does not
-            exist until the order is filled.
-          exclusiveMinimum: true
-          minimum: 0
+          format: double
+          exclusiveMinimum: 0
           multipleOf: 0.01
-          example: 1450.00
+          description: |
+            Limit price per unit, to two decimal places. Must be greater than zero, business rule 5.
+            Serialise as a JSON number and hold it as `BigDecimal` in Java. Never use `double` for
+            money in the domain.
+          example: 25.50
         idempotencyKey:
           type: string
-          description: >-
-            Caller-generated, unique per account. Replaying an accepted
-            key is refused with ORD-409 rather than duplicating the
-            trade; the authority is a unique constraint in the database,
-            not a read followed by a write.
           minLength: 8
           maxLength: 100
-          example: ord-2026-09-09-a1b2c3d4
+          description: |
+            Client-generated unique request identifier, normally a UUID. Enforced by a unique
+            constraint on `orders.idempotency_key`. Reuse returns `ORD-409`.
+          example: 6f2b1c2a-6a1e-4a4f-9c0d-2f7a1b3c4d5e
 
-    # -----------------------------------------------------------------
     OrderResponse:
       type: object
       additionalProperties: false
-      required: [orderId, accountId, symbol, side, quantity, price, status, message, placedAt]
-      description: The result of placing or cancelling one order.
+      required: [orderId, status, message, symbol, side, quantity, price]
       properties:
         orderId:
           type: string
-          format: uuid
-          description: >-
-            The order identifier, generated by the domain when the order
-            is placed rather than by the database, so that it exists
-            before the insert and a retry can carry the same one.
-
-            It is returned bare, with no display prefix: the value the
-            API hands out is the value DELETE /api/v1/orders/{orderId}
-            accepts back.
-          example: 6f9619ff-8b86-d011-b42d-00c04fc964ff
-        accountId:
-          type: integer
-          format: int64
-          example: 3
-        symbol:
-          type: string
-          maxLength: 20
-          example: INFY
-        side:
-          $ref: '#/components/schemas/OrderSide'
-        quantity:
-          type: number
-          description: >-
-            Units ordered. A response is fractional even though
-            PlaceOrderRequest accepts whole units only: order history
-            includes mutual fund orders placed through other channels,
-            and an allotment of 152.386 units is a real row. Reading
-            this into a 32-bit integer loses those orders.
-          exclusiveMinimum: true
-          minimum: 0
-          example: 50
-        price:
-          type: number
-          description: The price the customer submitted.
-          exclusiveMinimum: true
-          minimum: 0
-          multipleOf: 0.01
-          example: 1450.00
+          description: The order identifier, displayed with an `ORD-` prefix over the stored UUID.
+          example: ORD-6f2b1c2a-6a1e-4a4f-9c0d-2f7a1b3c4d5e
         status:
           $ref: '#/components/schemas/OrderStatus'
         message:
           type: string
-          description: >-
-            Display only. Never branch on this string — branch on
-            status, or on errorCode when the request failed.
-          maxLength: 200
+          description: Human-readable outcome. For display only. Never branch on this string.
           example: Order accepted
-        placedAt:
-          type: string
-          format: date-time
-          description: Submission time.
-          example: '2026-09-09T09:16:02Z'
-
-    # -----------------------------------------------------------------
-    OrderHistoryEntry:
-      type: object
-      additionalProperties: false
-      required: [orderId, accountId, symbol, side, quantity, price, status, placedAt]
-      description: >-
-        One order in the history, including rejected ones — the order
-        table is the audit trail, so an order is recorded when it is
-        received, before anyone knows whether it will succeed.
-      properties:
-        orderId:
-          type: string
-          format: uuid
-          example: 6f9619ff-8b86-d011-b42d-00c04fc964ff
-        accountId:
-          type: integer
-          format: int64
-          example: 3
         symbol:
           type: string
-          maxLength: 20
-          example: INFY
+          example: ACME
         side:
           $ref: '#/components/schemas/OrderSide'
         quantity:
-          type: number
-          description: >-
-            Units ordered, fractional for the same reason as
-            OrderResponse.quantity.
-          exclusiveMinimum: true
-          minimum: 0
-          example: 50
+          type: integer
+          format: int32
+          example: 100
         price:
           type: number
-          description: The price the customer submitted.
-          exclusiveMinimum: true
-          minimum: 0
-          example: 1450.00
-        executedPrice:
+          format: double
+          example: 25.50
+
+    OrderHistoryEntry:
+      type: object
+      additionalProperties: false
+      required: [orderId, accountId, symbol, side, quantity, price, status, createdOn]
+      properties:
+        orderId:
+          type: string
+          example: ORD-6f2b1c2a-6a1e-4a4f-9c0d-2f7a1b3c4d5e
+        accountId:
+          type: integer
+          format: int64
+          example: 1
+        symbol:
+          type: string
+          example: ACME
+        side:
+          $ref: '#/components/schemas/OrderSide'
+        quantity:
+          type: integer
+          format: int32
+          example: 100
+        price:
           type: number
-          nullable: true
-          description: >-
-            What the order actually filled at. Null until the order is
-            FILLED — a REJECTED or CANCELLED order never has one.
-          exclusiveMinimum: true
-          minimum: 0
-          example: 1448.5000
+          format: double
+          description: The limit price submitted with the order.
+          example: 25.50
+        executedPrice:
+          type: [number, 'null']
+          format: double
+          description: The price the Trade Executor filled at. Null until the order is FILLED.
+          example: 25.48
         status:
           $ref: '#/components/schemas/OrderStatus'
         idempotencyKey:
           type: string
-          nullable: true
-          description: The key the caller submitted with this order.
-          maxLength: 100
-          example: ord-2026-09-09-a1b2c3d4
-        placedAt:
+          example: 6f2b1c2a-6a1e-4a4f-9c0d-2f7a1b3c4d5e
+        createdOn:
           type: string
           format: date-time
-          description: Submission time.
-          example: '2026-09-09T09:16:02Z'
-        resolvedAt:
+          example: '2026-09-28T09:14:22Z'
+
+    AccountResponse:
+      type: object
+      additionalProperties: false
+      required: [id, accountId, holderName, cashBalance, status, version, lastUpdated]
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: The numeric account key. This is what every other endpoint calls `accountId`.
+          example: 1
+        accountId:
+          type: string
+          maxLength: 32
+          description: |
+            The business account identifier, `ACCOUNTS.account_id`. This is the one field in the
+            contract where the name `accountId` means the string identifier rather than the numeric
+            key. It exists because the source domain model defines both.
+          example: ACC-000001
+        holderName:
+          type: string
+          example: Priya Menon
+        cashBalance:
+          type: number
+          format: double
+          description: Available cash, to two decimal places.
+          example: 24500.75
+        status:
+          $ref: '#/components/schemas/AccountStatus'
+        version:
+          type: integer
+          format: int32
+          description: Optimistic lock version. Increments on every write to the account row.
+          example: 7
+        lastUpdated:
           type: string
           format: date-time
-          nullable: true
-          description: >-
-            When the order reached a terminal status. Null exactly when
-            the status is NEW.
-          example: '2026-09-09T09:16:04Z'
+          example: '2026-09-28T09:14:22Z'
+
+    BalanceResponse:
+      type: object
+      additionalProperties: false
+      required: [accountId, cashBalance, currency, asOf]
+      properties:
+        accountId:
+          type: integer
+          format: int64
+          example: 1
+        cashBalance:
+          type: number
+          format: double
+          example: 24500.75
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          description: ISO 4217 code.
+          example: USD
+        asOf:
+          type: string
+          format: date-time
+          example: '2026-09-28T09:14:22Z'
+
+    PositionResponse:
+      type: object
+      additionalProperties: false
+      required: [accountId, symbol, quantity, averageCost]
+      properties:
+        accountId:
+          type: integer
+          format: int64
+          example: 1
+        symbol:
+          type: string
+          example: ACME
+        quantity:
+          type: integer
+          format: int32
+          description: Net held quantity. Never negative; short selling is out of scope.
+          minimum: 0
+          example: 100
+        averageCost:
+          type: number
+          format: double
+          description: |
+            Weighted average cost basis per unit. A buy recalculates it. A sell reduces quantity and
+            leaves it unchanged, which is what makes realised profit and loss computable later.
+          example: 25.50
+
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [errorCode, message]
+      description: |
+        The single error envelope for every failure. Clients branch on `errorCode`, never on
+        `message` and never on the HTTP status alone, since 404 and 409 each carry two codes.
+      properties:
+        errorCode:
+          type: string
+          enum: [ACC-404, ACC-403, INS-404, ORD-400, ORD-409, VAL-422, AUTH-401]
+          description: |
+            | Code | HTTP | Meaning |
+            |---|---|---|
+            | `ACC-404` | 404 | Account not found |
+            | `ACC-403` | 403 | Account not active, or not reachable with this token |
+            | `INS-404` | 404 | Instrument not found or not tradable |
+            | `ORD-400` | 400 | Insufficient funds |
+            | `ORD-409` | 409 | Insufficient holdings, duplicate order, or order not cancellable |
+            | `VAL-422` | 422 | Invalid input |
+            | `AUTH-401` | 401 | Unauthorised or invalid token |
+          example: ORD-409
+        message:
+          type: string
+          description: |
+            Short description for a human. Never include a stack trace, a SQL fragment, a class
+            name or an internal identifier. Leaking those is OWASP A05.
+          example: Insufficient holdings

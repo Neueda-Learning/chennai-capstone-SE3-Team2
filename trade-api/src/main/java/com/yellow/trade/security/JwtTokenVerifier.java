@@ -23,7 +23,8 @@ import java.nio.charset.StandardCharsets;
  *   1. the signature   -- is this token ours at all?
  *   2. the expiry      -- is it still valid?
  *   3. the algorithm   -- is it the one we accept?
- *   ...and only then is any claim read.
+ *   4. the issuer      -- did the service we trust actually mint it?
+ *   ...and only then is any other claim read.
  *
  * A verifier that decodes the payload first has already trusted whatever the
  * client sent. Steps 1 and 2 happen inside parseSignedClaims below, which
@@ -43,6 +44,7 @@ public class JwtTokenVerifier {
 
     private final SecretKey key;
     private final String expectedAlgorithm;
+    private final String expectedIssuer;
 
     public JwtTokenVerifier(JwtProperties properties) {
         // HMAC-SHA256 needs at least 256 bits of key. A shorter secret is a
@@ -55,6 +57,7 @@ public class JwtTokenVerifier {
         }
         this.key = Keys.hmacShaKeyFor(secretBytes);
         this.expectedAlgorithm = properties.algorithm();
+        this.expectedIssuer = properties.issuer();
     }
 
     /**
@@ -69,7 +72,8 @@ public class JwtTokenVerifier {
         }
 
         JwtParser parser = Jwts.parser()
-                .verifyWith(key)     // step 1: signature, and MAC algorithms only
+                .verifyWith(key)              // step 1: signature, MAC algorithms only
+                .requireIssuer(expectedIssuer) // step 4, below
                 .build();
 
         Jws<Claims> verified;
@@ -89,6 +93,14 @@ public class JwtTokenVerifier {
             // an unsigned token, or one asking for an algorithm the key cannot serve
             throw new TokenVerificationException(
                     TokenVerificationException.Reason.BAD_ALGORITHM, e.getMessage());
+        } catch (io.jsonwebtoken.IncorrectClaimException | io.jsonwebtoken.MissingClaimException e) {
+            // The issuer was wrong or absent. Checked by the parser after the
+            // signature, so this can only be reached by a token that really was
+            // signed with our secret -- which is exactly the case it exists for:
+            // another service on the platform sharing the key.
+            throw new TokenVerificationException(
+                    TokenVerificationException.Reason.WRONG_ISSUER,
+                    "token issuer was not " + expectedIssuer);
         } catch (MalformedJwtException | IllegalArgumentException e) {
             throw new TokenVerificationException(
                     TokenVerificationException.Reason.MALFORMED, "token was not a well-formed JWS");

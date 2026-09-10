@@ -42,7 +42,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      * make one branch more helpful than the others by accident.
      */
     private static final ErrorResponse UNAUTHORIZED =
-            new ErrorResponse("AUTH-401", "Authentication failed");
+            new ErrorResponse("AUTH-401", "Unauthorised");
 
     private final JwtTokenVerifier verifier;
     private final ObjectMapper objectMapper;

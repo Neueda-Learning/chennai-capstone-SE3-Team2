@@ -17,15 +17,12 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -49,32 +46,37 @@ class OrderControllerTest {
 
     private static OrderResponse placed() {
         return new OrderResponse(
-                UUID.fromString("6f9619ff-8b86-d011-b42d-00c04fc964ff"), 3L, "APEX",
-                OrderSide.BUY, new BigDecimal("10"), new BigDecimal("1450.00"),
-                OrderStatus.NEW, "Order accepted", Instant.parse("2026-09-10T10:00:00Z"));
+                "ORD-6f9619ff-8b86-d011-b42d-00c04fc964ff",
+                OrderStatus.FILLED, "Order executed", "ACME",
+                OrderSide.BUY, new BigDecimal("10"), new BigDecimal("1450.00"));
     }
 
     @Test
-    @DisplayName("a placed order answers 201 with a Location header")
-    void placedOrderIsCreated() throws Exception {
+    @DisplayName("a placed order answers 200, and Sprint 6 fills it in the request")
+    void placedOrderIsFilled() throws Exception {
         when(orderService.placeOrder(any())).thenReturn(placed());
 
         mockMvc.perform(post("/api/v1/orders").contentType("application/json").content(VALID_BODY))
-                .andExpect(status().isCreated())
-                .andExpect(header().string("Location", "/api/v1/orders/6f9619ff-8b86-d011-b42d-00c04fc964ff"))
-                .andExpect(jsonPath("$.orderId").value("6f9619ff-8b86-d011-b42d-00c04fc964ff"))
-                .andExpect(jsonPath("$.status").value("NEW"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orderId").value("ORD-6f9619ff-8b86-d011-b42d-00c04fc964ff"))
+                .andExpect(jsonPath("$.status").value("FILLED"))
+                .andExpect(jsonPath("$.message").value("Order executed"));
     }
 
     @Test
-    @DisplayName("the order id is returned bare, with no display prefix")
-    void orderIdHasNoPrefix() throws Exception {
+    @DisplayName("the body carries the seven contract fields and no others")
+    void bodyMatchesTheContractExactly() throws Exception {
         when(orderService.placeOrder(any())).thenReturn(placed());
 
-        // The value handed out must be the value DELETE accepts back.
+        // additionalProperties: false. An account key or a timestamp added here
+        // fails a client that validates the response.
         mockMvc.perform(post("/api/v1/orders").contentType("application/json").content(VALID_BODY))
-                .andExpect(content().string(org.hamcrest.Matchers.not(
-                        org.hamcrest.Matchers.containsString("ORD-6f9619ff"))));
+                .andExpect(jsonPath("$.symbol").value("ACME"))
+                .andExpect(jsonPath("$.side").value("BUY"))
+                .andExpect(jsonPath("$.quantity").value(10))
+                .andExpect(jsonPath("$.price").value(1450.00))
+                .andExpect(jsonPath("$.accountId").doesNotExist())
+                .andExpect(jsonPath("$.placedAt").doesNotExist());
     }
 
     @Test

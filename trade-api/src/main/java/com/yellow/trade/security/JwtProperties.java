@@ -10,11 +10,16 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * a default signing secret is a signing secret that reaches production, and a
  * service that starts anyway would accept tokens anybody could mint.
  *
- * When Sprint 8 replaces the test fixture with the real auth service, this is
- * the only thing that changes -- the same secret, configured elsewhere. If any
- * Java has to move, this service was coupled to an issuer rather than to the
- * token contract.
+ * `issuer` is required by auth-api.yaml: "Consumers must validate the
+ * configured issuer." Without it, a token signed with the same shared secret by
+ * any other service on the platform would be accepted here as a trading
+ * credential.
+ *
+ * When Sprint 8 replaces the test fixture with the real auth service, these
+ * values are the only thing that changes -- the same secret and issuer,
+ * configured elsewhere. If any Java has to move, this service was coupled to an
+ * issuer rather than to the token contract.
  */
 @ConfigurationProperties(prefix = "security.jwt")
-public record JwtProperties(String secret, String algorithm, String protectedPathPrefix) {
+public record JwtProperties(String secret, String algorithm, String issuer, String protectedPathPrefix) {
 }
