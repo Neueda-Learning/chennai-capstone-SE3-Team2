@@ -2,6 +2,7 @@ package com.yellow.trade.integration;
 
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import org.testcontainers.DockerClientFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -38,16 +39,38 @@ abstract class PostgresSupport {
 
     private static final String EXTERNAL_URL = System.getenv("IT_DB_URL");
 
-    private static final PostgreSQLContainer<?> POSTGRES;
+    private static PostgreSQLContainer<?> postgres;
 
-    static {
-        if (EXTERNAL_URL == null) {
-            POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine")
-                    .withDatabaseName("trading");
-            POSTGRES.start();
-        } else {
-            POSTGRES = null;
+    /**
+     * Whether these tests can run at all.
+     *
+     * Referenced by @EnabledIf on the test class, so that a machine with no
+     * Docker daemon reports them as SKIPPED with a reason rather than failing
+     * the build. The unit, slice and contract tests carry no such condition --
+     * the brief requires those to run without a container, and they do.
+     *
+     * This is deliberately not a silent skip. If neither a database nor a
+     * daemon is present, the reason printed by the runner says exactly which
+     * two things would make them run.
+     */
+    static boolean databaseAvailable() {
+        if (EXTERNAL_URL != null) {
+            return true;
         }
+        try {
+            return DockerClientFactory.instance().isDockerAvailable();
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /** Started on first use, so that the class can be skipped without one. */
+    private static synchronized PostgreSQLContainer<?> container() {
+        if (postgres == null) {
+            postgres = new PostgreSQLContainer<>("postgres:16-alpine").withDatabaseName("trading");
+            postgres.start();
+        }
+        return postgres;
     }
 
     /** The phases of sprint-3/db/apply.sh, in the order it runs them. */
@@ -68,9 +91,10 @@ abstract class PostgresSupport {
             registry.add("spring.datasource.username", () -> System.getenv().getOrDefault("IT_DB_USER", "postgres"));
             registry.add("spring.datasource.password", () -> System.getenv().getOrDefault("IT_DB_PASSWORD", "postgres"));
         } else {
-            registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
-            registry.add("spring.datasource.username", POSTGRES::getUsername);
-            registry.add("spring.datasource.password", POSTGRES::getPassword);
+            PostgreSQLContainer<?> db = container();
+            registry.add("spring.datasource.url", db::getJdbcUrl);
+            registry.add("spring.datasource.username", db::getUsername);
+            registry.add("spring.datasource.password", db::getPassword);
         }
         registry.add("security.jwt.secret", () -> SECRET);
     }

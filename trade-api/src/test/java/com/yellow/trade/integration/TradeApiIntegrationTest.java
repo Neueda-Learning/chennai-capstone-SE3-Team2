@@ -9,6 +9,7 @@ import com.yellow.trade.dto.PositionResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIf;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
@@ -42,6 +43,10 @@ import static org.hamcrest.Matchers.nullValue;
  * These are the flows the review asks to see traced end to end.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@EnabledIf(
+        value = "com.yellow.trade.integration.PostgresSupport#databaseAvailable",
+        disabledReason = "needs a database: start Docker, or set IT_DB_URL "
+                + "(with IT_DB_USER and IT_DB_PASSWORD) to a PostgreSQL you already have")
 class TradeApiIntegrationTest extends PostgresSupport {
 
     /** Seeded: ACTIVE, balance 750,000.0000, blocked 220,000.0000, version 7. */
