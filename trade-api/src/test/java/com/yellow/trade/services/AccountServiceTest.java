@@ -3,151 +3,148 @@ package com.yellow.trade.services;
 import com.yellow.enums.AccountStatus;
 import com.yellow.exceptions.AccountNotActiveException;
 import com.yellow.exceptions.AccountNotFoundException;
-import com.yellow.trade.dto.AccountResponse;
 import com.yellow.trade.dto.BalanceResponse;
-import com.yellow.trade.dto.OrderHistoryEntry;
-import com.yellow.trade.dto.PositionResponse;
 import com.yellow.trade.mappers.AccountMapper;
 import com.yellow.trade.mappers.AccountRow;
-import com.yellow.trade.mappers.OrderHistoryRow;
 import com.yellow.trade.mappers.OrderMapper;
 import com.yellow.trade.mappers.PositionMapper;
-import com.yellow.trade.mappers.PositionRow;
-import com.yellow.trade.security.TokenAccountContext;
+import com.yellow.trade.security.CallerAccount;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
-import java.util.UUID;
 
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.*;
+import static org.hamcrest.Matchers.comparesEqualTo;
+import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.lenient;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class AccountServiceTest {
+
+    private static final Instant NOW = Instant.parse("2026-09-10T10:00:00Z");
 
     @Mock private AccountMapper accountMapper;
     @Mock private PositionMapper positionMapper;
     @Mock private OrderMapper orderMapper;
-    @Mock private TokenAccountContext tokenAccountContext;
+    @Mock private CallerAccount caller;
 
     private AccountService service;
 
     @BeforeEach
     void setUp() {
-        service = new AccountService(accountMapper, positionMapper, orderMapper, tokenAccountContext);
-        // most tests are about account 1 and a token that legitimately reaches it --
-        // lenient() because the "unknown account" tests never get far enough to check this
-        lenient().when(tokenAccountContext.currentAccountId()).thenReturn(1L);
+        service = new AccountService(accountMapper, positionMapper, orderMapper, caller,
+                Clock.fixed(NOW, ZoneOffset.UTC));
+        when(caller.accountId()).thenReturn(3L);
+        when(caller.canReach(3L)).thenReturn(true);
+        when(accountMapper.findById(3L)).thenReturn(row(AccountStatus.ACTIVE));
     }
 
-    private AccountRow accountRow() {
+    private static AccountRow row(AccountStatus status) {
         AccountRow row = new AccountRow();
-        row.id = 1L;
-        row.accountId = "ACC-000001";
-        row.holderName = "Priya Menon";
-        row.cashBalance = new BigDecimal("24500.75");
-        row.currency = "USD";
-        row.status = AccountStatus.ACTIVE;
-        row.version = 7;
-        row.lastUpdated = Instant.now();
+        row.setClientId(3L);
+        row.setAccountRef("ACC-000003");
+        row.setHolderName("Rohan Nair");
+        row.setStatus(status);
+        row.setBalance(new BigDecimal("750000.0000"));
+        row.setBlockedFunds(new BigDecimal("220000.0000"));
+        row.setVersion(7);
+        row.setCreatedAt(NOW);
         return row;
     }
 
     @Test
-    void getAccountReturnsResponseWhenRowExists() {
-        when(accountMapper.findById(1L)).thenReturn(accountRow());
-
-        AccountResponse response = service.getAccount(1L);
-
-        assertThat(response.getId(), is(equalTo(1L)));
-        assertThat(response.getAccountId(), is(equalTo("ACC-000001")));
-        assertThat(response.getHolderName(), is(equalTo("Priya Menon")));
+    @DisplayName("accountId in the body is the string business reference, not the key")
+    void accountIdIsTheBusinessReference() {
+        assertThat(service.getAccount(3L).accountId(), is("ACC-000003"));
     }
 
     @Test
-    void getAccountThrowsAccountNotFoundWhenRowIsNull() {
-        when(accountMapper.findById(99L)).thenReturn(null);
+    @DisplayName("available funds is balance minus blocked, computed not stored")
+    void availableFundsIsDerived() {
+        BalanceResponse balance = service.getBalance(3L);
 
-        assertThrows(AccountNotFoundException.class, () -> service.getAccount(99L));
+        assertThat(balance.availableFunds(), comparesEqualTo(new BigDecimal("530000.0000")));
+        assertThat(balance.asOf(), is(NOW));
     }
 
     @Test
-    void getAccountRefusesWhenTokenReachesADifferentAccount() {
-        when(accountMapper.findById(2L)).thenReturn(accountRow());
-        when(tokenAccountContext.currentAccountId()).thenReturn(1L); // token is for 1, request is for 2
+    @DisplayName("an unknown account is ACC-404")
+    void unknownAccountIsNotFound() {
+        when(accountMapper.findById(999L)).thenReturn(null);
 
-        assertThrows(AccountNotActiveException.class, () -> service.getAccount(2L));
+        AccountNotFoundException e = assertThrows(
+                AccountNotFoundException.class, () -> service.getAccount(999L));
+
+        assertThat(e.catalogueCode(), is("ACC-404"));
     }
 
     @Test
-    void getBalanceMapsCashBalanceAndCurrency() {
-        when(accountMapper.findById(1L)).thenReturn(accountRow());
+    @DisplayName("an account the token does not reach is ACC-403")
+    void unreachableAccountIsForbidden() {
+        when(accountMapper.findById(4L)).thenReturn(row(AccountStatus.ACTIVE));
+        when(caller.canReach(4L)).thenReturn(false);
 
-        BalanceResponse response = service.getBalance(1L);
+        AccountNotActiveException e = assertThrows(
+                AccountNotActiveException.class, () -> service.getAccount(4L));
 
-        assertThat(response.getCashBalance(), is(comparesEqualTo(new BigDecimal("24500.75"))));
-        assertThat(response.getCurrency(), is(equalTo("USD")));
+        // Identical to what a suspended account produces, so the difference
+        // cannot be used to enumerate account keys.
+        assertThat(e.catalogueCode(), is("ACC-403"));
+        assertThat(e.getMessage(), is("Account not active"));
     }
 
     @Test
-    void getPositionsFiltersOutZeroQuantityHoldings() {
-        when(accountMapper.findById(1L)).thenReturn(accountRow());
+    @DisplayName("a SUSPENDED account can still be read: suspension stops trading, not looking")
+    void suspendedAccountIsReadable() {
+        when(accountMapper.findById(3L)).thenReturn(row(AccountStatus.SUSPENDED));
 
-        PositionRow held = new PositionRow();
-        held.accountId = 1L;
-        held.symbol = "ACME";
-        held.quantity = new BigDecimal("100");
-        held.averageCost = new BigDecimal("25.50");
-
-        PositionRow closed = new PositionRow();
-        closed.accountId = 1L;
-        closed.symbol = "MSFT";
-        closed.quantity = BigDecimal.ZERO;
-        closed.averageCost = new BigDecimal("300.00");
-
-        when(positionMapper.findByAccountId(1L)).thenReturn(List.of(held, closed));
-
-        List<PositionResponse> positions = service.getPositions(1L);
-
-        assertThat(positions, hasSize(1));
-        assertThat(positions.get(0).getSymbol(), is(equalTo("ACME")));
-        assertThat(positions.get(0).getQuantity(), is(equalTo(100)));
+        assertThat(service.getAccount(3L).status(), is(AccountStatus.SUSPENDED));
     }
 
     @Test
-    void getPositionsThrowsAccountNotFoundEvenWhenPositionListWouldBeEmpty() {
-        when(accountMapper.findById(99L)).thenReturn(null);
+    @DisplayName("an account holding nothing returns an empty list, having still been checked")
+    void emptyHoldingsStillCheckTheAccount() {
+        when(positionMapper.findByAccountId(3L)).thenReturn(List.of());
 
-        assertThrows(AccountNotFoundException.class, () -> service.getPositions(99L));
+        assertThat(service.getPositions(3L), is(List.of()));
+        // The check is not skipped just because the answer would be empty --
+        // skipping it would confirm to a valid token which keys exist.
+        verify(accountMapper).findById(3L);
     }
 
     @Test
-    void getOrdersMapsRowsWithOrdPrefixOnOrderId() {
-        when(accountMapper.findById(1L)).thenReturn(accountRow());
+    @DisplayName("an unknown account is refused before positions are read at all")
+    void positionsAreNotReadForAnUnknownAccount() {
+        when(accountMapper.findById(999L)).thenReturn(null);
 
-        UUID rawId = UUID.randomUUID();
-        OrderHistoryRow row = new OrderHistoryRow();
-        row.orderId = rawId;
-        row.accountId = 1L;
-        row.symbol = "ACME";
-        row.quantity = new BigDecimal("100");
-        row.price = new BigDecimal("25.50");
-        row.createdOn = Instant.now();
+        assertThrows(AccountNotFoundException.class, () -> service.getPositions(999L));
+        verify(positionMapper, never()).findByAccountId(anyLong());
+    }
 
-        when(orderMapper.findByAccountId(1L, null, null, null)).thenReturn(List.of(row));
+    @Test
+    @DisplayName("a null status filter is passed through as null, not as a literal")
+    void nullStatusFilterStaysNull() {
+        when(orderMapper.findByAccountId(anyLong(), any(), any(), any())).thenReturn(List.of());
 
-        List<OrderHistoryEntry> orders = service.getOrders(1L, null, null, null);
+        service.getOrders(3L, null, null, null);
 
-        assertThat(orders, hasSize(1));
-        assertThat(orders.get(0).getOrderId(), is(equalTo("ORD-" + rawId)));
+        verify(orderMapper).findByAccountId(3L, null, null, null);
     }
 }
