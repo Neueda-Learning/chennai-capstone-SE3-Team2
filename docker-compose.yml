@@ -1,0 +1,90 @@
+# =====================================================================
+# Local orchestration for the trading platform.
+#
+#   docker compose --profile platform up -d --build
+#
+# Nothing in Sprint 6 needs Kafka.
+#
+# Every value that differs between a laptop and a deployment comes from
+# .env, which is not committed. See .env.example.
+# =====================================================================
+
+name: fauxnance
+
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: fauxnance-postgres
+    profiles: [platform]
+    environment:
+      POSTGRES_DB: ${DB_NAME:-trading}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
+    ports:
+      # Published so psql from the host can reach it during a review.
+      - "${DB_PUBLISHED_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Applied in filename order on first start of an empty volume,
+      # which is the same order sprint-3/db/apply.sh uses. Read-only:
+      # nothing in the container has any business editing the schema.
+      - ./sprint-3/db/base/000_base_schema.sql:/docker-entrypoint-initdb.d/01-base.sql:ro
+      - ./sprint-3/db/migrations/001_schema_migrations.sql:/docker-entrypoint-initdb.d/02-migration-001.sql:ro
+      - ./sprint-3/db/migrations/002_api_alignment.sql:/docker-entrypoint-initdb.d/03-migration-002.sql:ro
+      - ./sprint-3/db/indexes/001_performance_indexes.sql:/docker-entrypoint-initdb.d/04-indexes.sql:ro
+      - ./sprint-3/db/seed/001_reference_data.sql:/docker-entrypoint-initdb.d/05-seed-reference.sql:ro
+      - ./sprint-3/db/seed/002_clients.sql:/docker-entrypoint-initdb.d/06-seed-clients.sql:ro
+      - ./sprint-3/db/seed/003_instruments.sql:/docker-entrypoint-initdb.d/07-seed-instruments.sql:ro
+      - ./sprint-3/db/seed/004_transactions.sql:/docker-entrypoint-initdb.d/08-seed-transactions.sql:ro
+    networks: [trading-net]
+    healthcheck:
+      # -U and -d matter: the default probes the "postgres" database as
+      # the "root" user and reports healthy while ours is still building.
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-trading}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  trade-api:
+    build:
+      # The context is the service folder alone. The Sprint 5 domain is
+      # source inside it, so the build needs nothing from outside.
+      context: ./trade-api
+      dockerfile: Dockerfile
+    container_name: fauxnance-trade-api
+    profiles: [platform]
+    environment:
+      # postgres by service name, not localhost: inside a container,
+      # localhost is that container.
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-trading}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
+      # No default. The service refuses to start without it rather than
+      # accepting tokens anybody could mint. Sprint 8's auth service
+      # reads the same value, which is what makes that swap configuration
+      # rather than code.
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      SERVER_PORT: 8080
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "${API_PUBLISHED_PORT:-8080}:8080"
+    networks: [trading-net]
+    depends_on:
+      postgres:
+        # On the health condition, not on the container merely existing.
+        # Starting before the database accepts connections is a crash
+        # loop, not a failure, and it is slower to diagnose than it looks.
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  trading-net:
+    driver: bridge
+
+volumes:
+  postgres-data:
