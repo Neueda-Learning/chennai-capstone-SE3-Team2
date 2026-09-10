@@ -1,0 +1,136 @@
+---
+title: Trading Platform - state after 000_base_schema.sql (pre-migration)
+---
+erDiagram
+
+    CLIENT_ACCOUNT {
+        int client_id PK
+        string pan UK
+        string demat_id UK
+        string kyc_status
+        decimal balance
+        decimal blocked_funds
+        datetime created_at
+    }
+
+    CLIENT_PROFILE {
+        int client_id PK, FK
+        string name
+        date dob
+        string email UK
+        string phone_number
+        string address
+    }
+
+    CLIENT_AUTH {
+        int client_id PK, FK
+        string password_hash
+        datetime last_login
+    }
+
+    FUND_TRANSFER {
+        int transfer_id PK
+        int client_id FK
+        decimal amount
+        string direction
+        string status
+        string reference_id UK
+        datetime created_at
+    }
+
+    EXCHANGE {
+        string exchange_code PK
+        string name
+        string country
+        boolean is_active
+    }
+
+    AMC {
+        int amc_id PK
+        string amc_code UK
+        string amc_name
+        boolean is_active
+    }
+
+    INSTRUMENT {
+        int instrument_id PK
+        string instrument_type
+        string name
+        string isin UK
+    }
+
+    EQUITY {
+        int instrument_id PK, FK
+        string instrument_type FK
+        string ticker
+        string exchange_code FK
+        int lot_size
+    }
+
+    MUTUAL_FUND {
+        int instrument_id PK, FK
+        string instrument_type FK
+        string scheme_code UK
+        int amc_id FK
+        string plan_type
+        decimal expense_ratio
+    }
+
+    ORDERS {
+        int order_id PK
+        int client_id FK
+        int instrument_id FK
+        string side
+        string order_type
+        string product_type
+        decimal price
+        decimal quantity
+        decimal filled_quantity
+        decimal average_fill_price
+        string status
+        datetime date_placed
+        datetime last_updated
+    }
+
+    ORDERS_HISTORY {
+        int order_id PK
+        int client_id FK
+        int instrument_id FK
+        string side
+        string order_type
+        string product_type
+        decimal price
+        decimal quantity
+        decimal filled_quantity
+        decimal average_fill_price
+        string status
+        datetime date_placed
+        datetime last_updated
+        datetime archived_at
+    }
+
+    POSITION {
+        int position_id PK
+        int client_id FK
+        int instrument_id FK
+        string position_type
+        decimal quantity
+        decimal average_price
+    }
+
+    CLIENT_ACCOUNT ||--|| CLIENT_PROFILE : has
+    CLIENT_ACCOUNT ||--|| CLIENT_AUTH : authenticates_with
+    CLIENT_ACCOUNT ||--o{ FUND_TRANSFER : moves_money_via
+    CLIENT_ACCOUNT ||--o{ ORDERS : places
+    CLIENT_ACCOUNT ||--o{ ORDERS_HISTORY : placed
+    CLIENT_ACCOUNT ||--o{ POSITION : holds
+
+    INSTRUMENT ||--o| EQUITY : "is_a (stock / ETF)"
+    INSTRUMENT ||--o| MUTUAL_FUND : "is_a (MF)"
+
+    EXCHANGE ||--o{ EQUITY : lists
+    AMC ||--o{ MUTUAL_FUND : manages
+
+    INSTRUMENT ||--o{ ORDERS : traded_in
+    INSTRUMENT ||--o{ ORDERS_HISTORY : traded_in
+    INSTRUMENT ||--o{ POSITION : held_as
