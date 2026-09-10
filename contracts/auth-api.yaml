@@ -1,0 +1,224 @@
+openapi: 3.0.3
+
+# =====================================================================
+# Auth API — the token contract.
+#
+# PROVENANCE
+# ----------
+# Authored by Team 2 alongside trade-api.yaml; no contract was supplied.
+# Story 216 refers to a services/auth-stub that does not exist in this
+# repository, and readme_6 says plainly that no token issuer is supplied
+# in Sprint 6 and that the team builds a test fixture that mints signed
+# tokens instead. This file is what that fixture implements and what the
+# real auth service must implement unchanged in Sprint 8.
+#
+# WHAT THIS FILE IS FOR
+# ---------------------
+# The Trade REST API does not call this service. It never has to: a JWT
+# is verified with the shared secret alone, offline. What the Trade API
+# consumes from this file is the CLAIM SET below — nothing else.
+#
+# That is the whole point of writing it down. Sprint 8 replaces the test
+# fixture with a running auth service, and if the Trade API is coupled
+# to the token contract rather than to an issuer, that swap is a change
+# of JWT_SECRET and nothing else. If any Java has to move, something is
+# coupled to the implementation, and this file is the thing to check it
+# against.
+#
+# The fixture must NOT be deployed as a service. It lives in test scope,
+# mints tokens, and its tokens are verified through the same production
+# code path a real one would take.
+# =====================================================================
+
+info:
+  title: Auth API
+  version: 1.0.0
+  description: >-
+    Issues signed JSON Web Tokens for the trading platform. In Sprint 6
+    this contract is implemented only by a team-owned test fixture; the
+    real service arrives in Sprint 8.
+
+servers:
+  - url: http://localhost:8081
+    description: Sprint 8 auth service (not deployed in Sprint 6)
+
+paths:
+
+  /auth/login:
+    post:
+      operationId: login
+      summary: Exchange credentials for a token
+      description: >-
+        Verifies the password against the argon2/bcrypt hash in
+        client_auth and returns a signed token carrying the claims
+        below.
+
+        A wrong email and a wrong password answer identically. A more
+        specific message tells an attacker which of the two they got,
+        and lets them enumerate registered email addresses.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authenticated. The token is in the body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          description: |
+            AUTH-401 — unknown email, wrong password, or an account that
+            may not sign in. One answer for all of them.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                errorCode: AUTH-401
+                message: Authentication failed
+        '422':
+          description: VAL-422 — the request failed field validation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                errorCode: VAL-422
+                message: Invalid input
+
+components:
+
+  schemas:
+
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          description: The login identifier held in client_profile.
+          maxLength: 200
+          example: priya.menon@example.com
+        password:
+          type: string
+          format: password
+          description: >-
+            Compared against the stored hash. Never logged, never
+            echoed, and never stored in plaintext at either end.
+          minLength: 8
+          maxLength: 200
+
+    TokenResponse:
+      type: object
+      additionalProperties: false
+      required: [accessToken, tokenType, expiresIn]
+      properties:
+        accessToken:
+          type: string
+          description: >-
+            The signed JWT. Sent to the Trade REST API as
+            "Authorization: Bearer <accessToken>".
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzIn0.SIGNATURE
+        tokenType:
+          type: string
+          enum: [Bearer]
+          description: The scheme the Trade API expects on the header.
+        expiresIn:
+          type: integer
+          format: int32
+          description: Seconds until the token expires, from time of issue.
+          minimum: 1
+          example: 3600
+
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [errorCode, message]
+      description: >-
+        The same envelope trade-api.yaml defines. One shape across the
+        platform means Sprint 9 keeps one error handler.
+      properties:
+        errorCode:
+          type: string
+          enum: [AUTH-401, VAL-422]
+        message:
+          type: string
+          maxLength: 200
+
+    # -----------------------------------------------------------------
+    # THE CLAIM SET
+    #
+    # Declared as a schema so it is reviewable and testable, though it
+    # is never a response body: it is the decoded payload of
+    # TokenResponse.accessToken. This is the only part of this file the
+    # Trade REST API depends on.
+    #
+    # VERIFICATION ORDER, which is assessed:
+    #   1. the signature          — is this token ours?
+    #   2. the expiry             — is it still valid?
+    #   3. the requested algorithm — is it the one we accept?
+    #   ...and only then is any claim below read.
+    #
+    # A verifier that decodes the payload first has already trusted
+    # whatever the client sent. Checking `alg` matters specifically
+    # because a token asking for "none", or asking for RS256 where the
+    # public key is then used as an HMAC secret, are both forgeries that
+    # a verifier which trusts the header will accept.
+    # -----------------------------------------------------------------
+    JwtClaims:
+      type: object
+      required: [sub, accountId, iat, exp]
+      description: >-
+        The decoded payload. Signed with HS256 over the shared secret,
+        which is read from the JWT_SECRET environment variable at
+        runtime and appears in no properties file, no YAML file and no
+        Java constant.
+      properties:
+        sub:
+          type: string
+          description: >-
+            The subject: the numeric account key as a string, per JWT
+            convention that `sub` is a string.
+          example: '3'
+        accountId:
+          type: integer
+          format: int64
+          description: >-
+            The numeric account key. This is the claim the Trade REST
+            API compares against the account key on the request, and a
+            mismatch answers ACC-403 with the identical message a
+            suspended account gets — so that nobody can enumerate
+            account keys by reading the difference.
+
+            Authorisation is answered where the account key is known,
+            not in the token filter: the filter answers only "is this
+            token valid".
+          minimum: 1
+          example: 3
+        email:
+          type: string
+          format: email
+          description: >-
+            Present for logging and for the Sprint 9 UI to display. The
+            Trade REST API makes no decision on it.
+          example: priya.menon@example.com
+        iat:
+          type: integer
+          format: int64
+          description: Issued-at, seconds since the epoch.
+          example: 1789200000
+        exp:
+          type: integer
+          format: int64
+          description: >-
+            Expiry, seconds since the epoch. An expired token answers
+            AUTH-401 with the same body a missing, malformed or forged
+            one gets.
+          example: 1789203600
