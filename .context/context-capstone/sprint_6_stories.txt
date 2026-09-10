@@ -1,0 +1,187 @@
+story 209
+Acceptance Criteria
+One Maven project rooted in the sprint folder builds with mvn clean verify on a machine that has never seen your code.
+
+The Sprint 5 module resolves from the local Maven repository by the coordinates declared in manifest.env, and JWT_SECRET is read from the environment and appears in no committed file.
+
+Tasks
+Set the project up on Java 21 with Spring Boot 3.5.x, the web and validation starters, the MyBatis starter and the Postgres driver.
+
+Run mvn install in sprint-05-domain-engine before mvn verify here, and again every time the domain changes.
+
+Declare the base package, the controller sub-package and the mapper sub-package in manifest.env; the layering checks find them by name.
+
+story 210
+Acceptance Criteria
+The six operations answer at the paths, verbs and status codes the contract fixes, with response bodies matching the contract schemas field for field.
+
+Every failure leaves as the error envelope and nothing else: no whitelabel page, no stack trace, no bare status with an empty body.
+
+Tasks
+Read contracts/trade-api.yaml and map every operation onto a controller method.
+
+Return the error envelope on every failure path so that Sprint 9 keeps one error handler for the whole platform.
+
+Note that AccountResponse.accountId is the one place in the platform where that name means the string business reference rather than the numeric key.
+
+Notes
+The contract exists so that Sprint 9 can generate a typed client without reading your Java. It is the thing you build, not documentation of something you build.
+
+story 211
+Acceptance Criteria
+Controllers hold no SQL, open no transaction and carry no business rule, and import nothing from the mapper package, java.sql, javax.sql, MyBatis, Spring JDBC or a persistence API.
+
+The service takes no servlet type, request object or status code as a parameter, and the domain module carries no HTTP type.
+
+Tasks
+Put controllers in one sub-package and mappers in another, and keep the service between them.
+
+Wire dependency injection between the layers.
+
+Check that the published Sprint 5 artefact on the compile classpath references no servlet, Spring or MyBatis type.
+
+Notes
+The Trade Executor in Sprint 7 has no HTTP request and needs the same rules unchanged, so a rule taking a request DTO has bound the rules to one caller.
+
+story 212
+Acceptance Criteria
+Every value arriving from outside is bound as a JDBC bind parameter; the harness fails the build on any string interpolation in a mapper.
+
+Result sets map cleanly onto the domain and DTO objects.
+
+Tasks
+Write the mappers in XML under src/main/resources/mapper/ or in annotations on the mapper interface; either style is acceptable.
+
+Bind the account key, the symbol, the status filter and the timestamps as parameters, never as text substituted into the statement.
+
+If a column name or sort direction genuinely cannot be a bind parameter, check it against a fixed list of permitted names first and declare it in the manifest allowlist with a comment saying what does that checking.
+
+Unit Test Execution Paths
+order row inserted and retrievable
+
+account and positions read correctly
+
+mapper reports the affected row count rather than returning void
+
+mapper surfaces a constraint violation rather than swallowing it
+
+Notes
+A symbol of AAPL' OR '1'='1 substituted into a statement becomes part of that statement, and the positions that come back are whichever account the attacker asked for. That is OWASP A03.
+
+An allowlist entry is a question the review asks.
+
+story 213
+Acceptance Criteria
+Order placement is transactional, so cash and position move together or neither moves.
+
+The update names the version the account row held when it was read and increments it; zero rows affected is refused with ORD-409 rather than treated as success.
+
+Tasks
+Annotate the order placement path with @Transactional and keep the transaction around the work that has to be atomic and no more.
+
+Read the version with the row and return the affected row count from the mapper, because a mapper returning void has thrown away the only evidence that anything happened.
+
+Make the cancel transition conditional on the state you expect, in one statement.
+
+Unit Test Execution Paths
+place order commits cash and position together
+
+failed order rolls back with no partial write
+
+a concurrent update is detected and the second writer is refused
+
+cancelling a filled order returns ORD-409
+
+Notes
+Without the lock, two buys of 20,000 against a balance of 25,000 both read the row, both write the same figure back, and nothing reports it until somebody reconciles the cash the next morning.
+
+story 214
+Acceptance Criteria
+The account read endpoints expose account details, cash balance, positions and order history, shaped by the contract schemas.
+
+Tasks
+Implement the read operations the contract defines and shape the responses through the DTOs.
+
+Answer ACC-404 for an unknown account and ACC-403 where the token does not reach the account.
+
+Unit Test Execution Paths
+account, balance, positions and order history returned successfully
+
+unknown account returns ACC-404
+
+an account the token does not reach returns ACC-403
+
+Integration Test
+Exercise the read flows through the real controller, service and MyBatis persistence against Postgres.
+
+Notes
+Balance and positions are exposed here on the account endpoints. There is no separate Sprint 6 portfolio service; the Sprint 10 extension is a distinct service that adds valuation and profit and loss.
+
+story 215
+Acceptance Criteria
+A @ControllerAdvice maps every domain exception to its documented code and HTTP status, with no stack trace or internal detail in the body.
+
+The message is written for a human reading a screen: no class name, no SQL fragment, no account key, no internal identifier.
+
+Tasks
+Map ACC-404 to 404, ACC-403 to 403, INS-404 to 404, ORD-400 to 400, ORD-409 to 409, VAL-422 to 422 and AUTH-401 to 401.
+
+Log what an investigation needs on the server rather than returning it.
+
+Confirm that clients can branch on the code, since 404 and 409 each carry more than one code.
+
+Unit Test Execution Paths
+account not found maps to ACC-404 with status 404
+
+inactive account maps to ACC-403 with status 403
+
+unknown instrument maps to INS-404 with status 404
+
+insufficient funds maps to ORD-400 with status 400
+
+reused idempotency key maps to ORD-409 with status 409
+
+invalid input maps to VAL-422 with status 422
+
+
+story 216
+Acceptance Criteria
+Every route under the API prefix is answered for token validity once, before any controller runs.
+
+A missing header, a wrong scheme, an expired token and a forged signature all return AUTH-401 with the same body.
+
+A token that does not reach the addressed account returns ACC-403 with the same message a suspended account gets.
+
+Tasks
+Check the signature, the expiry and the algorithm the token asks for, in that order, before reading a claim.
+
+Read the demo users, the claims and the shared signing secret from services/auth-stub/README.md; the stub starts with the infrastructure.
+
+Answer authorisation where the account key is known, not in the filter.
+
+Notes
+A verifier that decodes the payload first has already trusted whatever the client sent.
+
+A more specific message tells an attacker which of the four failures they got, and the identical ACC-403 message stops anyone enumerating account keys.
+
+Sprint 8 swaps the stub for the real service as a configuration change. If yours needs a code change, something is coupled to the stub rather than to the token, and that is worth finding now.
+
+story 217
+Acceptance Criteria
+The service builds and runs from a multi-stage Dockerfile whose final stage is not a build image and does not run as root.
+
+docker compose up -d --profile platform starts the service, which resolves postgres and the auth stub by service name and reports healthy.
+
+Tasks
+Build the jar in a stage carrying Maven and a JDK, and take it into a stage carrying a Java runtime and neither of the other two.
+
+Order the copies so that changing a source file does not invalidate the resolved-dependency layer.
+
+Build both projects inside the image build, because it starts with an empty local Maven repository and cannot reach the Sprint 5 module on your laptop.
+
+Add the service to the root docker-compose.yml under the platform profile, on trading-net, with a published port, database and JWT_SECRET values from the environment, depends_on Postgres on its health condition, and a health check.
+
+Notes
+Every tool in an image is a tool available to whoever gets into the container, which is the reason to care rather than disk.
+
+Nothing this sprint needs Kafka.

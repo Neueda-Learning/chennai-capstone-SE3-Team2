@@ -162,7 +162,10 @@ class OrderLogicTest {
         InvalidOrderException ex = assertThrows(InvalidOrderException.class,
                 () -> orderService.placeOrder(badQty));
 
-        assertThat(ex.catalogueCode(), is(equalTo("ORD-422")));
+        // VAL-422 is the catalogue's code for a failed field validation, and
+        // rules 4 and 5 are the same outcome reached without a validator.
+        // ORD-422 is in no catalogue and reached clients as an undeclared code.
+        assertThat(ex.catalogueCode(), is(equalTo("VAL-422")));
         assertThat(ex.field(), is(equalTo("quantity")));
         assertThat(ex.submittedValue(), is(equalTo("0")));
     }
@@ -177,7 +180,10 @@ class OrderLogicTest {
         InvalidOrderException ex = assertThrows(InvalidOrderException.class,
                 () -> orderService.placeOrder(badPrice));
 
-        assertThat(ex.catalogueCode(), is(equalTo("ORD-422")));
+        // VAL-422 is the catalogue's code for a failed field validation, and
+        // rules 4 and 5 are the same outcome reached without a validator.
+        // ORD-422 is in no catalogue and reached clients as an undeclared code.
+        assertThat(ex.catalogueCode(), is(equalTo("VAL-422")));
         assertThat(ex.field(), is(equalTo("price")));
     }
 

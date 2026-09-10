@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+  ======================================================================
+  Platform reactor.
+
+  Two modules, built in dependency order by one command:
+
+      domainrules   the Sprint 5 domain. Plain Java, jakarta.validation
+                    and nothing else. Produces com.yellow:sprint5-domain.
+
+      trade-api     the Sprint 6 Trade REST API. Spring Boot, MyBatis,
+                    Postgres. Declares a dependency on the jar above.
+
+  WHY A REACTOR RATHER THAN TWO SEPARATE BUILDS.
+
+  The domain is an independent package with its own jar and its own
+  coordinates, and trade-api consumes it as a dependency, which is the
+  normal way to share code and keeps exactly one copy of the rules.
+
+  Doing that with `mvn install` in one folder and then `mvn install` in
+  the other works, but it puts the dependency in ~/.m2: a directory
+  outside the repository, per-machine, and invisible to git. A fresh
+  clone would not build, and an image build starts with an empty ~/.m2
+  and cannot reach anybody's laptop.
+
+  A reactor removes that coupling without removing the boundary. Maven
+  resolves sprint5-domain from the build itself, so:
+
+      mvn clean install
+
+  from this directory builds both, in order, on a machine that has never
+  seen the code. Criterion 1 holds and the module boundary is real.
+
+  WHAT THE BOUNDARY BUYS, concretely: domainrules keeps its own build,
+  so the enforcer plugin's bannedDependencies rule still fails the build
+  the moment Spring, a servlet API, MyBatis, a JDBC driver or a
+  connection pool reaches the domain's classpath. That guarantee is
+  mechanical here. It cannot be, if the domain is a folder of source
+  inside a Spring Boot project where all of those legitimately resolve.
+
+  NOTE ON PARENTS. This pom aggregates; it does not parent. trade-api
+  keeps spring-boot-starter-parent as its parent for dependency
+  management, and domainrules keeps no parent at all so that nothing
+  Spring-shaped can arrive by inheritance. In Maven, aggregation and
+  inheritance are independent, and here they are deliberately different.
+  ======================================================================
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.yellow</groupId>
+    <artifactId>fauxnance-platform</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>Fauxnance Trading Platform</name>
+    <description>
+        Reactor for the Sprint 5 domain engine and the Sprint 6 Trade REST API.
+    </description>
+
+    <!-- Order matters only for readability: Maven sorts by dependency. -->
+    <modules>
+        <module>domainrules</module>
+        <module>trade-api</module>
+    </modules>
+
+</project>

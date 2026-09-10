@@ -76,6 +76,25 @@
                 <version>3.13.0</version>
                 <configuration>
                     <release>21</release>
+                    <!--
+                      Keep parameter names in the class files.
+
+                      PlaceOrderRequest has one constructor and no no-arg
+                      constructor, so Jackson can only bind a JSON body to it
+                      by matching names, and it can only see those names if
+                      they survive compilation.
+
+                      This was invisible while the domain was a folder of
+                      source inside the Trade REST API, because Spring Boot's
+                      parent adds the flag for you. Compiled here as its own
+                      jar, the flag has to be asked for, and without it every
+                      POST /api/v1/orders answers 500.
+
+                      A no-arg constructor would also work, and would put a
+                      framework's requirement inside the domain to do it.
+                      This is a build flag instead.
+                    -->
+                    <parameters>true</parameters>
                 </configuration>
             </plugin>
 

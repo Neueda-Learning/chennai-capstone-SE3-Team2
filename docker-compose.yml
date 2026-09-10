@@ -51,10 +51,11 @@ services:
 
   trade-api:
     build:
-      # The context is the service folder alone. The Sprint 5 domain is
-      # source inside it, so the build needs nothing from outside.
-      context: ./trade-api
-      dockerfile: Dockerfile
+      # The context is the repository root, because the service depends
+      # on the sibling domain module. The reactor builds both from here
+      # in one Maven invocation; see trade-api/Dockerfile.
+      context: .
+      dockerfile: trade-api/Dockerfile
     container_name: fauxnance-trade-api
     profiles: [platform]
     environment:

@@ -88,22 +88,28 @@
         </dependency>
 
         <!--
-          The Sprint 5 domain is NOT a dependency. Its sources live in this
-          project, under com.yellow.{dto,entities,enums,exceptions,
-          repositories,services}, compiled by this build. That is what lets a
-          fresh checkout build this service with one command, and what lets the
-          image build run a single `mvn package` against a context of one
-          folder with an empty ~/.m2.
+          The Sprint 5 domain, as a dependency on its own jar rather than
+          as a folder of source copied in here.
 
-          Consequence worth knowing rather than rediscovering: the Sprint 5
-          build banned Spring, servlet, MyBatis, JDBC and pooling artefacts
-          with the enforcer plugin. That rule cannot follow the sources here,
-          where all of them are legitimately on the classpath for the
-          transport layer. From this sprint the constraint is a rule about
-          what may appear INSIDE the com.yellow.* domain packages (no
-          servlet, Spring or MyBatis type in any of them), and nothing but
-          code review holds it. See readme_6, "The engineering contract".
+          One copy of the rules exists, in domainrules/, with its own
+          build. That build bans Spring, servlet APIs, MyBatis, JDBC
+          drivers and connection pools with the enforcer plugin, so the
+          "no framework in the domain" constraint is enforced mechanically
+          instead of by review.
+
+          It resolves from the reactor, not from ~/.m2. See the root pom:
+          `mvn clean install` there builds both modules in order, so a
+          fresh clone builds with one command and the image build needs
+          nothing from anybody's local repository.
+
+          Building this module alone, `cd trade-api && mvn install` -
+          needs sprint5-domain in ~/.m2 first. Build from the root.
         -->
+        <dependency>
+            <groupId>com.yellow</groupId>
+            <artifactId>sprint5-domain</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
 
         <!-- Tests -->
         <dependency>
