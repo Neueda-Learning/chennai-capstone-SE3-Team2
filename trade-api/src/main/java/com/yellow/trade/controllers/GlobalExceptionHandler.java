@@ -27,26 +27,6 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
-/**
- * The one place a failure becomes an HTTP answer.
- *
- * There is exactly one of these classes. Two would be worse than none: Spring
- * picks between competing advices in an order nobody declared, so the same
- * exception could answer 404 on one deploy and 409 on the next, and both sets
- * of tests would pass.
- *
- * TWO RULES HOLD HERE.
- *
- * Every failure leaves as the error envelope and nothing else. That includes
- * the ones nobody wrote a handler for -- see the catch-all at the bottom,
- * which exists so that a NullPointerException reaches the client as a
- * documented code rather than as a whitelabel page or an empty 500.
- *
- * The message is for a human reading a screen. What an investigation needs --
- * the account key, the symbol, the amounts, the class name -- is logged on the
- * server, from the typed fields the domain exceptions carry for exactly this
- * purpose. Putting it in the body instead is OWASP A05.
- */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 

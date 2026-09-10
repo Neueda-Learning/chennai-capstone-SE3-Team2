@@ -151,6 +151,7 @@ class OrderServiceTest {
 
     @Test
     @DisplayName("a buy debits the consideration, opens the holding and fills the order")
+    // 213:1 - PLACE ORDER COMMITS
     void buyMovesCashAndPositionTogether() {
         Order placed = order(OrderSide.BUY);
         when(domainOrderService.placeOrder(any())).thenReturn(placed);
@@ -215,6 +216,7 @@ class OrderServiceTest {
 
     @Test
     @DisplayName("zero rows affected is refused, not treated as success")
+    // 213:2 - FAILED ORDER, 213:3 - CONCURRENCY
     void lostRaceIsRefusedWithOrd409() {
         when(domainOrderService.placeOrder(any())).thenReturn(order(OrderSide.BUY));
         when(accountMapper.debitBalance(anyLong(), any(), anyInt())).thenReturn(0);
@@ -247,6 +249,7 @@ class OrderServiceTest {
 
     @Test
     @DisplayName("cancelling an order somebody else already resolved is ORD-409")
+    // 213:4 - CANCELLED
     void cancelLosesTheRace() {
         UUID orderId = UUID.randomUUID();
         when(orderMapper.findById(orderId)).thenReturn(orderRow(orderId, OrderStatus.FILLED));

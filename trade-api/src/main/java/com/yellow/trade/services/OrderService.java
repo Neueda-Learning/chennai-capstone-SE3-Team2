@@ -91,24 +91,11 @@ public class OrderService {
         this.clock = clock;
     }
 
-    /**
-     * Places an order and, this sprint, fills it.
-     *
-     * The transaction encloses exactly the work that has to succeed or fail
-     * together -- the order row, the cash and the holding -- and no more. The
-     * reachability check above it needs no transaction, and the response is
-     * built after it.
-     *
-     * An order recorded without its cash moved would let the same money be
-     * spent twice; cash moved without a holding would lose the stock it bought.
-     */
+    // 213
     @Transactional
     public OrderResponse placeOrder(PlaceOrderRequest request) {
         Long accountId = request.getAccountId();
 
-        // Answered here, where the account key is known, rather than in the
-        // token filter. The account must exist before the caller can be told
-        // anything about it, so rule 1's answer comes first.
         AccountRow account = accountMapper.findById(accountId);
         if (account == null) {
             throw new AccountNotFoundException(accountId);
@@ -119,14 +106,12 @@ public class OrderService {
             throw new AccountNotActiveException(account.getStatus());
         }
 
-        // Rules 1 to 8, in the domain, against MyBatis-backed repositories. The
-        // order row is inserted by MyBatisOrderRepository.save() inside this
-        // transaction. A refusal throws, and everything below is skipped.
         Order order = domainOrderService.placeOrder(request);
 
         BigDecimal fillPrice = order.limitPrice();
         BigDecimal consideration = money(order.quantity().multiply(fillPrice));
 
+        // single database transaction
         moveCash(account, order.side(), consideration);
         movePosition(order, fillPrice);
 
@@ -152,19 +137,8 @@ public class OrderService {
                 order.limitPrice());
     }
 
-    /**
-     * The optimistic lock, and the only place cash moves.
-     *
-     * The version the row was read at is named in the UPDATE and incremented by
-     * it, so two writers racing on one account are serialised by the database:
-     * the first affects one row, the second affects none. Zero rows affected is
-     * NOT success -- it means somebody else wrote between our read and our
-     * write, and the balance this order was judged against is stale.
-     *
-     * The answer is to refuse, not to retry. A retry would re-run rule 6
-     * against the new balance and might succeed, which would mean a customer's
-     * single click spent money they saw a different figure for.
-     */
+    // 213: The optimistic lock, and the only place cash moves.
+
     private void moveCash(AccountRow account, OrderSide side, BigDecimal consideration) {
         int affected = side == OrderSide.BUY
                 ? accountMapper.debitBalance(account.getClientId(), consideration, account.getVersion())
@@ -177,15 +151,6 @@ public class OrderService {
         }
     }
 
-    /**
-     * Moves the holding, using the domain's own average-cost arithmetic rather
-     * than repeating it in SQL.
-     *
-     * The asymmetry belongs to the domain and is worth not losing: a buy
-     * recalculates the average across the old holding and the new units; a sell
-     * reduces the quantity and leaves the average alone, which is what makes
-     * realised profit and loss computable at the point of sale.
-     */
     private void movePosition(Order order, BigDecimal fillPrice) {
         Long accountId = order.accountId();
         Long instrumentId = order.instrumentId();
@@ -256,6 +221,7 @@ public class OrderService {
             throw new AccountNotActiveException(null);
         }
 
+        // 213: CANCELLATION
         int affected = orderMapper.cancelIfNew(orderId, Instant.now(clock));
         if (affected == 0) {
             log.warn("ORD-409: order {} was {} when cancel ran", orderId, existing.getStatus());
