@@ -4,33 +4,26 @@ import com.yellow.enums.OrderSide;
 import com.yellow.enums.OrderStatus;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
 
-public class OrderResponse {
-
-    private final String orderId;
-    private final OrderStatus status;
-    private final String message;
-    private final String symbol;
-    private final OrderSide side;
-    private final int quantity;
-    private final BigDecimal price;
-
-    public OrderResponse(String orderId, OrderStatus status, String message, String symbol,
-                          OrderSide side, int quantity, BigDecimal price) {
-        this.orderId = orderId;
-        this.status = status;
-        this.message = message;
-        this.symbol = symbol;
-        this.side = side;
-        this.quantity = quantity;
-        this.price = price;
-    }
-
-    public String getOrderId() { return orderId; }
-    public OrderStatus getStatus() { return status; }
-    public String getMessage() { return message; }
-    public String getSymbol() { return symbol; }
-    public OrderSide getSide() { return side; }
-    public int getQuantity() { return quantity; }
-    public BigDecimal getPrice() { return price; }
+/**
+ * contracts/trade-api.yaml -> OrderResponse.
+ *
+ * orderId is the bare UUID with no display prefix: the value this API hands
+ * out is the value DELETE /api/v1/orders/{orderId} accepts back.
+ *
+ * message is display only. Clients branch on status, or on errorCode when the
+ * request failed -- never on this string.
+ */
+public record OrderResponse(
+        UUID orderId,
+        Long accountId,
+        String symbol,
+        OrderSide side,
+        BigDecimal quantity,
+        BigDecimal price,
+        OrderStatus status,
+        String message,
+        Instant placedAt) {
 }

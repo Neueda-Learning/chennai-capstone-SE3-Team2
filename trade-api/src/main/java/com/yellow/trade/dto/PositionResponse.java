@@ -2,24 +2,20 @@ package com.yellow.trade.dto;
 
 import java.math.BigDecimal;
 
-// contract: quantity is int32, domain Position.quantity() is BigDecimal -
-// the conversion happens where we build this DTO, not in this class.
-public class PositionResponse {
-
-    private final Long accountId;
-    private final String symbol;
-    private final int quantity;
-    private final BigDecimal averageCost;
-
-    public PositionResponse(Long accountId, String symbol, int quantity, BigDecimal averageCost) {
-        this.accountId = accountId;
-        this.symbol = symbol;
-        this.quantity = quantity;
-        this.averageCost = averageCost;
-    }
-
-    public Long getAccountId() { return accountId; }
-    public String getSymbol() { return symbol; }
-    public int getQuantity() { return quantity; }
-    public BigDecimal getAverageCost() { return averageCost; }
+/**
+ * contracts/trade-api.yaml -> PositionResponse.
+ *
+ * quantity is decimal, not an int: mutual fund allotments are fractional, and
+ * a holding of 240.117 units is an ordinary row in this schema.
+ *
+ * positionType is carried because it is part of the natural key. Without it
+ * the same scrip held intraday and as delivery arrives as two entries a
+ * client cannot tell apart.
+ */
+public record PositionResponse(
+        Long accountId,
+        String symbol,
+        String positionType,
+        BigDecimal quantity,
+        BigDecimal averagePrice) {
 }

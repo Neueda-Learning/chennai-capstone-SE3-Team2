@@ -6,15 +6,29 @@ import com.yellow.trade.dto.BalanceResponse;
 import com.yellow.trade.dto.OrderHistoryEntry;
 import com.yellow.trade.dto.PositionResponse;
 import com.yellow.trade.services.AccountService;
+import jakarta.validation.constraints.Min;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
 import java.util.List;
 
+/**
+ * The four read operations from contracts/trade-api.yaml.
+ *
+ * This class speaks HTTP and nothing else: paths, verbs, DTOs, validation
+ * annotations. It holds no SQL, opens no transaction and makes no decision
+ * about who may see what -- the service answers that, where the account key
+ * has been resolved against the database.
+ */
 @RestController
+@RequestMapping("/api/v1/accounts")
+@Validated
 public class AccountController {
 
     private final AccountService accountService;
@@ -23,27 +37,35 @@ public class AccountController {
         this.accountService = accountService;
     }
 
-    @GetMapping("/api/v1/accounts/{id}")
-    public AccountResponse getAccount(@PathVariable Long id) {
-        return accountService.getAccount(id);
+    @GetMapping("/{accountId}")
+    public AccountResponse getAccount(@PathVariable @Min(1) Long accountId) {
+        return accountService.getAccount(accountId);
     }
 
-    @GetMapping("/api/v1/accounts/{id}/balance")
-    public BalanceResponse getBalance(@PathVariable Long id) {
-        return accountService.getBalance(id);
+    @GetMapping("/{accountId}/balance")
+    public BalanceResponse getBalance(@PathVariable @Min(1) Long accountId) {
+        return accountService.getBalance(accountId);
     }
 
-    @GetMapping("/api/v1/accounts/{id}/positions")
-    public List<PositionResponse> getPositions(@PathVariable Long id) {
-        return accountService.getPositions(id);
+    @GetMapping("/{accountId}/positions")
+    public List<PositionResponse> getPositions(@PathVariable @Min(1) Long accountId) {
+        return accountService.getPositions(accountId);
     }
 
-    @GetMapping("/api/v1/accounts/{id}/orders")
-    public List<OrderHistoryEntry> getOrders(
-            @PathVariable Long id,
+    /**
+     * The three filters are optional and bound as typed parameters, not as
+     * text. An unparseable status or timestamp is refused by Spring before
+     * this method runs and leaves as VAL-422 -- it never reaches a statement.
+     */
+    @GetMapping("/{accountId}/orders")
+    public List<OrderHistoryEntry> getOrderHistory(
+            @PathVariable @Min(1) Long accountId,
             @RequestParam(required = false) OrderStatus status,
-            @RequestParam(required = false) Instant from,
-            @RequestParam(required = false) Instant to) {
-        return accountService.getOrders(id, status, from, to);
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to) {
+
+        return accountService.getOrders(accountId, status, from, to);
     }
 }

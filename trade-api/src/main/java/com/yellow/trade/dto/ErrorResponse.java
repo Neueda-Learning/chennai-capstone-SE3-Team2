@@ -1,22 +1,19 @@
 package com.yellow.trade.dto;
 
-// contract: ErrorResponse, additionalProperties false, required [errorCode, message]
-// this is the ONE body shape every failure returns - no whitelabel page, no bare status
-public class ErrorResponse {
-
-    private final String errorCode;
-    private final String message;
-
-    public ErrorResponse(String errorCode, String message) {
-        this.errorCode = errorCode;
-        this.message = message;
-    }
-
-    public String getErrorCode() {
-        return errorCode;
-    }
-
-    public String getMessage() {
-        return message;
-    }
+/**
+ * contracts/trade-api.yaml -> ErrorResponse.
+ *
+ * The one body shape every failure returns: no whitelabel page, no stack
+ * trace, no bare status with an empty body. Sprint 9 keeps one error handler
+ * because there is one envelope.
+ *
+ * Clients branch on errorCode, never on the status alone -- 404 carries both
+ * ACC-404 and INS-404, and 409 carries insufficient holdings, a reused
+ * idempotency key and an uncancellable order.
+ *
+ * message is written for a human reading a screen: no class name, no SQL
+ * fragment, no account key, no internal identifier. What an investigation
+ * needs is logged on the server instead. Leaking it here is OWASP A05.
+ */
+public record ErrorResponse(String errorCode, String message) {
 }

@@ -3,23 +3,18 @@ package com.yellow.trade.dto;
 import java.math.BigDecimal;
 import java.time.Instant;
 
-// contract: cash only, no holdings value
-public class BalanceResponse {
-
-    private final Long accountId;
-    private final BigDecimal cashBalance;
-    private final String currency;
-    private final Instant asOf;
-
-    public BalanceResponse(Long accountId, BigDecimal cashBalance, String currency, Instant asOf) {
-        this.accountId = accountId;
-        this.cashBalance = cashBalance;
-        this.currency = currency;
-        this.asOf = asOf;
-    }
-
-    public Long getAccountId() { return accountId; }
-    public BigDecimal getCashBalance() { return cashBalance; }
-    public String getCurrency() { return currency; }
-    public Instant getAsOf() { return asOf; }
+/**
+ * contracts/trade-api.yaml -> BalanceResponse. Cash only.
+ *
+ * availableFunds is returned rather than left to the client to compute:
+ * it is the figure rule 6 tests a buy against, and a client subtracting
+ * the wrong pair would disagree with the server about what it can afford.
+ */
+public record BalanceResponse(
+        Long accountId,
+        BigDecimal cashBalance,
+        BigDecimal blockedFunds,
+        BigDecimal availableFunds,
+        String currency,
+        Instant asOf) {
 }
