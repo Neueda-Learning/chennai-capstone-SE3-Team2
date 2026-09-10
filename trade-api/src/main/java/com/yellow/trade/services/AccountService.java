@@ -9,89 +9,138 @@ import com.yellow.trade.dto.OrderHistoryEntry;
 import com.yellow.trade.dto.PositionResponse;
 import com.yellow.trade.mappers.AccountMapper;
 import com.yellow.trade.mappers.AccountRow;
-import com.yellow.trade.mappers.OrderHistoryRow;
 import com.yellow.trade.mappers.OrderMapper;
+import com.yellow.trade.mappers.OrderRow;
+import com.yellow.trade.PlatformConstants;
 import com.yellow.trade.mappers.PositionMapper;
-import com.yellow.trade.mappers.PositionRow;
-import com.yellow.trade.security.TokenAccountContext;
+import com.yellow.trade.security.CallerAccount;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 
+/**
+ * The four read operations.
+ *
+ * Every one of them starts by resolving the account, which answers ACC-404 and
+ * ACC-403 in one place. That matters more than it looks: an endpoint that
+ * skipped the check because it "only returns an empty list anyway" would tell
+ * a caller with a valid token whether an account key exists.
+ */
 @Service
 public class AccountService {
+
+    private static final Logger log = LoggerFactory.getLogger(AccountService.class);
 
     private final AccountMapper accountMapper;
     private final PositionMapper positionMapper;
     private final OrderMapper orderMapper;
-    private final TokenAccountContext tokenAccountContext;
+    private final CallerAccount caller;
+    private final Clock clock;
 
-    public AccountService(AccountMapper accountMapper, PositionMapper positionMapper,
-                           OrderMapper orderMapper, TokenAccountContext tokenAccountContext) {
+    public AccountService(AccountMapper accountMapper,
+                          PositionMapper positionMapper,
+                          OrderMapper orderMapper,
+                          CallerAccount caller,
+                          Clock clock) {
         this.accountMapper = accountMapper;
         this.positionMapper = positionMapper;
         this.orderMapper = orderMapper;
-        this.tokenAccountContext = tokenAccountContext;
+        this.caller = caller;
+        this.clock = clock;
     }
 
-    private AccountRow requireAccount(Long id) {
-        AccountRow row = accountMapper.findById(id);
+    /**
+     * Resolves an account the caller is allowed to see, or refuses.
+     *
+     * Note what is NOT checked here: whether the account is ACTIVE. A
+     * SUSPENDED account can be read and cannot trade -- suspension is
+     * reversible and the holder still needs to see their own money. Trading
+     * is where status is enforced, by rule 2, in the domain.
+     */
+    private AccountRow requireReachableAccount(Long accountId) {
+        AccountRow row = accountMapper.findById(accountId);
         if (row == null) {
-            // reuse the domain's own exception -- @ControllerAdvice maps
-            // this to ACC-404 wherever it's thrown, not just here
-            throw new AccountNotFoundException(id);
+            throw new AccountNotFoundException(accountId);
         }
-        // a token proves who you are, not what you may reach -- same ACC-403
-        // message a suspended account gets, so wrong-token and suspended
-        // look identical to the caller
-        if (!id.equals(tokenAccountContext.currentAccountId())) {
-            throw new AccountNotActiveException(row.status);
+        if (!caller.canReach(accountId)) {
+            // The same code and the same message a suspended account gets.
+            // A caller holding a valid token for account 4 must not be able to
+            // tell "account 7 exists but is not yours" from "account 7 is
+            // suspended" -- either answer, repeated across a range of keys,
+            // enumerates the account table.
+            log.warn("ACC-403: token for account {} addressed account {}",
+                    caller.accountId(), accountId);
+            throw new AccountNotActiveException(row.getStatus());
         }
         return row;
     }
 
-    public AccountResponse getAccount(Long id) {
-        AccountRow row = requireAccount(id);
-        return new AccountResponse(row.id, row.accountId, row.holderName,
-                row.cashBalance, row.status, row.version, row.lastUpdated);
+    @Transactional(readOnly = true)
+    public AccountResponse getAccount(Long accountId) {
+        AccountRow row = requireReachableAccount(accountId);
+        return new AccountResponse(
+                row.getAccountRef(),      // the string business reference
+                row.getHolderName(),
+                row.getStatus(),
+                row.getCreatedAt());
     }
 
-    public BalanceResponse getBalance(Long id) {
-        AccountRow row = requireAccount(id);
-        return new BalanceResponse(row.id, row.cashBalance, row.currency, Instant.now());
+    @Transactional(readOnly = true)
+    public BalanceResponse getBalance(Long accountId) {
+        AccountRow row = requireReachableAccount(accountId);
+        return new BalanceResponse(
+                row.getClientId(),
+                row.getBalance(),
+                row.getBlockedFunds(),
+                row.availableFunds(),
+                PlatformConstants.QUOTE_CURRENCY,
+                Instant.now(clock));
     }
 
-    public List<PositionResponse> getPositions(Long id) {
-        requireAccount(id); // ACC-404 must fire even if positions come back empty
-        return positionMapper.findByAccountId(id).stream()
-                // contract: zero-quantity holdings are not returned
-                .filter(row -> row.quantity.signum() != 0)
-                .map(row -> new PositionResponse(row.accountId, row.symbol,
-                        row.quantity.intValueExact(), row.averageCost))
+    @Transactional(readOnly = true)
+    public List<PositionResponse> getPositions(Long accountId) {
+        requireReachableAccount(accountId);
+        return positionMapper.findByAccountId(accountId).stream()
+                .map(row -> new PositionResponse(
+                        row.getClientId(),
+                        row.getSymbol(),
+                        row.getPositionType(),
+                        row.getQuantity(),
+                        row.getAveragePrice()))
                 .toList();
     }
 
-    public List<OrderHistoryEntry> getOrders(Long id, OrderStatus status, Instant from, Instant to) {
-        requireAccount(id);
-        return orderMapper.findByAccountId(id, status, from, to).stream()
-                .map(this::toOrderHistoryEntry)
+    /**
+     * The status filter is bound as a parameter like every other value. It is
+     * converted to its name here rather than passed as an enum so the mapper
+     * binds a plain string -- and it can only ever be one of four literals,
+     * because Spring rejected anything else before this method was entered.
+     */
+    @Transactional(readOnly = true)
+    public List<OrderHistoryEntry> getOrders(Long accountId, OrderStatus status, Instant from, Instant to) {
+        requireReachableAccount(accountId);
+        return orderMapper.findByAccountId(accountId, status == null ? null : status.name(), from, to).stream()
+                .map(AccountService::toHistoryEntry)
                 .toList();
     }
 
-    private OrderHistoryEntry toOrderHistoryEntry(OrderHistoryRow row) {
+    private static OrderHistoryEntry toHistoryEntry(OrderRow row) {
         return new OrderHistoryEntry(
-                "ORD-" + row.orderId, // contract: display prefix over the stored UUID
-                row.accountId,
-                row.symbol,
-                row.side,
-                row.quantity.intValueExact(),
-                row.price,
-                row.executedPrice,
-                row.status,
-                row.idempotencyKey,
-                row.createdOn
-        );
+                row.getOrderId(),
+                row.getClientId(),
+                row.getSymbol(),
+                row.getSide(),
+                row.getQuantity(),
+                row.getPrice(),
+                row.getFillPrice(),
+                row.getStatus(),
+                row.getIdempotencyKey(),
+                row.getDatePlaced(),
+                row.getResolvedAt());
     }
 }
