@@ -20,7 +20,7 @@ import java.util.UUID;
 import java.util.Map;
 
 
-abstract class PostgresSupport {
+public abstract class PostgresSupport {
 
     private static final String ISSUER = "auth-service";
     private static final String SECRET = "an-integration-test-secret-of-32-plus-bytes";
@@ -30,7 +30,7 @@ abstract class PostgresSupport {
 
     private static PostgreSQLContainer<?> postgres;
 
-    static boolean databaseAvailable() {
+    public static boolean databaseAvailable() {
         if (EXTERNAL_URL != null) {
             return true;
         }
@@ -79,7 +79,7 @@ abstract class PostgresSupport {
     }
 
 
-    static void applySchema(JdbcTemplate jdbc) {
+    public static void applySchema(JdbcTemplate jdbc) {
         jdbc.execute("DROP SCHEMA public CASCADE");
         jdbc.execute("CREATE SCHEMA public");
 
@@ -93,7 +93,7 @@ abstract class PostgresSupport {
         }
     }
 
-    static HttpHeaders tokenFor(long accountId) {
+    public static HttpHeaders tokenFor(long accountId) {
         String jwt = Jwts.builder()
                 .subject(UUID.randomUUID().toString())
                 .issuer(ISSUER)
