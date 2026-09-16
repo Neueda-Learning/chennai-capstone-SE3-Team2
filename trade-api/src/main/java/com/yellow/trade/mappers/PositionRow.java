@@ -2,13 +2,8 @@ package com.yellow.trade.mappers;
 
 import java.math.BigDecimal;
 
-/**
- * One row of position, joined to its instrument's symbol.
- *
- * positionType is part of the natural key, not decoration: the same client
- * holding the same scrip intraday and as delivery is two rows, because one
- * is squared off tonight and one sits in the demat account.
- */
+//One row of position, joined to its instrument's symbol.
+
 public class PositionRow {
 
     private Long positionId;

@@ -48,10 +48,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/**
- * The service's own responsibilities: authorisation, the lock, the fill, and
- * the conditional cancel. The eight rules are the domain's and are tested there.
- */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class OrderServiceTest {

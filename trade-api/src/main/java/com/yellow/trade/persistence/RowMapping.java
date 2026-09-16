@@ -11,15 +11,6 @@ import com.yellow.trade.mappers.InstrumentRow;
 import com.yellow.trade.mappers.OrderRow;
 import com.yellow.trade.mappers.PositionRow;
 
-/**
- * The one place a database row becomes a domain object and back.
- *
- * It lives here rather than on either side of the boundary on purpose. The
- * domain must not know that rows exist, and a mapper must not decide what a
- * row means -- so the translation is its own thing, and the vocabulary
- * mismatches between the schema and the model are all visible in one file
- * instead of scattered across four adapters.
- */
 final class RowMapping {
 
     private RowMapping() {

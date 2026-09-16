@@ -5,15 +5,6 @@ import com.yellow.enums.AccountStatus;
 import java.math.BigDecimal;
 import java.time.Instant;
 
-/**
- * One row of client_account, joined to the holder's name on client_profile.
- *
- * A row type rather than the domain's Account, because a row carries things
- * the domain has no opinion about -- the business reference a support call
- * quotes, when the account was opened -- and because the domain entity
- * validates its invariants in a constructor, which is the wrong behaviour
- * for something being reconstituted from storage.
- */
 public class AccountRow {
 
     private Long clientId;

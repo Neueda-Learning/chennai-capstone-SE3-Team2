@@ -16,14 +16,6 @@ public class MyBatisInstrumentRepository implements InstrumentRepository {
     public MyBatisInstrumentRepository(InstrumentMapper instrumentMapper) {
         this.instrumentMapper = instrumentMapper;
     }
-
-    /**
-     * Returns delisted instruments too. Rule 3 asks two questions -- does the
-     * symbol exist, and may it be traded -- and the domain answers both, with
-     * the same INS-404 but a different typed reason on the exception. Hiding
-     * untradable rows here would collapse the two into one and lose the
-     * distinction the server log needs.
-     */
     @Override
     public Optional<Instrument> findBySymbol(String symbol) {
         if (symbol == null || symbol.isBlank()) {

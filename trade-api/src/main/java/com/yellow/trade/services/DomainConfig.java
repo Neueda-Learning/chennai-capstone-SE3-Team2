@@ -9,20 +9,6 @@ import org.springframework.context.annotation.Configuration;
 
 import java.time.Clock;
 
-/**
- * Wires the domain into Spring without the domain knowing Spring exists.
- *
- * The domain's OrderService is a plain class with a constructor: no
- * annotation, no component scan, nothing that would put a framework type
- * inside com.yellow.services. That is the constraint the Sprint 5 build
- * enforced with the enforcer plugin and that this project now holds by review.
- * Declaring the bean here is what keeps it true.
- *
- * The four repositories it receives are the MyBatis adapters in
- * com.yellow.trade.persistence. The domain declared the ports; the transport
- * layer supplies the implementations. That is the whole reason the same rules
- * run against a hash map in Sprint 5's tests and against Postgres here.
- */
 @Configuration
 public class DomainConfig {
 

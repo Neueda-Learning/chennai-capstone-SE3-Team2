@@ -10,14 +10,9 @@ import org.apache.ibatis.annotations.Update;
 import java.math.BigDecimal;
 import java.util.List;
 
-/**
- * position, joined to each holding's instrument symbol.
- *
- * Read-only this sprint. A holding changes when an order FILLS, and filling
- * is the Trade Executor's job in Sprint 7 -- placing an order blocks cash and
- * records the order, and moves no stock. Write statements for a fill belong
- * with the code that fills, not here as dead methods nothing calls.
- */
+
+//position, joined to each holding's instrument symbol.
+
 @Mapper
 public interface PositionMapper {
 

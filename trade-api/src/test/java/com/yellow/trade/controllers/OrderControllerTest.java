@@ -26,11 +26,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * The web layer alone: statuses, the envelope, and validation. No database and
- * no container -- the service is mocked, because what is under test here is the
- * translation between HTTP and a service call.
- */
 @WebMvcTest(OrderController.class)
 @org.springframework.context.annotation.Import(GlobalExceptionHandler.class)
 class OrderControllerTest {

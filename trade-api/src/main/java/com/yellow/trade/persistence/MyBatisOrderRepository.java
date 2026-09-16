@@ -11,18 +11,6 @@ import org.springframework.stereotype.Repository;
 import java.util.Optional;
 import java.util.UUID;
 
-/**
- * Binds the domain's OrderRepository port to Postgres, and is where rule 8
- * actually gets decided.
- *
- * The domain asks existsByAccountAndKey before it builds an order, which is
- * the seam that makes rule 8 testable in Sprint 5 with no database. That check
- * is necessary and not sufficient: two requests carrying the same key can both
- * read "no" before either writes. The authority is
- * uq_orders_client_idempotency_key, built in Sprint 3, and it is enforced
- * below by letting the insert fail and translating the failure -- not by
- * checking harder first.
- */
 @Repository
 public class MyBatisOrderRepository implements OrderRepository {
 

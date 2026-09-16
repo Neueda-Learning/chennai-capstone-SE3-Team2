@@ -36,12 +36,6 @@ import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 
-/**
- * The whole stack: HTTP in, controller, service, domain rules, MyBatis, and a
- * real PostgreSQL carrying the real migrations.
- *
- * These are the flows the review asks to see traced end to end.
- */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @EnabledIf(
         value = "com.yellow.trade.integration.PostgresSupport#databaseAvailable",

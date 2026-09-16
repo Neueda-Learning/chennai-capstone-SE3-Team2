@@ -24,14 +24,6 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 
-/**
- * The four read operations.
- *
- * Every one of them starts by resolving the account, which answers ACC-404 and
- * ACC-403 in one place. That matters more than it looks: an endpoint that
- * skipped the check because it "only returns an empty list anyway" would tell
- * a caller with a valid token whether an account key exists.
- */
 @Service
 public class AccountService {
 
@@ -55,14 +47,6 @@ public class AccountService {
         this.clock = clock;
     }
 
-    /**
-     * Resolves an account the caller is allowed to see, or refuses.
-     *
-     * Note what is NOT checked here: whether the account is ACTIVE. A
-     * SUSPENDED account can be read and cannot trade -- suspension is
-     * reversible and the holder still needs to see their own money. Trading
-     * is where status is enforced, by rule 2, in the domain.
-     */
     private AccountRow requireReachableAccount(Long accountId) {
         AccountRow row = accountMapper.findById(accountId);
         if (row == null) {

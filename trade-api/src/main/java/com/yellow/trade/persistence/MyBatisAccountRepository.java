@@ -8,14 +8,6 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 
-/**
- * Binds the domain's AccountRepository port to Postgres.
- *
- * The domain declares what it needs -- "give me the account with this key" --
- * and knows nothing about how. This class is the how, and it is the only
- * reason the same rules can run here against a database and in Sprint 5's
- * tests against a hash map.
- */
 @Repository
 public class MyBatisAccountRepository implements AccountRepository {
 

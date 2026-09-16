@@ -42,9 +42,6 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(InstrumentNotFoundException.class)
     public ResponseEntity<ErrorResponse> handle(InstrumentNotFoundException e) {
-        // The typed reason separates "no such symbol" from "delisted last
-        // month", which the client must not be able to tell apart but an
-        // investigation needs.
         log.warn("INS-404: symbol {} ({})", e.requestedSymbol(), e.reason());
         return envelope(HttpStatus.NOT_FOUND, e);
     }
@@ -92,15 +89,9 @@ public class GlobalExceptionHandler {
         return envelope(HttpStatus.CONFLICT, e);
     }
 
-    /**
-     * 404 with the ORD-409 code, which is what the contract states and is not a
-     * typo: the catalogue has no ORD-404, so an order that does not exist
-     * borrows the conflict code while answering the not-found status.
-     *
-     * This is the one place a status and a code disagree in shape, and it is
-     * why the contract insists clients branch on errorCode rather than on the
-     * status alone.
-     */
+
+     //404 with the ORD-409 code, because the order was never accepted and so cannot be cancelled or queried.
+
     @ExceptionHandler(OrderNotFoundException.class)
     public ResponseEntity<ErrorResponse> handle(OrderNotFoundException e) {
         log.warn("order not found: {}", e.requestedOrderId());
@@ -130,11 +121,7 @@ public class GlobalExceptionHandler {
         return envelope(HttpStatus.UNPROCESSABLE_ENTITY, "VAL-422", "Invalid input");
     }
 
-    /**
-     * A body that is not JSON, or is JSON of the wrong shape, or carries a
-     * field the contract does not declare. Without this, Spring answers 400
-     * with its own body and the envelope has a hole in it.
-     */
+
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handle(HttpMessageNotReadableException e) {
         // getMessage() can quote the offending JSON. It goes to the log only.
@@ -142,10 +129,7 @@ public class GlobalExceptionHandler {
         return envelope(HttpStatus.UNPROCESSABLE_ENTITY, "VAL-422", "Invalid input");
     }
 
-    /**
-     * ?status=NOPE, or an order id that is not a UUID. Spring's default answer
-     * is a 500, which is both wrong and outside the envelope.
-     */
+
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ErrorResponse> handle(MethodArgumentTypeMismatchException e) {
         log.warn("VAL-422: parameter {} could not be read as {}",
@@ -160,11 +144,6 @@ public class GlobalExceptionHandler {
     }
 
     // ------------------------------------------------- transport mismatches
-    //
-    // These are not in the catalogue, because the catalogue describes business
-    // outcomes and these are a client addressing the service wrongly. They
-    // still leave as the envelope: the Angular error handler must never meet a
-    // body it cannot parse.
 
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ErrorResponse> handle(NoResourceFoundException e) {
@@ -186,14 +165,7 @@ public class GlobalExceptionHandler {
 
     // ---------------------------------------------------------------- 500
 
-    /**
-     * A domain exception nobody wrote a handler for.
-     *
-     * It cannot be mapped to a status from here, so it is a 500 -- but it
-     * still leaves as its own catalogue code, because the domain author put
-     * one on it and a client can branch on that. Reaching this method means a
-     * type was added to the domain and this class was not updated.
-     */
+
     @ExceptionHandler(TradeException.class)
     public ResponseEntity<ErrorResponse> handleUnmapped(TradeException e) {
         log.error("unmapped domain exception {} carrying {}",
@@ -201,15 +173,6 @@ public class GlobalExceptionHandler {
         return envelope(HttpStatus.INTERNAL_SERVER_ERROR, e);
     }
 
-    /**
-     * The backstop. Anything at all -- a null dereference, a driver failure, a
-     * connection timeout -- leaves as the envelope rather than as a whitelabel
-     * page or a bare status with an empty body.
-     *
-     * The stack trace goes to the log, at ERROR, with the exception attached.
-     * The client gets a code and a sentence, because the alternative is
-     * handing an attacker the class names and line numbers of the internals.
-     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpected(Exception e) {
         log.error("unhandled exception", e);
@@ -217,13 +180,6 @@ public class GlobalExceptionHandler {
     }
 
     // ----------------------------------------------------------------------
-
-    /**
-     * The code and the message both come from the exception, which is where
-     * the domain put them. Sprint 7 maps the same code onto a Kafka rejection
-     * reason, which is why the domain carries a catalogue code and never an
-     * HTTP status.
-     */
     private ResponseEntity<ErrorResponse> envelope(HttpStatus status, TradeException e) {
         return envelope(status, e.catalogueCode(), e.getMessage());
     }

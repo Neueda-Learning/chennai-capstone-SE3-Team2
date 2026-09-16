@@ -1,12 +1,5 @@
 package com.yellow.trade.mappers;
 
-/**
- * One tradeable instrument, flattened across the supertype and whichever
- * subtype holds its symbol.
- *
- * "Symbol" is equity.ticker for a stock or ETF and mutual_fund.scheme_code
- * for a fund. The contract exposes one field, so the join resolves which.
- */
 public class InstrumentRow {
 
     private Long instrumentId;

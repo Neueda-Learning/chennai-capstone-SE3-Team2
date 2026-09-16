@@ -17,14 +17,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-/**
- * The token fixture and the verifier, together.
- *
- * These tests mint signed tokens with a team-owned fixture and verify them
- * through the same production code path a real token takes. No container, no
- * socket, no auth service -- Sprint 8 replaces the issuer and none of this
- * changes.
- */
 class JwtTokenVerifierTest {
 
     private static final String ISSUER = "auth-service";
@@ -35,7 +27,6 @@ class JwtTokenVerifierTest {
     private final JwtTokenVerifier verifier =
             new JwtTokenVerifier(new JwtProperties(SECRET, "HS256", ISSUER, "/api/v1/"));
 
-    /** The team-owned fixture. It follows auth-api.yaml and is never deployed. */
     private static String mint(SecretKey key, long accountId, Instant expiry) {
         return Jwts.builder()
                 .subject(UUID.randomUUID().toString())

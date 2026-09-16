@@ -15,30 +15,15 @@ import org.springframework.stereotype.Component;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 
-/**
- * Verifies a token and answers who the caller is. Nothing else.
- *
- * ORDER MATTERS, and it is the order the brief assesses:
- *
- *   1. the signature   -- is this token ours at all?
- *   2. the expiry      -- is it still valid?
- *   3. the algorithm   -- is it the one we accept?
- *   4. the issuer      -- did the service we trust actually mint it?
- *   ...and only then is any other claim read.
- *
- * A verifier that decodes the payload first has already trusted whatever the
- * client sent. Steps 1 and 2 happen inside parseSignedClaims below, which
- * refuses the token before it hands back anything readable; step 3 is checked
- * against the header of the ALREADY-VERIFIED token, never against a header
- * read out of the raw string.
- *
- * Why step 3 exists at all when step 1 passed: algorithm confusion. A token
- * asking for "none" is not a signed JWT and parseSignedClaims rejects it. A
- * token asking for RS256 against an HMAC key is rejected here because
- * verifyWith(SecretKey) only admits MAC algorithms. Asserting the algorithm
- * explicitly means the guarantee survives someone later widening the key type
- * without thinking about it.
- */
+// * Verifies a token and answers who the caller is. Nothing else.
+// *
+// * ORDER MATTERS, and it is the order the brief assesses:
+// *
+// *   1. the signature   -- is this token ours at all?
+// *   2. the expiry      -- is it still valid?
+// *   3. the algorithm   -- is it the one we accept?
+// *   4. the issuer      -- did the service we trust actually mint it?
+
 @Component
 public class JwtTokenVerifier {
 

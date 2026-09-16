@@ -19,20 +19,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.Map;
 
-/**
- * A real PostgreSQL, carrying the real schema.
- *
- * THE SCHEMA IS NOT A FIXTURE. These tests apply sprint-3/db verbatim -- base
- * schema, both migrations, the indexes and the seed -- in the order apply.sh
- * applies them. A hand-written CREATE TABLE in a test resource would drift
- * from the real one within a sprint, and the first thing it would stop
- * catching is a migration that does not apply.
- *
- * Postgres comes from Testcontainers by default. Set IT_DB_URL (with
- * IT_DB_USER and IT_DB_PASSWORD) to point at a database you already have --
- * useful on a machine where the Docker daemon is not running, and the reason
- * these tests could be verified during development here.
- */
+
 abstract class PostgresSupport {
 
     private static final String ISSUER = "auth-service";
@@ -43,18 +30,6 @@ abstract class PostgresSupport {
 
     private static PostgreSQLContainer<?> postgres;
 
-    /**
-     * Whether these tests can run at all.
-     *
-     * Referenced by @EnabledIf on the test class, so that a machine with no
-     * Docker daemon reports them as SKIPPED with a reason rather than failing
-     * the build. The unit, slice and contract tests carry no such condition --
-     * the brief requires those to run without a container, and they do.
-     *
-     * This is deliberately not a silent skip. If neither a database nor a
-     * daemon is present, the reason printed by the runner says exactly which
-     * two things would make them run.
-     */
     static boolean databaseAvailable() {
         if (EXTERNAL_URL != null) {
             return true;
@@ -103,11 +78,7 @@ abstract class PostgresSupport {
         registry.add("security.jwt.issuer", () -> ISSUER);
     }
 
-    /**
-     * Rebuilds the database from the committed SQL. Dropping the schema first
-     * makes each run independent of the last, which matters more than speed:
-     * a test that passes only after another test has run is not a test.
-     */
+
     static void applySchema(JdbcTemplate jdbc) {
         jdbc.execute("DROP SCHEMA public CASCADE");
         jdbc.execute("CREATE SCHEMA public");
@@ -122,12 +93,6 @@ abstract class PostgresSupport {
         }
     }
 
-    /**
-     * The team-owned token fixture, following contracts/auth-api.yaml. It
-     * mints tokens and is never deployed; Sprint 8 replaces the issuer and
-     * these tests keep working because they depend on the claim set, not on
-     * who produced it.
-     */
     static HttpHeaders tokenFor(long accountId) {
         String jwt = Jwts.builder()
                 .subject(UUID.randomUUID().toString())

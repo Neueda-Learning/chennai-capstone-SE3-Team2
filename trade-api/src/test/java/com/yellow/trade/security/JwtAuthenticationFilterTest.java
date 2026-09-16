@@ -25,13 +25,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-/**
- * The filter, without a container.
- *
- * The point of these tests is the one the brief makes: four different failures
- * must be indistinguishable from outside. Asserting the status alone would not
- * catch a message that quietly says which one it was.
- */
+//Filter without container
 class JwtAuthenticationFilterTest {
 
     private static final String ISSUER = "auth-service";

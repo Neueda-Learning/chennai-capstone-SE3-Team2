@@ -18,14 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.Instant;
 import java.util.List;
 
-/**
- * The four read operations from contracts/trade-api.yaml.
- *
- * This class speaks HTTP and nothing else: paths, verbs, DTOs, validation
- * annotations. It holds no SQL, opens no transaction and makes no decision
- * about who may see what -- the service answers that, where the account key
- * has been resolved against the database.
- */
+//The four read operations from contracts/trade-api.yaml.
 @RestController
 @RequestMapping("/api/v1/accounts")
 @Validated
@@ -52,11 +45,6 @@ public class AccountController {
         return accountService.getPositions(accountId);
     }
 
-    /**
-     * The three filters are optional and bound as typed parameters, not as
-     * text. An unparseable status or timestamp is refused by Spring before
-     * this method runs and leaves as VAL-422 -- it never reaches a statement.
-     */
     @GetMapping("/{id}/orders")
     public List<OrderHistoryEntry> getOrders(
             @PathVariable("id") @Min(1) Long accountId,

@@ -27,22 +27,6 @@ import static org.hamcrest.Matchers.in;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/**
- * Reads the binding contract and asserts the Java agrees with it.
- *
- * `contracts/trade-api.yaml` is the programme's own file, verbatim. It is the
- * specification, and a specification nothing checks drifts from the code within
- * a sprint -- which is how a team ends up implementing a contract it
- * reconstructed from prose instead of the one it was given.
- *
- * Parsed properly rather than with regular expressions, so the test survives
- * the file being reformatted. SnakeYAML is already on the classpath: Spring
- * Boot uses it to read application.yml.
- *
- * The one place we knowingly differ is recorded in contracts/DEVIATIONS.md and
- * asserted at the bottom of this class, so that the deviation cannot quietly
- * grow into several.
- */
 class ContractConformanceTest {
 
     private static final Path CONTRACT = Path.of("..", "contracts", "trade-api.yaml");

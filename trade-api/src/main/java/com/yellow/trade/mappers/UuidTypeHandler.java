@@ -11,20 +11,6 @@ import java.sql.SQLException;
 import java.sql.Types;
 import java.util.UUID;
 
-/**
- * Binds java.util.UUID to PostgreSQL's uuid type.
- *
- * MyBatis ships handlers for the JDBC types the spec names, and uuid is not
- * one of them -- it is a PostgreSQL extension type, so the mapping has to be
- * declared. Without this, MyBatis reports "No typehandler found for property
- * orderId" while parsing the result map, at startup rather than at first use,
- * which is the right time to find out.
- *
- * Types.OTHER on the way in is what tells the driver to send the value as a
- * uuid rather than as a string the server then has to cast -- and a cast
- * would work until somebody compared a uuid column to a text parameter and
- * lost the index.
- */
 @MappedTypes(UUID.class)
 public class UuidTypeHandler extends BaseTypeHandler<UUID> {
 

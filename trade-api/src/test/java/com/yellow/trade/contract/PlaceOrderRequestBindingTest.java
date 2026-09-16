@@ -14,22 +14,8 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.comparesEqualTo;
 import static org.hamcrest.Matchers.is;
 
-/**
- * A JSON body binds onto the domain's request DTO.
- *
- * This looks trivial and is not. PlaceOrderRequest has one constructor and no
- * no-arg constructor, so Jackson can bind to it only by matching parameter
- * names -- and it can only see those names if the domain was compiled with
- * -parameters.
- *
- * That flag was invisible while the domain was a folder of source inside this
- * service, because Spring Boot's parent supplies it. Compiled as its own jar
- * it has to be asked for, and the failure mode is not subtle: every
- * POST /api/v1/orders answers 500, and only at runtime.
- *
- * So this test exists to fail loudly in the build if the domain module ever
- * stops emitting parameter names, rather than at the review.
- */
+//A JSON body binds onto the domain's request DTO.
+
 class PlaceOrderRequestBindingTest {
 
     private static final String BODY = """

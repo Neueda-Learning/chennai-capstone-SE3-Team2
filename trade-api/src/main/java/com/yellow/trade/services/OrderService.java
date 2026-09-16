@@ -33,32 +33,8 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 
-/**
- * Order placement and cancellation.
- *
- * This class decides nothing about whether a trade is allowed. Rules 1 to 8 are
- * evaluated by the domain's own OrderService, against the same objects the
- * Sprint 7 executor will use. What this class owns is the three things the
- * domain deliberately does not: whether the caller may reach the account, the
- * transaction, and the lock.
- *
- * SYNCHRONOUS EXECUTION, and why.
- *
- * The contract is explicit that in Sprint 6 there is no Trade Executor, so
- * POST /api/v1/orders "validates, fills and persists inside one request". That
- * is what makes rules 9 and 10 real rather than aspirational: cash and position
- * move together, in one transaction, or neither moves.
- *
- * From Sprint 7 the same endpoint records the order NEW, publishes it to Kafka
- * and returns immediately, and the executor does the work below in another
- * process against a live quote. The contract permits both responses and tells
- * clients to handle an order that is still NEW when the response arrives. When
- * that happens, the fill moves out of this method and nothing else here changes.
- *
- * Because Sprint 6 has no live quote, an order fills at the price the customer
- * submitted. The executed price is still recorded separately from the limit
- * price, because from Sprint 7 the two genuinely differ.
- */
+//Order placement and cancellation.
+
 @Service
 public class OrderService {
 
@@ -192,18 +168,8 @@ public class OrderService {
                 row.getQuantity(), row.getAveragePrice());
     }
 
-    /**
-     * Cancels an order.
-     *
-     * The transition is one conditional statement rather than a read followed
-     * by a write: reading the status, deciding, and then writing would let the
-     * executor fill the order in between, and the cancel would overwrite the
-     * fill. Naming NEW in the WHERE clause makes the database arbitrate.
-     *
-     * Nothing is cancellable while Sprint 6 fills synchronously -- every order
-     * is terminal by the time the response leaves. The path exists because the
-     * contract fixes it, and Sprint 7 makes it reachable.
-     */
+
+     //Cancels an order.
     @Transactional
     public OrderResponse cancelOrder(UUID orderId) {
         OrderRow existing = orderMapper.findById(orderId);

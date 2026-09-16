@@ -7,13 +7,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
-/**
- * One row of orders, joined to its instrument's symbol.
- *
- * orderId is supplied by the application, not the database: the domain mints
- * it in Order.place() before the insert, so a retry can carry the identity it
- * was given. See migration 002_api_alignment.sql.
- */
+//One row of orders, joined to its instrument's symbol.
+
 public class OrderRow {
 
     private UUID orderId;
