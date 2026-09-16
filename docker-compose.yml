@@ -13,7 +13,7 @@ name: fauxnance
 
 services:
 
-    kafka:
+  kafka:
     image: apache/kafka:3.8.0
     container_name: fauxnance-kafka
     profiles: [platform]
@@ -40,7 +40,6 @@ services:
       retries: 10
       start_period: 15s
     restart: unless-stopped
-
 
   postgres:
     image: postgres:16-alpine
