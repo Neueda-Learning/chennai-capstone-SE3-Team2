@@ -35,7 +35,8 @@ import java.time.Instant;
  *       call, no Kafka publish inside it</li>
  * </ul>
  */
-@Component
+// @Component removed: FullSettlement (story 611) is the active implementation.
+// This class is kept as reference for the story 610 guard logic.
 public class GuardedSettlement implements SettlementPort {
 
     private static final Logger log = LoggerFactory.getLogger(GuardedSettlement.class);

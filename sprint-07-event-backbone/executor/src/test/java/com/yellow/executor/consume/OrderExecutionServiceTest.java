@@ -17,8 +17,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import org.springframework.kafka.core.KafkaTemplate;
+
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -52,12 +56,15 @@ class OrderExecutionServiceTest {
     private SettlementPort settlement;
     private OrderExecutionService service;
 
+    @SuppressWarnings("unchecked")
     @BeforeEach
     void wire() {
         mapper = mock(ExecutionMapper.class);
         quotes = mock(QuoteSource.class);
         settlement = mock(SettlementPort.class);
-        service = new OrderExecutionService(mapper, quotes, settlement);
+        service = new OrderExecutionService(mapper, quotes, settlement,
+                mock(KafkaTemplate.class),
+                Clock.fixed(Instant.parse("2026-09-17T09:14:24Z"), ZoneOffset.UTC));
 
         when(settlement.settle(any(), any())).thenReturn(SettlementResult.SETTLED);
     }

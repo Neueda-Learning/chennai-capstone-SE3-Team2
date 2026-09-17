@@ -1,6 +1,8 @@
 package com.yellow.executor.settle;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+
+import java.math.BigDecimal;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.DockerClientFactory;
@@ -104,6 +106,18 @@ public abstract class ExecutorPostgresSupport {
     protected static Long itcInstrumentId(JdbcTemplate jdbc) {
         return jdbc.queryForObject(
                 "SELECT instrument_id FROM equity WHERE ticker = 'ITC.NS'", Long.class);
+    }
+
+    protected static BigDecimal readBalance(JdbcTemplate jdbc, Long clientId) {
+        return jdbc.queryForObject(
+                "SELECT balance FROM client_account WHERE client_id = ?",
+                BigDecimal.class, clientId);
+    }
+
+    protected static BigDecimal readBlockedFunds(JdbcTemplate jdbc, Long clientId) {
+        return jdbc.queryForObject(
+                "SELECT blocked_funds FROM client_account WHERE client_id = ?",
+                BigDecimal.class, clientId);
     }
 
     /** One order sitting at NEW, waiting for the executor to decide about it. */
