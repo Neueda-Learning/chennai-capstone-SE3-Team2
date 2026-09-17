@@ -27,6 +27,19 @@ services:
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      # Single-broker cluster settings. Kafka's defaults assume >= 3
+      # brokers for its two internal topics; on one broker the defaults
+      # silently prevent __consumer_offsets and __transaction_state from
+      # being created, and every consumer group's FIND_COORDINATOR
+      # then hangs. Set them to 1 explicitly.
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      # No initial delay before the first consumer's join is accepted.
+      # The default 3s is fine for a large cluster where several
+      # consumers arrive together; on a single-node dev stack it just
+      # slows every startup.
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
       CLUSTER_ID: "fauxnance-sprint7-kraft"
     ports:
       - "9092:9092"
