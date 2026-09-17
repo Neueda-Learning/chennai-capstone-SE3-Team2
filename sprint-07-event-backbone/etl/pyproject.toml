@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sprint-07-analytics-etl"
+version = "0.1.0"
+description = "Incremental analytics ETL: Postgres to DuckDB star schema"
+requires-python = ">=3.12"
+dependencies = [
+    "psycopg2-binary",
+    "duckdb>=0.10.0",
+    "pandas",
+    "python-dotenv",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-mock",
+]
+
+[project.scripts]
+analytics-etl = "etl.pipeline:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
