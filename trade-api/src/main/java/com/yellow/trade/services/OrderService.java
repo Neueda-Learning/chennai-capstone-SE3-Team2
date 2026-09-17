@@ -13,6 +13,7 @@ import com.yellow.exceptions.StaleAccountVersionException;
 import com.yellow.trade.OrderIdentifier;
 import com.yellow.trade.PlatformConstants;
 import com.yellow.trade.dto.OrderResponse;
+import com.yellow.trade.events.OrderPlacedDomainEvent;
 import com.yellow.trade.mappers.AccountMapper;
 import com.yellow.trade.mappers.AccountRow;
 import com.yellow.trade.mappers.InstrumentMapper;
@@ -24,6 +25,7 @@ import com.yellow.trade.mappers.PositionRow;
 import com.yellow.trade.security.CallerAccount;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,6 +52,7 @@ public class OrderService {
     private final PositionMapper positionMapper;
     private final CallerAccount caller;
     private final Clock clock;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     public OrderService(com.yellow.services.OrderService domainOrderService,
                         AccountMapper accountMapper,
@@ -57,7 +60,8 @@ public class OrderService {
                         OrderMapper orderMapper,
                         PositionMapper positionMapper,
                         CallerAccount caller,
-                        Clock clock) {
+                        Clock clock,
+                        ApplicationEventPublisher applicationEventPublisher) {
         this.domainOrderService = domainOrderService;
         this.accountMapper = accountMapper;
         this.instrumentMapper = instrumentMapper;
@@ -65,9 +69,11 @@ public class OrderService {
         this.positionMapper = positionMapper;
         this.caller = caller;
         this.clock = clock;
+        this.applicationEventPublisher = applicationEventPublisher;
     }
 
-    // 213
+    // 213: Sprint 7 changes: order stays at NEW, no synchronous fill.
+    // Executor handles pricing and fill. Event published after transaction commits.
     @Transactional
     public OrderResponse placeOrder(PlaceOrderRequest request) {
         Long accountId = request.getAccountId();
@@ -84,29 +90,40 @@ public class OrderService {
 
         Order order = domainOrderService.placeOrder(request);
 
-        BigDecimal fillPrice = order.limitPrice();
-        BigDecimal consideration = money(order.quantity().multiply(fillPrice));
+        BigDecimal limitPrice = order.limitPrice();
+        BigDecimal consideration = money(order.quantity().multiply(limitPrice));
 
-        // single database transaction
+        // Persist order at NEW status before moving cash/positions
+        OrderRow orderRow = new OrderRow();
+        orderRow.setOrderId(order.orderId());
+        orderRow.setClientId(accountId);
+        orderRow.setInstrumentId(order.instrumentId());
+        orderRow.setSide(order.side());
+        orderRow.setPrice(limitPrice);
+        orderRow.setQuantity(order.quantity());
+        orderRow.setFillPrice(null);
+        orderRow.setStatus(OrderStatus.NEW);
+        orderRow.setIdempotencyKey(order.idempotencyKey());
+        orderRow.setDatePlaced(Instant.now(clock));
+        orderRow.setResolvedAt(null);
+        orderMapper.insert(orderRow);
+
+        // Update cash and positions in single transaction
         moveCash(account, order.side(), consideration);
-        movePosition(order, fillPrice);
-
-        int filled = orderMapper.fillIfNew(order.orderId(), fillPrice, Instant.now(clock));
-        if (filled == 0) {
-            // Unreachable while placement fills in the transaction that
-            // recorded the order. It stops being unreachable in Sprint 7.
-            throw new OrderNotCancellableException(OrderStatus.NEW);
-        }
+        movePosition(order, limitPrice);
 
         InstrumentRow instrument = instrumentMapper.findById(order.instrumentId());
-        log.info("order {} filled: account={} {} {} of {} at {}",
+        log.info("order {} accepted: account={} {} {} of {} at limit price {}",
                 order.orderId(), accountId, order.side(), order.quantity(),
-                instrument == null ? order.instrumentId() : instrument.getSymbol(), fillPrice);
+                instrument == null ? order.instrumentId() : instrument.getSymbol(), limitPrice);
+
+        // Publish domain event after transaction commits (handled by @TransactionalEventListener)
+        applicationEventPublisher.publishEvent(new OrderPlacedDomainEvent(this, order));
 
         return new OrderResponse(
                 OrderIdentifier.display(order.orderId()),
-                OrderStatus.FILLED,
-                messageFor(OrderStatus.FILLED),
+                OrderStatus.NEW,
+                messageFor(OrderStatus.NEW),
                 instrument == null ? null : instrument.getSymbol(),
                 order.side(),
                 order.quantity(),

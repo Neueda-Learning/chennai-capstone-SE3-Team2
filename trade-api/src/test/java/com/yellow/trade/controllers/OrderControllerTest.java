@@ -9,6 +9,7 @@ import com.yellow.exceptions.InstrumentNotFoundException;
 import com.yellow.enums.Reason;
 import com.yellow.trade.dto.OrderResponse;
 import com.yellow.trade.services.OrderService;
+import com.yellow.trade.controllers.GlobalExceptionHandler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,20 +43,20 @@ class OrderControllerTest {
     private static OrderResponse placed() {
         return new OrderResponse(
                 "ORD-6f9619ff-8b86-d011-b42d-00c04fc964ff",
-                OrderStatus.FILLED, "Order executed", "ACME",
+                OrderStatus.NEW, "Order accepted", "ACME",
                 OrderSide.BUY, new BigDecimal("10"), new BigDecimal("1450.00"));
     }
 
     @Test
-    @DisplayName("a placed order answers 200, and Sprint 6 fills it in the request")
-    void placedOrderIsFilled() throws Exception {
+    @DisplayName("a placed order answers 200 with NEW status, and Sprint 7 executor fills it")
+    void placedOrderIsNew() throws Exception {
         when(orderService.placeOrder(any())).thenReturn(placed());
 
         mockMvc.perform(post("/api/v1/orders").contentType("application/json").content(VALID_BODY))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.orderId").value("ORD-6f9619ff-8b86-d011-b42d-00c04fc964ff"))
-                .andExpect(jsonPath("$.status").value("FILLED"))
-                .andExpect(jsonPath("$.message").value("Order executed"));
+                .andExpect(jsonPath("$.status").value("NEW"))
+                .andExpect(jsonPath("$.message").value("Order accepted"));
     }
 
     @Test

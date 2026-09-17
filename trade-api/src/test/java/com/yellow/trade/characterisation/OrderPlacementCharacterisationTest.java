@@ -42,8 +42,8 @@ class OrderPlacementCharacterisationTest extends PostgresSupport {
     }
 
     @Test
-    @DisplayName("PINNED: an affordable order fills synchronously and returns FILLED, field by field")
-    void affordableOrderFillsSynchronously() {
+    @DisplayName("PINNED: an affordable order is accepted at NEW and executor fills it later")
+    void affordableOrderIsAcceptedAtNew() {
         ResponseEntity<OrderResponse> response = rest.exchange("/api/v1/orders", HttpMethod.POST,
                 new HttpEntity<>("""
                         {"accountId":3,"symbol":"APEX","side":"BUY","quantity":10,
@@ -53,10 +53,9 @@ class OrderPlacementCharacterisationTest extends PostgresSupport {
         assertThat(response.getStatusCode(), is(HttpStatus.OK));
         OrderResponse body = response.getBody();
         assertThat(body.orderId(), startsWith("ORD-"));
-        // PINNED: currently returns the TERMINAL status FILLED, not NEW.
-        // Sprint 7's change to NEW updates this line in the SAME commit.
-        assertThat(body.status().name(), is("FILLED"));
-        assertThat(body.message(), is("Order executed"));
+        // Sprint 7: order is accepted at NEW status, executor fills later
+        assertThat(body.status().name(), is("NEW"));
+        assertThat(body.message(), is("Order accepted"));
         assertThat(body.symbol(), is("APEX"));
         assertThat(body.side().name(), is("BUY"));
         assertThat(body.quantity(), comparesEqualTo(new BigDecimal("10")));
@@ -64,7 +63,7 @@ class OrderPlacementCharacterisationTest extends PostgresSupport {
     }
 
     @Test
-    @DisplayName("PINNED: an accepted order writes the order row, debits cash and opens the position")
+    @DisplayName("PINNED: an accepted order writes the order row at NEW, debits cash and opens the position")
     void acceptedOrderWritesRowCashAndPosition() {
         rest.exchange("/api/v1/orders", HttpMethod.POST,
                 new HttpEntity<>("""
@@ -74,7 +73,8 @@ class OrderPlacementCharacterisationTest extends PostgresSupport {
 
         var row = jdbc.queryForMap(
                 "SELECT status FROM orders WHERE idempotency_key = ?", "char-key-02");
-        assertThat(row.get("status"), is("FILLED"));
+        // Sprint 7: order is saved at NEW status, not FILLED
+        assertThat(row.get("status"), is("NEW"));
 
         BigDecimal balance = jdbc.queryForObject(
                 "SELECT balance FROM client_account WHERE client_id = 3", BigDecimal.class);
