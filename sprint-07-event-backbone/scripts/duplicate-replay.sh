@@ -45,7 +45,12 @@ LIMIT_PRICE="${LIMIT_PRICE:-2000.00}"
 
 KAFKA_CONTAINER="${KAFKA_CONTAINER:-fauxnance-kafka}"
 EXECUTOR_CONTAINER="${EXECUTOR_CONTAINER:-fauxnance-executor}"
-KAFKA_BROKER_INTERNAL="${KAFKA_BROKER_INTERNAL:-localhost:29092}"
+# From INSIDE the broker container, use the advertised name -- the
+# broker advertises `PLAINTEXT://kafka:29092` in metadata replies, and
+# a client that connected via `localhost:29092` fails on the follow-up
+# with `Timed out waiting for a node assignment` when localhost does
+# not match what was advertised.
+KAFKA_BROKER_INTERNAL="${KAFKA_BROKER_INTERNAL:-kafka:29092}"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "${TMP}"' EXIT

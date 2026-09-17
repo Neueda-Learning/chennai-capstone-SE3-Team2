@@ -199,7 +199,7 @@ Straight from the brief. Bring these on demand:
 
 - the running stack
 - `docker exec fauxnance-kafka /opt/kafka/bin/kafka-topics.sh
-  --describe --bootstrap-server localhost:29092` with `design/kafka.md`
+  --describe --bootstrap-server kafka:29092` with `design/kafka.md`
   open beside them
 - one order traced end to end: HTTP request → `orders` topic →
   committed rows in Postgres → `trade-events` published
