@@ -67,6 +67,38 @@
     <modules>
         <module>domainrules</module>
         <module>trade-api</module>
+        <module>sprint-07-event-backbone/executor</module>
     </modules>
+
+    <!--
+      WHY THE EXECUTOR IS A REACTOR MODULE.
+
+      readme_7.md asks for one Maven project rooted at executor/ where
+      `mvn clean verify` succeeds on a machine that has never seen the code.
+      Read literally, that rules out depending on sprint5-domain, because a
+      fresh clone has nothing in ~/.m2 to resolve it from.
+
+      We chose the dependency anyway, and the reason is worth stating. The
+      executor re-checks business rules 6 and 7 at execution time, can the
+      account still afford this, is the holding still there, and those are
+      Account.canAfford and Position.canSell, already written and already
+      tested in the domain. Reimplementing them here would put two copies of
+      the same rule in one repository, drifting apart from the day they are
+      written, which is the failure the module boundary exists to prevent.
+      The alternative cost is one line of build instruction.
+
+      So: build from this directory, as Sprint 6 already required.
+
+          mvn clean install
+
+      `cd sprint-07-event-backbone/executor && mvn clean verify` works too,
+      once sprint5-domain is in ~/.m2 from a root build. The Dockerfile
+      builds from the repository root for the same reason trade-api's does.
+    -->
+
+    <properties>
+        <java.version>21</java.version>
+        <maven.compiler.release>21</maven.compiler.release>
+    </properties>
 
 </project>

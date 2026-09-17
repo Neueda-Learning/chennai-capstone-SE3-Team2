@@ -177,7 +177,9 @@ class TradeApiIntegrationTest extends PostgresSupport {
                         """, tokenFor(ACTIVE_ACCOUNT)), OrderResponse.class);
 
         assertThat(response.getStatusCode(), is(HttpStatus.OK));
-        assertThat(response.getBody().status().name(), is("FILLED"));
+        // Sprint 7: the API accepts and records. It does not price and does not
+        // fill, because there is no price in the request.
+        assertThat(response.getBody().status().name(), is("NEW"));
 
         // The response carries the display form; the row is keyed by the UUID.
         String displayed = response.getBody().orderId();
@@ -191,21 +193,26 @@ class TradeApiIntegrationTest extends PostgresSupport {
         assertThat(row.get("client_id"), is(3));
         assertThat(row.get("order_type"), is("MARKET"));
         assertThat(row.get("product_type"), is("CNC"));
-        assertThat(row.get("status"), is("FILLED"));
-        assertThat(row.get("resolved_at"), is(notNullValue()));
+        assertThat(row.get("status"), is("NEW"));
+        // Nothing has resolved it yet, so it carries no resolution timestamp.
+        assertThat(row.get("resolved_at"), is(nullValue()));
 
-        // Cash moved with it, under the lock: 10 x 1450.00 = 14,500 debited.
+        // Cash has NOT moved, and the version has not turned. From Sprint 7 the
+        // account row is untouched by placement: the Trade Executor debits it,
+        // under the same optimistic lock, at the price the order actually
+        // executed at. Debiting here would charge the limit price for a trade
+        // that had not happened, and then charge again when it did.
         var account = jdbc.queryForMap(
                 "SELECT balance, version FROM client_account WHERE client_id = 3");
-        assertThat((BigDecimal) account.get("balance"), comparesEqualTo(new BigDecimal("735500.0000")));
-        assertThat(account.get("version"), is(8));
+        assertThat((BigDecimal) account.get("balance"), comparesEqualTo(new BigDecimal("750000.0000")));
+        assertThat(account.get("version"), is(7));
 
-        // And the holding moved in the same transaction. Rule 9.
+        // No holding either: the customer owns nothing until the order executes.
         assertThat(jdbc.queryForObject(
-                "SELECT quantity FROM position WHERE client_id = 3 AND instrument_id = "
+                "SELECT count(*) FROM position WHERE client_id = 3 AND instrument_id = "
                         + "(SELECT instrument_id FROM equity WHERE ticker = 'APEX') "
-                        + "AND position_type = 'DELIVERY'", BigDecimal.class),
-                comparesEqualTo(new BigDecimal("10.000000")));
+                        + "AND position_type = 'DELIVERY'", Integer.class),
+                is(0));
     }
 
     @Test
@@ -255,12 +262,14 @@ class TradeApiIntegrationTest extends PostgresSupport {
     // ----------------------------------------------------------- cancel
 
     @Test
-    @DisplayName("an order that already filled cannot be cancelled")
-    void aFilledOrderIsNotCancellable() {
-        // Sprint 6 fills inside the request, so every order is terminal by the
-        // time the response arrives and nothing is cancellable. From Sprint 7
-        // an order sits NEW until the executor resolves it, and this path
-        // starts mattering.
+    @DisplayName("a NEW order cancels, and cancelling it twice is refused")
+    void aNewOrderCancelsAndASecondCancelIsRefused() {
+        // The old name was aFilledOrderIsNotCancellable, and its own comment
+        // predicted this rewrite: Sprint 6 filled inside the request, so every
+        // order was terminal by the time the response arrived and nothing was
+        // ever cancellable. From Sprint 7 an order sits NEW until the executor
+        // resolves it, so this path starts mattering and the cancel guard
+        // becomes reachable for the first time.
         String displayed = rest.exchange("/api/v1/orders", HttpMethod.POST,
                 new HttpEntity<>("""
                         {"accountId":3,"symbol":"APEX","side":"BUY","quantity":10,
@@ -269,6 +278,22 @@ class TradeApiIntegrationTest extends PostgresSupport {
 
         String orderId = displayed.substring("ORD-".length());
 
+        ResponseEntity<OrderResponse> cancelled = rest.exchange(
+                "/api/v1/orders/" + orderId, HttpMethod.DELETE,
+                new HttpEntity<>(tokenFor(ACTIVE_ACCOUNT)), OrderResponse.class);
+
+        assertThat(cancelled.getStatusCode(), is(HttpStatus.OK));
+        assertThat(cancelled.getBody().status().name(), is("CANCELLED"));
+
+        var row = jdbc.queryForMap(
+                "SELECT status, resolved_at FROM orders WHERE order_id = ?", UUID.fromString(orderId));
+        assertThat(row.get("status"), is("CANCELLED"));
+        // Terminal now, so it carries its resolution timestamp.
+        assertThat(row.get("resolved_at"), is(notNullValue()));
+
+        // cancelIfNew is conditional on the state it expects, so the second
+        // cancel affects zero rows rather than cancelling a cancelled order.
+        // This is the same guard shape the executor uses on settlement.
         ResponseEntity<ErrorResponse> refused = rest.exchange(
                 "/api/v1/orders/" + orderId, HttpMethod.DELETE,
                 new HttpEntity<>(tokenFor(ACTIVE_ACCOUNT)), ErrorResponse.class);
@@ -294,10 +319,25 @@ class TradeApiIntegrationTest extends PostgresSupport {
     // ------------------------------------------------------ concurrency
 
     @Test
-    @DisplayName("concurrent buys against one account: one wins, and the cash reconciles")
-    void concurrentBuysAreSerialisedByTheVersionColumn() throws Exception {
-        // Account 4 holds 9,200.75 with 1,200.00 blocked: 8,000.75 available.
-        // Eight buys of 5,000 each. Any one fits; together they are 40,000.
+    @DisplayName("concurrent buys against one account are all accepted, and none of them moves money")
+    void concurrentBuysAreAllAcceptedAndMoveNoMoney() throws Exception {
+        // REWRITTEN FOR SPRINT 7, and the change is the point of the sprint.
+        //
+        // In Sprint 6 this test proved the optimistic lock: eight concurrent
+        // buys of 5,000 against 8,000.75 available, exactly one won, because
+        // cash moved inside the request under a version check.
+        //
+        // Sprint 7 moves that contest. Placement records the order and touches
+        // no money, so all eight are accepted at NEW -- the API is not the
+        // place where affordability is finally decided any more. The executor
+        // re-checks rule 6 at the executed price against the balance as it then
+        // is, and rejects the ones the account can no longer afford. The lock
+        // itself has not gone anywhere: AccountMapper.debitBalance still carries
+        // it, and story 611 applies it inside the settlement transaction.
+        //
+        // What this test still proves is that placement is genuinely free of
+        // side effects under concurrency, which is what makes the executor the
+        // single writer of cash.
         int attempts = 8;
         ExecutorService pool = Executors.newFixedThreadPool(attempts);
 
@@ -316,24 +356,26 @@ class TradeApiIntegrationTest extends PostgresSupport {
             }
         }
 
-        // Without the lock, every one of them would read 8,000.75, every one
-        // would pass rule 6, and every one would write its own figure back.
-        assertThat(created, is(1L));
+        // Every one is accepted: each independently passes rule 6 against a
+        // balance that nothing is decrementing.
+        assertThat(created, is(8L));
 
-        BigDecimal balance = jdbc.queryForObject(
-                "SELECT balance FROM client_account WHERE client_id = 4", BigDecimal.class);
-        BigDecimal spent = jdbc.queryForObject(
-                "SELECT coalesce(sum(price * quantity), 0) FROM orders "
-                        + "WHERE client_id = 4 AND idempotency_key LIKE 'race-key-%'", BigDecimal.class);
-
-        // The reconciliation somebody would otherwise do the next morning:
-        // the cash that left equals the notional of every order recorded.
-        assertThat(balance, comparesEqualTo(new BigDecimal("9200.7500").subtract(spent)));
-
-        // And the holding is there exactly once, for the one order that won.
+        // Eight rows, all NEW, one per distinct idempotency key.
         assertThat(jdbc.queryForObject(
-                "SELECT coalesce(sum(quantity), 0) FROM position WHERE client_id = 4 "
+                "SELECT count(*) FROM orders WHERE client_id = 4 "
+                        + "AND idempotency_key LIKE 'race-key-%' AND status = 'NEW'",
+                Integer.class), is(8));
+
+        // Not one paisa has moved, and the version has not turned.
+        var account = jdbc.queryForMap(
+                "SELECT balance, version FROM client_account WHERE client_id = 4");
+        assertThat((BigDecimal) account.get("balance"), comparesEqualTo(new BigDecimal("9200.7500")));
+        assertThat(account.get("version"), is(2));
+
+        // And no holding exists for any of them.
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM position WHERE client_id = 4 "
                         + "AND instrument_id = (SELECT instrument_id FROM equity WHERE ticker = 'APEX')",
-                BigDecimal.class), comparesEqualTo(new BigDecimal("5.000000")));
+                Integer.class), is(0));
     }
 }

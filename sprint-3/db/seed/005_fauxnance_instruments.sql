@@ -4,6 +4,23 @@
 -- Sprint 7. Instruments whose symbols exist in the Fauxnance registry,
 -- so that an order can be priced against a live quote.
 --
+-- WHY THIS LIVES IN seed/ AND NOT IN migrations/.
+--
+-- It was written into migrations/ first, and it cannot run there.
+-- apply.sh applies base, then migrations, then indexes, then seed. The
+-- equity rows below carry exchange_code 'NSE', and equity.exchange_code
+-- REFERENCES exchange (exchange_code) -- but the NSE row is created by
+-- seed/001_reference_data.sql, which runs two phases later. From
+-- migrations/ this insert hits a foreign key violation against an
+-- exchange table that is still empty, and apply.sh stops there with
+-- ON_ERROR_STOP=1, leaving the database half built.
+--
+-- It also belongs here on its own terms: it is rows, not schema.
+-- Migrations change the shape of the database and are applied once per
+-- environment for ever; seeds are the data a developer's database
+-- starts with. Instruments are already seeded, in
+-- seed/003_instruments.sql, and these are more of the same.
+--
 -- WHY A SECOND SET OF INSTRUMENTS.
 --
 -- 003_instruments.sql seeds a fictional universe -- APEX, ORIONM,
