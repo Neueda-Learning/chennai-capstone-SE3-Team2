@@ -2,6 +2,7 @@ package com.yellow.trade.services;
 
 import com.yellow.entities.Order;
 import com.yellow.enums.OrderSide;
+import com.yellow.trade.events.EventEnvelope;
 import com.yellow.trade.events.OrderPlacedDomainEvent;
 import com.yellow.trade.events.OrderPlacedEvent;
 import com.yellow.trade.config.KafkaTopics;
@@ -35,10 +36,10 @@ class OrderEventPublisherTest {
     private static final Long ACCOUNT = 3L;
     private static final Long INSTRUMENT = 1L;
 
-    @Mock private KafkaTemplate<String, OrderPlacedEvent> kafkaTemplate;
+    @Mock private KafkaTemplate<String, EventEnvelope<OrderPlacedEvent>> kafkaTemplate;
     @Mock private InstrumentMapper instrumentMapper;
 
-    @Captor private ArgumentCaptor<OrderPlacedEvent> eventCaptor;
+    @Captor private ArgumentCaptor<EventEnvelope<OrderPlacedEvent>> envelopeCaptor;
 
     private OrderEventPublisher publisher;
 
@@ -64,14 +65,23 @@ class OrderEventPublisherTest {
         verify(kafkaTemplate).send(
                 eq(KafkaTopics.ORDERS),
                 eq(ACCOUNT.toString()),
-                eventCaptor.capture());
+                envelopeCaptor.capture());
         
-        OrderPlacedEvent payload = eventCaptor.getValue();
+        EventEnvelope<OrderPlacedEvent> envelope = envelopeCaptor.getValue();
+        assertThat(envelope.eventId(), notNullValue());
+        assertThat(envelope.eventType(), is("ORDER_PLACED"));
+        assertThat(envelope.source(), is("trade-api"));
+        assertThat(envelope.schemaVersion(), is(1));
+        assertThat(envelope.eventTime(), notNullValue());
+        
+        OrderPlacedEvent payload = envelope.payload();
         assertThat(payload.accountId(), is(ACCOUNT));
         assertThat(payload.symbol(), is("APEX"));
         assertThat(payload.side(), is(OrderSide.BUY));
         assertThat(payload.quantity(), comparesEqualTo(new BigDecimal("10")));
+        assertThat(payload.price(), comparesEqualTo(new BigDecimal("1450.00")));
         assertThat(payload.status(), is("NEW"));
+        assertThat(payload.createdOn(), notNullValue());
         assertThat(payload.idempotencyKey(), is("key-12345678"));
     }
 
@@ -87,7 +97,7 @@ class OrderEventPublisherTest {
         verify(kafkaTemplate).send(
                 eq(KafkaTopics.ORDERS),
                 eq(ACCOUNT.toString()),
-                any(OrderPlacedEvent.class));
+                any(EventEnvelope.class));
     }
 
     @Test
@@ -102,7 +112,7 @@ class OrderEventPublisherTest {
         verify(kafkaTemplate).send(
                 eq(KafkaTopics.ORDERS),
                 anyString(),
-                any(OrderPlacedEvent.class));
+                any(EventEnvelope.class));
     }
 
     @Test
@@ -136,11 +146,13 @@ class OrderEventPublisherTest {
         verify(kafkaTemplate).send(
                 eq(KafkaTopics.ORDERS),
                 eq(ACCOUNT.toString()),
-                eventCaptor.capture());
+                envelopeCaptor.capture());
         
-        OrderPlacedEvent payload = eventCaptor.getValue();
+        EventEnvelope<OrderPlacedEvent> envelope = envelopeCaptor.getValue();
+        OrderPlacedEvent payload = envelope.payload();
         assertThat(payload.symbol(), is((String) null));
         assertThat(payload.orderId(), is(notNullValue()));
     }
 }
+
 
