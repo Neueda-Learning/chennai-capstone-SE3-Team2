@@ -90,32 +90,10 @@ public class OrderService {
 
         Order order = domainOrderService.placeOrder(request);
 
-        BigDecimal limitPrice = order.limitPrice();
-        BigDecimal consideration = money(order.quantity().multiply(limitPrice));
-
-        // Persist order at NEW status before moving cash/positions
-        OrderRow orderRow = new OrderRow();
-        orderRow.setOrderId(order.orderId());
-        orderRow.setClientId(accountId);
-        orderRow.setInstrumentId(order.instrumentId());
-        orderRow.setSide(order.side());
-        orderRow.setPrice(limitPrice);
-        orderRow.setQuantity(order.quantity());
-        orderRow.setFillPrice(null);
-        orderRow.setStatus(OrderStatus.NEW);
-        orderRow.setIdempotencyKey(order.idempotencyKey());
-        orderRow.setDatePlaced(Instant.now(clock));
-        orderRow.setResolvedAt(null);
-        orderMapper.insert(orderRow);
-
-        // Update cash and positions in single transaction
-        moveCash(account, order.side(), consideration);
-        movePosition(order, limitPrice);
-
         InstrumentRow instrument = instrumentMapper.findById(order.instrumentId());
         log.info("order {} accepted: account={} {} {} of {} at limit price {}",
                 order.orderId(), accountId, order.side(), order.quantity(),
-                instrument == null ? order.instrumentId() : instrument.getSymbol(), limitPrice);
+                instrument == null ? order.instrumentId() : instrument.getSymbol(), order.limitPrice());
 
         // Publish domain event after transaction commits (handled by @TransactionalEventListener)
         applicationEventPublisher.publishEvent(new OrderPlacedDomainEvent(this, order));
@@ -131,6 +109,9 @@ public class OrderService {
     }
 
     // 213: The optimistic lock, and the only place cash moves.
+    // Unused by placeOrder from Sprint 7 onwards. Story 611 moves this into the
+    // executor's settlement transaction, priced at the executed price rather
+    // than the limit price.
 
     private void moveCash(AccountRow account, OrderSide side, BigDecimal consideration) {
         int affected = side == OrderSide.BUY

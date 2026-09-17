@@ -148,20 +148,22 @@ class OrderServiceTest {
     // ------------------------------------------------------- the fill
 
     @Test
-    @DisplayName("a buy debits the consideration, opens the holding and saves order at NEW")
-    // 213:1 - PLACE ORDER COMMITS (Sprint 7: no fill)
-    void buyMovesCashAndPositionTogether() {
+    @DisplayName("a buy order is placed at NEW without moving cash or position")
+    // 213:1 - PLACE ORDER COMMITS (Sprint 7: no synchronous fill)
+    // Story 611 will move cash and position during settlement, not at placement
+    void buyIsPlacedWithoutMovingCashOrPosition() {
         Order placed = order(OrderSide.BUY);
         when(domainOrderService.placeOrder(any())).thenReturn(placed);
-        when(positionMapper.findOne(ACCOUNT, INSTRUMENT, "DELIVERY")).thenReturn(null);
 
         OrderResponse response = service.placeOrder(request(OrderSide.BUY));
 
-        // 10 units at 1450.00 is 14,500.00, debited at the version it read.
-        verify(accountMapper).debitBalance(ACCOUNT, new BigDecimal("14500.0000"), 7);
-        verify(positionMapper).insertPosition(eq(ACCOUNT), eq(INSTRUMENT), eq("DELIVERY"),
-                eq(new BigDecimal("10.000000")), eq(new BigDecimal("1450.0000")));
-        verify(orderMapper).insert(any());
+        // No cash movement at placement
+        verify(accountMapper, never()).debitBalance(anyLong(), any(), anyInt());
+        // No position creation at placement
+        verify(positionMapper, never()).insertPosition(anyLong(), anyLong(), anyString(), any(), any());
+        verify(positionMapper, never()).updatePosition(anyLong(), anyLong(), anyString(), any(), any());
+        verify(positionMapper, never()).deletePosition(anyLong(), anyLong(), anyString());
+        // Event published
         verify(applicationEventPublisher).publishEvent(any());
 
         assertThat(response.status(), is(OrderStatus.NEW));
@@ -169,67 +171,53 @@ class OrderServiceTest {
     }
 
     @Test
-    @DisplayName("a buy into an existing holding recalculates the average cost")
-    void buyRecalculatesAverageCost() {
+    @DisplayName("a buy into an existing holding leaves the position untouched at placement")
+    void buyDoesNotModifyExistingPosition() {
         when(domainOrderService.placeOrder(any())).thenReturn(order(OrderSide.BUY));
         when(positionMapper.findOne(ACCOUNT, INSTRUMENT, "DELIVERY"))
                 .thenReturn(positionRow("10.000000", "1350.0000"));
 
         service.placeOrder(request(OrderSide.BUY));
 
-        // 10 at 1350 plus 10 at 1450 is 20 at 1400.
-        verify(positionMapper).updatePosition(ACCOUNT, INSTRUMENT, "DELIVERY",
-                new BigDecimal("20.000000"), new BigDecimal("1400.0000"));
+        // Position is NOT modified at placement
+        verify(positionMapper, never()).updatePosition(anyLong(), anyLong(), anyString(), any(), any());
     }
 
     @Test
-    @DisplayName("a sell credits the proceeds and leaves the average cost alone")
-    void sellCreditsAndKeepsAverageCost() {
+    @DisplayName("a sell order is placed at NEW without moving cash or position")
+    void sellIsPlacedWithoutMovingCashOrPosition() {
         when(domainOrderService.placeOrder(any())).thenReturn(order(OrderSide.SELL));
         when(positionMapper.findOne(ACCOUNT, INSTRUMENT, "DELIVERY"))
                 .thenReturn(positionRow("25.000000", "1350.0000"));
 
         service.placeOrder(request(OrderSide.SELL));
 
-        verify(accountMapper).creditBalance(ACCOUNT, new BigDecimal("14500.0000"), 7);
-        // Quantity falls; the average is untouched, which is what makes
-        // realised profit and loss computable at the point of sale.
-        verify(positionMapper).updatePosition(ACCOUNT, INSTRUMENT, "DELIVERY",
-                new BigDecimal("15.000000"), new BigDecimal("1350.0000"));
-    }
-
-    @Test
-    @DisplayName("selling the whole holding deletes the row rather than zeroing it")
-    void sellingOutDeletesThePosition() {
-        when(domainOrderService.placeOrder(any())).thenReturn(order(OrderSide.SELL));
-        when(positionMapper.findOne(ACCOUNT, INSTRUMENT, "DELIVERY"))
-                .thenReturn(positionRow("10.000000", "1350.0000"));
-
-        service.placeOrder(request(OrderSide.SELL));
-
-        verify(positionMapper).deletePosition(ACCOUNT, INSTRUMENT, "DELIVERY");
+        // No cash movement at placement
+        verify(accountMapper, never()).creditBalance(anyLong(), any(), anyInt());
+        // No position modification at placement
         verify(positionMapper, never()).updatePosition(anyLong(), anyLong(), anyString(), any(), any());
+        verify(positionMapper, never()).deletePosition(anyLong(), anyLong(), anyString());
     }
+
 
     // ------------------------------------------------- the optimistic lock
+    // Note: The optimistic lock is no longer checked at placement (Sprint 7).
+    // The account balance check was moved to story 611's settlement transaction.
 
     @Test
-    @DisplayName("zero rows affected is refused, not treated as success")
-    // 213:2 - FAILED ORDER, 213:3 - CONCURRENCY
-    void lostRaceIsRefusedWithOrd409() {
+    @DisplayName("order placement succeeds even if a concurrent update changed the account")
+    // 213:2 - FAILED ORDER, 213:3 - CONCURRENCY (now happens at settlement, not placement)
+    void placeOrderIgnoresConcurrentAccountUpdates() {
         when(domainOrderService.placeOrder(any())).thenReturn(order(OrderSide.BUY));
-        when(accountMapper.debitBalance(anyLong(), any(), anyInt())).thenReturn(0);
 
-        StaleAccountVersionException e = assertThrows(
-                StaleAccountVersionException.class, () -> service.placeOrder(request(OrderSide.BUY)));
+        // No exception thrown; order is placed successfully
+        OrderResponse response = service.placeOrder(request(OrderSide.BUY));
 
-        assertThat(e.catalogueCode(), is("ORD-409"));
-        assertThat(e.expectedVersion(), is(7));
-        // Order is inserted but then rolled back by the exception; nothing else happens.
-        // The insert is called, but the transaction rollback undoes it.
-        verify(orderMapper).insert(any());
-        verify(positionMapper, never()).insertPosition(anyLong(), anyLong(), anyString(), any(), any());
-        verify(applicationEventPublisher, never()).publishEvent(any());
+        // No cash movement, so no optimistic lock check
+        verify(accountMapper, never()).debitBalance(anyLong(), any(), anyInt());
+        // Event published after successful placement
+        verify(applicationEventPublisher).publishEvent(any());
+        assertThat(response.status(), is(OrderStatus.NEW));
     }
 
     // ------------------------------------------------------------- cancel

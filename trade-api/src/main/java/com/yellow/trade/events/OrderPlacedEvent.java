@@ -7,8 +7,10 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 /**
- * Kafka payload for ORDER_PLACED events.
- * Published to the 'orders' topic, keyed by account ID, after the order transaction commits.
+ * Payload for ORDER_PLACED events published to the 'orders' topic.
+ * This is wrapped in an EventEnvelope for publication.
+ * The orderId is a bare UUID that matches orders.id in Postgres.
+ * Internal field: instrumentId should never drive consumer logic.
  */
 public record OrderPlacedEvent(
         @JsonProperty("orderId")
@@ -26,11 +28,14 @@ public record OrderPlacedEvent(
         @JsonProperty("quantity")
         BigDecimal quantity,
 
+        @JsonProperty("price")
+        BigDecimal price,
+
         @JsonProperty("status")
         String status,
 
-        @JsonProperty("timestamp")
-        Instant timestamp,
+        @JsonProperty("createdOn")
+        Instant createdOn,
 
         @JsonProperty("idempotencyKey")
         String idempotencyKey,
@@ -38,3 +43,4 @@ public record OrderPlacedEvent(
         @JsonProperty("instrumentId")
         Long instrumentId) {
 }
+
