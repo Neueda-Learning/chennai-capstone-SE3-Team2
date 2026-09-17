@@ -50,17 +50,28 @@ public abstract class PostgresSupport {
         return postgres;
     }
 
-    /** The phases of sprint-3/db/apply.sh, in the order it runs them. */
+    /**
+     * The phases of sprint-3/db/apply.sh, in the order it runs them.
+     *
+     * <p>NOT A GLOB, DELIBERATELY: the order matters and an accidental file in
+     * one of those folders should not silently join the schema a test runs
+     * against. The cost is that this list has to be maintained by hand, and a
+     * migration or seed added without a line here produces tests that run
+     * against a database missing the change, failing somewhere unrelated.
+     * If you added a .sql file, add it here too.
+     */
     private static final List<String> SCHEMA_FILES = List.of(
             "base/000_base_schema.sql",
             "migrations/001_schema_migrations.sql",
             "migrations/002_api_alignment.sql",
             "migrations/003_account_last_updated.sql",
+            "migrations/004_execution_columns.sql",
             "indexes/001_performance_indexes.sql",
             "seed/001_reference_data.sql",
             "seed/002_clients.sql",
             "seed/003_instruments.sql",
-            "seed/004_transactions.sql");
+            "seed/004_transactions.sql",
+            "seed/005_fauxnance_instruments.sql");
 
     @DynamicPropertySource
     static void datasource(DynamicPropertyRegistry registry) {

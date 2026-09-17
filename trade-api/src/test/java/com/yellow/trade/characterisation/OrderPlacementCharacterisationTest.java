@@ -21,6 +21,7 @@ import java.math.BigDecimal;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.comparesEqualTo;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.Matchers.startsWith;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -63,7 +64,7 @@ class OrderPlacementCharacterisationTest extends PostgresSupport {
     }
 
     @Test
-    @DisplayName("PINNED: an accepted order writes the order row at NEW, debits cash and opens the position")
+    @DisplayName("PINNED: an accepted order writes the order row at NEW, and moves neither cash nor position")
     void acceptedOrderWritesRowCashAndPosition() {
         rest.exchange("/api/v1/orders", HttpMethod.POST,
                 new HttpEntity<>("""
@@ -71,20 +72,35 @@ class OrderPlacementCharacterisationTest extends PostgresSupport {
                          "price":1450.00,"idempotencyKey":"char-key-02"}
                         """, tokenFor(ACTIVE_ACCOUNT)), OrderResponse.class);
 
+        // DELIBERATELY REPINNED IN SPRINT 7. This test recorded Sprint 6's
+        // behaviour: the order was written FILLED, 14,500 was debited and the
+        // position was opened, all inside the request. Sprint 7 splits accepting
+        // an order from executing it, so placement now records the order and
+        // nothing else. Cash and position move in the Trade Executor's
+        // settlement transaction, at the executed price rather than the limit
+        // price, which is the only price that was ever real.
         var row = jdbc.queryForMap(
-                "SELECT status FROM orders WHERE idempotency_key = ?", "char-key-02");
-        // Sprint 7: order is saved at NEW status, not FILLED
+                "SELECT status, fill_price, resolved_at FROM orders WHERE idempotency_key = ?",
+                "char-key-02");
         assertThat(row.get("status"), is("NEW"));
+        // A NEW order has not resolved and has not filled. Both are enforced by
+        // ck_orders_resolved_at_matches_status and ck_orders_fill_price_matches_status.
+        assertThat(row.get("fill_price"), is(nullValue()));
+        assertThat(row.get("resolved_at"), is(nullValue()));
 
-        BigDecimal balance = jdbc.queryForObject(
-                "SELECT balance FROM client_account WHERE client_id = 3", BigDecimal.class);
-        assertThat(balance, comparesEqualTo(new BigDecimal("735500.0000")));
+        // The money has not moved, and the version has not turned: placement no
+        // longer touches the account row at all.
+        var account = jdbc.queryForMap(
+                "SELECT balance, version FROM client_account WHERE client_id = 3");
+        assertThat((BigDecimal) account.get("balance"), comparesEqualTo(new BigDecimal("750000.0000")));
+        assertThat(account.get("version"), is(7));
 
-        BigDecimal positionQty = jdbc.queryForObject(
-                "SELECT quantity FROM position WHERE client_id = 3 AND instrument_id = "
+        // No holding either. The customer owns nothing until the order executes.
+        Integer positions = jdbc.queryForObject(
+                "SELECT count(*) FROM position WHERE client_id = 3 AND instrument_id = "
                         + "(SELECT instrument_id FROM equity WHERE ticker = 'APEX') "
-                        + "AND position_type = 'DELIVERY'", BigDecimal.class);
-        assertThat(positionQty, comparesEqualTo(new BigDecimal("10.000000")));
+                        + "AND position_type = 'DELIVERY'", Integer.class);
+        assertThat(positions, is(0));
     }
 
     @Test
