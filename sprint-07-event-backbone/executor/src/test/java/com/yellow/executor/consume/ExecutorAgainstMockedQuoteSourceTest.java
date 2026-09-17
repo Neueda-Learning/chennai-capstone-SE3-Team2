@@ -2,6 +2,10 @@ package com.yellow.executor.consume;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.WireMockServer;
+import com.yellow.executor.events.EventEnvelope;
+import com.yellow.executor.events.TradeEventPayload;
+import org.mockito.Mockito;
+import org.springframework.kafka.core.KafkaTemplate;
 import com.yellow.executor.config.FauxnanceProperties;
 import com.yellow.executor.persistence.AccountRow;
 import com.yellow.executor.persistence.ExecutableOrderRow;
@@ -75,7 +79,9 @@ class ExecutorAgainstMockedQuoteSourceTest {
         service = new OrderExecutionService(
                 mapper,
                 new FauxnanceQuoteClient(props, new QuotaCounter(fixed), new ObjectMapper()),
-                new GuardedSettlement(mapper, fixed));
+                new GuardedSettlement(mapper, fixed),
+                mockTemplate(),
+                fixed);
     }
 
     @AfterEach
@@ -176,6 +182,12 @@ class ExecutorAgainstMockedQuoteSourceTest {
         assertThat(mapper.settleAttempts, is(1));
         // And the duplicate did not spend a request out of the daily 2000.
         assertThat(fauxnance.getAllServeEvents().size(), is(requestsAfterFirst));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static KafkaTemplate<String, EventEnvelope<TradeEventPayload>> mockTemplate() {
+        return (KafkaTemplate<String, EventEnvelope<TradeEventPayload>>)
+                (Object) Mockito.mock(KafkaTemplate.class);
     }
 
     // ----------------------------------------------------------- fixtures
@@ -279,6 +291,45 @@ class ExecutorAgainstMockedQuoteSourceTest {
         @Override
         public List<String> findSymbolsWorthPolling() {
             return new ArrayList<>();
+        }
+
+        @Override
+        public int updateAccount(Long accountId, BigDecimal balanceDelta,
+                                 BigDecimal blockedDelta, int expectedVersion) {
+            AccountRow row = accounts.get(accountId);
+            if (row == null || row.getVersion() != expectedVersion) return 0;
+            row.setBalance(row.getBalance().add(balanceDelta));
+            row.setBlockedFunds(row.getBlockedFunds().add(blockedDelta));
+            row.setVersion(row.getVersion() + 1);
+            return 1;
+        }
+
+        @Override
+        public void insertPosition(Long accountId, Long instrumentId,
+                                   String positionType, BigDecimal quantity,
+                                   BigDecimal averagePrice) {
+            PositionRow row = new PositionRow();
+            row.setClientId(accountId);
+            row.setInstrumentId(instrumentId);
+            row.setQuantity(quantity);
+            row.setAveragePrice(averagePrice);
+            positions.put(accountId + ":" + instrumentId + ":" + positionType, row);
+        }
+
+        @Override
+        public void updatePosition(Long accountId, Long instrumentId,
+                                   String positionType, BigDecimal quantity,
+                                   BigDecimal averagePrice) {
+            PositionRow row = positions.get(accountId + ":" + instrumentId + ":" + positionType);
+            if (row != null) {
+                row.setQuantity(quantity);
+                row.setAveragePrice(averagePrice);
+            }
+        }
+
+        @Override
+        public void deletePosition(Long accountId, Long instrumentId, String positionType) {
+            positions.remove(accountId + ":" + instrumentId + ":" + positionType);
         }
     }
 }

@@ -5,6 +5,8 @@ import com.yellow.entities.Instrument;
 import com.yellow.entities.Position;
 import com.yellow.enums.AssetClass;
 import com.yellow.executor.checks.PreTradeChecks;
+import com.yellow.executor.events.EventEnvelope;
+import com.yellow.executor.events.TradeEventPayload;
 import com.yellow.executor.fill.EquityFillRule;
 import com.yellow.executor.fill.FillDecision;
 import com.yellow.executor.fill.FillRule;
@@ -23,8 +25,13 @@ import com.yellow.executor.settle.SettlementPort;
 import com.yellow.executor.settle.SettlementResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -41,12 +48,17 @@ import java.util.UUID;
  *   <li>fetch the quote</li>
  *   <li>apply the fill rule</li>
  *   <li>re-check rules 6 and 7 at the price it would actually fill at</li>
- *   <li>settle, through the port story 611 takes over</li>
+ *   <li>settle, publish the trade event, then return for the ack</li>
  * </ol>
  *
  * <p>Step 1 is a cheap early exit and NOT the duplicate guard. The real guard
  * is the conditional UPDATE in settlement: two deliveries arriving together
  * both read NEW here, and only one of them changes a row.
+ *
+ * <p>Story 611: the trade event is published AFTER the settlement transaction
+ * commits and BEFORE the consumer acknowledges. The consumer ({@link
+ * OrderPlacedConsumer}) only acks when this method returns normally, so the
+ * message is redelivered if anything between settle and ack fails.
  */
 @Service
 public class OrderExecutionService {
@@ -62,16 +74,25 @@ public class OrderExecutionService {
     private final ExecutionMapper mapper;
     private final QuoteSource quotes;
     private final SettlementPort settlement;
+    private final KafkaTemplate<String, EventEnvelope<TradeEventPayload>> tradeEventTemplate;
+    private final Clock clock;
+
+    @Value("${executor.topics.trade-events:trade-events}")
+    private String tradeEventsTopic;
 
     private final FillRule equityRule = new EquityFillRule();
     private final FillRule mutualFundRule = new MutualFundFillRule();
 
     public OrderExecutionService(ExecutionMapper mapper,
                                  QuoteSource quotes,
-                                 SettlementPort settlement) {
+                                 SettlementPort settlement,
+                                 KafkaTemplate<String, EventEnvelope<TradeEventPayload>> tradeEventTemplate,
+                                 Clock clock) {
         this.mapper = mapper;
         this.quotes = quotes;
         this.settlement = settlement;
+        this.tradeEventTemplate = tradeEventTemplate;
+        this.clock = clock;
     }
 
     /**
@@ -111,7 +132,8 @@ public class OrderExecutionService {
         // the fill path will want later in the day.
         Optional<RejectReason> beforePricing = PreTradeChecks.beforePricing(instrument, account);
         if (beforePricing.isPresent()) {
-            return Optional.of(reject(order, beforePricing.get()));
+            return Optional.of(settleAndPublish(
+                    new FillDecision.Reject(beforePricing.get()), order));
         }
 
         Quote quote;
@@ -124,7 +146,8 @@ public class OrderExecutionService {
             // for the customer than telling them it did not trade.
             log.warn("no price for order {} ({} after {} attempts): rejecting",
                     orderId, e.getMessage(), e.attempts());
-            return Optional.of(reject(order, RejectReason.NO_PRICE));
+            return Optional.of(settleAndPublish(
+                    new FillDecision.Reject(RejectReason.NO_PRICE), order));
         }
 
         FillDecision decision = ruleFor(instrument.assetClass()).decide(order, quote);
@@ -140,7 +163,8 @@ public class OrderExecutionService {
                     PreTradeChecks.atExecution(order, account, held, fill.executedPrice());
 
             if (atExecution.isPresent()) {
-                return Optional.of(reject(order, atExecution.get()));
+                return Optional.of(settleAndPublish(
+                        new FillDecision.Reject(atExecution.get()), order));
             }
 
             log.info("order {} is marketable: {} {} of {} at {} (bid {} / ask {}, spread {}bps, source {})",
@@ -148,7 +172,72 @@ public class OrderExecutionService {
                     fill.executedPrice(), quote.bid(), quote.ask(), quote.spreadBps(), quote.source());
         }
 
-        return Optional.of(settlement.settle(decision, order));
+        return Optional.of(settleAndPublish(decision, order));
+    }
+
+    /**
+     * Settle the order, then — if it was newly settled — publish the trade
+     * event. The event is published AFTER the transaction commits (settle()
+     * returns after commit) and BEFORE the caller acks (execute() returns
+     * after this). That ordering is the whole point of story 611.
+     */
+    private SettlementResult settleAndPublish(FillDecision decision, OrderSnapshot order) {
+        SettlementResult result = settlement.settle(decision, order);
+        if (result == SettlementResult.SETTLED) {
+            publishTradeEvent(decision, order);
+        }
+        return result;
+    }
+
+    private void publishTradeEvent(FillDecision decision, OrderSnapshot order) {
+        Instant eventTime = Instant.now(clock);
+        boolean isFill = decision instanceof FillDecision.Fill;
+
+        BigDecimal cashDelta;
+        BigDecimal positionQtyAfter = null;
+        BigDecimal averageCostAfter = null;
+
+        if (isFill) {
+            BigDecimal executedPrice = ((FillDecision.Fill) decision).executedPrice();
+            BigDecimal consideration = order.considerationAt(executedPrice);
+            cashDelta = order.isBuy() ? consideration.negate() : consideration;
+
+            PositionRow pos = mapper.findPosition(
+                    order.accountId(), order.instrumentId(), POSITION_TYPE);
+            if (pos != null) {
+                positionQtyAfter = pos.getQuantity();
+                averageCostAfter = pos.getAveragePrice();
+            }
+        } else {
+            cashDelta = BigDecimal.ZERO;
+        }
+
+        TradeEventPayload payload = new TradeEventPayload(
+                order.orderId().toString(),
+                order.accountId(),
+                order.symbol(),
+                order.side().name(),
+                order.quantity(),
+                order.limitPrice(),
+                isFill ? ((FillDecision.Fill) decision).executedPrice() : null,
+                isFill ? "FILLED" : "REJECTED",
+                !isFill ? ((FillDecision.Reject) decision).reason().name() : null,
+                cashDelta,
+                positionQtyAfter,
+                averageCostAfter,
+                eventTime);
+
+        EventEnvelope<TradeEventPayload> envelope = new EventEnvelope<>(
+                UUID.randomUUID().toString(),
+                isFill ? "ORDER_FILLED" : "ORDER_REJECTED",
+                eventTime,
+                "trade-executor",
+                1,
+                payload);
+
+        tradeEventTemplate.send(tradeEventsTopic, order.accountId().toString(), envelope);
+        log.info("trade event {} published for order {} on account {}",
+                envelope.eventType(), order.orderId(), order.accountId());
     }
 
     /**
@@ -158,9 +247,5 @@ public class OrderExecutionService {
      */
     private FillRule ruleFor(AssetClass assetClass) {
         return assetClass == AssetClass.MUTUAL_FUND ? mutualFundRule : equityRule;
-    }
-
-    private SettlementResult reject(OrderSnapshot order, RejectReason reason) {
-        return settlement.settle(new FillDecision.Reject(reason), order);
     }
 }

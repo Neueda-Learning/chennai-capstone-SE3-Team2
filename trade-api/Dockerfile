@@ -30,17 +30,27 @@ WORKDIR /build
 # sources, so resolving them in their own layer means editing a .java
 # file reuses the cached download instead of repeating it. Copying the
 # whole tree first would invalidate this layer on every source edit.
+#
+# The executor's pom is copied even though this image never packages
+# the executor: the ROOT pom declares it as a reactor module, and
+# Maven refuses to load a reactor whose module list references a
+# missing child pom. Same reason executor/Dockerfile copies trade-api's.
 COPY pom.xml .
 COPY domainrules/pom.xml domainrules/
 COPY trade-api/pom.xml   trade-api/
+COPY sprint-07-event-backbone/executor/pom.xml sprint-07-event-backbone/executor/
 
-# -B batch mode, and go-offline over the reactor so both modules'
+# -B batch mode, and go-offline over the reactor so every module's
 # dependencies land in the same cached layer.
 RUN mvn -B -q dependency:go-offline
 
-# Now the sources, in their own layer.
+# Now the sources, in their own layer. The executor's sources are
+# copied because -pl below asks Maven to load the whole reactor; a
+# module whose pom exists but whose src does not still trips the
+# lifecycle at validate time.
 COPY domainrules/src domainrules/src
 COPY trade-api/src   trade-api/src
+COPY sprint-07-event-backbone/executor/src sprint-07-event-backbone/executor/src
 
 # -pl trade-api -am: build the API and also make the modules it needs,
 # which is the domain. One invocation, in dependency order.

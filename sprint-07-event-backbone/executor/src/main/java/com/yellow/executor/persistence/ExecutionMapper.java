@@ -1,5 +1,7 @@
 package com.yellow.executor.persistence;
 
+import org.apache.ibatis.annotations.Delete;
+import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -10,7 +12,8 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Everything the executor reads and the one thing story 610 writes.
+ * Everything the executor reads and writes. Story 610 added the guarded orders
+ * update; story 611 adds the account and position writes.
  *
  * <p>Separate mappers from the Trade REST API's, even though some statements
  * look alike. They are different services reading the same database, and the
@@ -136,4 +139,60 @@ public interface ExecutionMapper {
             ORDER BY symbol
             """)
     java.util.List<String> findSymbolsWorthPolling();
+
+    /**
+     * Moves cash and releases (or charges) blocked funds, conditioned on the
+     * version the caller read. Returns 1 on success, 0 when another writer
+     * has already incremented the version -- the optimistic lock.
+     *
+     * <p>{@code balanceDelta} and {@code blockedDelta} are SIGNED: negative
+     * to debit, positive to credit. The caller computes the right sign for
+     * the scenario (BUY FILL, SELL FILL, BUY REJECT, SELL REJECT).
+     */
+    @Update("""
+            UPDATE client_account
+               SET balance       = balance + #{balanceDelta},
+                   blocked_funds = blocked_funds + #{blockedDelta},
+                   version       = version + 1
+             WHERE client_id = #{accountId}
+               AND version   = #{expectedVersion}
+            """)
+    int updateAccount(@Param("accountId") Long accountId,
+                      @Param("balanceDelta") BigDecimal balanceDelta,
+                      @Param("blockedDelta") BigDecimal blockedDelta,
+                      @Param("expectedVersion") int expectedVersion);
+
+    @Insert("""
+            INSERT INTO position (client_id, instrument_id, position_type, quantity, average_price)
+            VALUES (#{accountId}, #{instrumentId}, #{positionType}, #{quantity}, #{averagePrice})
+            """)
+    void insertPosition(@Param("accountId") Long accountId,
+                        @Param("instrumentId") Long instrumentId,
+                        @Param("positionType") String positionType,
+                        @Param("quantity") BigDecimal quantity,
+                        @Param("averagePrice") BigDecimal averagePrice);
+
+    @Update("""
+            UPDATE position
+               SET quantity      = #{quantity},
+                   average_price = #{averagePrice}
+             WHERE client_id     = #{accountId}
+               AND instrument_id = #{instrumentId}
+               AND position_type = #{positionType}
+            """)
+    void updatePosition(@Param("accountId") Long accountId,
+                        @Param("instrumentId") Long instrumentId,
+                        @Param("positionType") String positionType,
+                        @Param("quantity") BigDecimal quantity,
+                        @Param("averagePrice") BigDecimal averagePrice);
+
+    @Delete("""
+            DELETE FROM position
+             WHERE client_id     = #{accountId}
+               AND instrument_id = #{instrumentId}
+               AND position_type = #{positionType}
+            """)
+    void deletePosition(@Param("accountId") Long accountId,
+                        @Param("instrumentId") Long instrumentId,
+                        @Param("positionType") String positionType);
 }

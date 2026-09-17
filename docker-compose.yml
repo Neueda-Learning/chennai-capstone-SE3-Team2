@@ -27,6 +27,19 @@ services:
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      # Single-broker cluster settings. Kafka's defaults assume >= 3
+      # brokers for its two internal topics; on one broker the defaults
+      # silently prevent __consumer_offsets and __transaction_state from
+      # being created, and every consumer group's FIND_COORDINATOR
+      # then hangs. Set them to 1 explicitly.
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      # No initial delay before the first consumer's join is accepted.
+      # The default 3s is fine for a large cluster where several
+      # consumers arrive together; on a single-node dev stack it just
+      # slows every startup.
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
       CLUSTER_ID: "fauxnance-sprint7-kraft"
     ports:
       - "9092:9092"
@@ -103,6 +116,12 @@ services:
       # reads the same value, which is what makes that swap configuration
       # rather than code.
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      # Story 609: trade-api publishes ORDER_PLACED to `orders` after
+      # commit. Without this, the producer falls back to localhost:9092
+      # (application.yml default), which inside the container is the
+      # trade-api itself and nothing answers -- orders commit to
+      # Postgres and are never published, so they stay at NEW for ever.
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       SERVER_PORT: 8080
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     ports:
@@ -113,6 +132,13 @@ services:
         # On the health condition, not on the container merely existing.
         # Starting before the database accepts connections is a crash
         # loop, not a failure, and it is slower to diagnose than it looks.
+        condition: service_healthy
+      kafka:
+        # Same reason as postgres. A producer that comes up before the
+        # broker spends its first minute retrying connections and
+        # logging noise. The publish path also has a bounded retry
+        # budget, so once that is spent the order commits with no
+        # event -- which is the current failure mode.
         condition: service_healthy
     restart: unless-stopped
 
