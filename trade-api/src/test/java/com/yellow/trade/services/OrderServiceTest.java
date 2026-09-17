@@ -20,6 +20,7 @@ import com.yellow.trade.mappers.OrderRow;
 import com.yellow.trade.mappers.PositionMapper;
 import com.yellow.trade.mappers.PositionRow;
 import com.yellow.trade.security.CallerAccount;
+import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -62,13 +63,14 @@ class OrderServiceTest {
     @Mock private OrderMapper orderMapper;
     @Mock private PositionMapper positionMapper;
     @Mock private CallerAccount caller;
+    @Mock private ApplicationEventPublisher applicationEventPublisher;
 
     private OrderService service;
 
     @BeforeEach
     void setUp() {
         service = new OrderService(domainOrderService, accountMapper, instrumentMapper,
-                orderMapper, positionMapper, caller, Clock.fixed(NOW, ZoneOffset.UTC));
+                orderMapper, positionMapper, caller, Clock.fixed(NOW, ZoneOffset.UTC), applicationEventPublisher);
 
         when(caller.canReach(ACCOUNT)).thenReturn(true);
         when(caller.accountId()).thenReturn(ACCOUNT);
@@ -82,7 +84,7 @@ class OrderServiceTest {
         // the happy path everywhere unless a test says otherwise
         when(accountMapper.debitBalance(anyLong(), any(), anyInt())).thenReturn(1);
         when(accountMapper.creditBalance(anyLong(), any(), anyInt())).thenReturn(1);
-        when(orderMapper.fillIfNew(any(), any(), any())).thenReturn(1);
+        when(orderMapper.insert(any())).thenReturn(1);
         when(positionMapper.insertPosition(anyLong(), anyLong(), anyString(), any(), any())).thenReturn(1);
         when(positionMapper.updatePosition(anyLong(), anyLong(), anyString(), any(), any())).thenReturn(1);
     }
@@ -146,8 +148,8 @@ class OrderServiceTest {
     // ------------------------------------------------------- the fill
 
     @Test
-    @DisplayName("a buy debits the consideration, opens the holding and fills the order")
-    // 213:1 - PLACE ORDER COMMITS
+    @DisplayName("a buy debits the consideration, opens the holding and saves order at NEW")
+    // 213:1 - PLACE ORDER COMMITS (Sprint 7: no fill)
     void buyMovesCashAndPositionTogether() {
         Order placed = order(OrderSide.BUY);
         when(domainOrderService.placeOrder(any())).thenReturn(placed);
@@ -159,9 +161,10 @@ class OrderServiceTest {
         verify(accountMapper).debitBalance(ACCOUNT, new BigDecimal("14500.0000"), 7);
         verify(positionMapper).insertPosition(eq(ACCOUNT), eq(INSTRUMENT), eq("DELIVERY"),
                 eq(new BigDecimal("10.000000")), eq(new BigDecimal("1450.0000")));
-        verify(orderMapper).fillIfNew(placed.orderId(), new BigDecimal("1450.00"), NOW);
+        verify(orderMapper).insert(any());
+        verify(applicationEventPublisher).publishEvent(any());
 
-        assertThat(response.status(), is(OrderStatus.FILLED));
+        assertThat(response.status(), is(OrderStatus.NEW));
         assertThat(response.orderId(), startsWith("ORD-"));
     }
 
@@ -222,9 +225,11 @@ class OrderServiceTest {
 
         assertThat(e.catalogueCode(), is("ORD-409"));
         assertThat(e.expectedVersion(), is(7));
-        // Nothing else moved: the transaction rolls back around all of it.
+        // Order is inserted but then rolled back by the exception; nothing else happens.
+        // The insert is called, but the transaction rollback undoes it.
+        verify(orderMapper).insert(any());
         verify(positionMapper, never()).insertPosition(anyLong(), anyLong(), anyString(), any(), any());
-        verify(orderMapper, never()).fillIfNew(any(), any(), any());
+        verify(applicationEventPublisher, never()).publishEvent(any());
     }
 
     // ------------------------------------------------------------- cancel

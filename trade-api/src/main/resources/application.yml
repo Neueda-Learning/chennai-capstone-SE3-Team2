@@ -25,6 +25,14 @@ spring:
       connection-timeout: 5000
       pool-name: trade-api-pool
 
+  kafka:
+    bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
+    producer:
+      acks: all
+      retries: 3
+      max-in-flight-requests-per-connection: 5
+      request-timeout-ms: 30000
+
   # Fail on an unknown JSON property rather than ignoring it: the
   # contract declares additionalProperties false, and a client sending a
   # field we do not know about has misread it.
