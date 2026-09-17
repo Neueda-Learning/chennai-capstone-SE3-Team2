@@ -14,6 +14,7 @@ import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
+import org.springframework.kafka.listener.CommonErrorHandler;
 import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.support.serializer.ErrorHandlingDeserializer;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
@@ -82,8 +83,6 @@ public class KafkaConsumerConfig {
         props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 10);
 
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ErrorHandlingDeserializer.class);
-        props.put(ErrorHandlingDeserializer.VALUE_DESERIALIZER_CLASS, JsonDeserializer.class);
 
         JavaType envelopeOfOrderPlaced = objectMapper.getTypeFactory()
                 .constructParametricType(EventEnvelope.class, OrderPlacedPayload.class);
@@ -95,13 +94,20 @@ public class KafkaConsumerConfig {
         // is a deserialisation vulnerability.
         value.setUseTypeHeaders(false);
 
-        return new DefaultKafkaConsumerFactory<>(props, new StringDeserializer(), value);
+        // Wrap the JSON deserializer so malformed payloads are surfaced as
+        // failed records that the error handler can recover (DLT), instead
+        // of bubbling out as poll-level container exceptions.
+        ErrorHandlingDeserializer<EventEnvelope<OrderPlacedPayload>> safeValue =
+                new ErrorHandlingDeserializer<>(value);
+
+        return new DefaultKafkaConsumerFactory<>(props, new StringDeserializer(), safeValue);
     }
 
     @Bean
     public ConcurrentKafkaListenerContainerFactory<String, EventEnvelope<OrderPlacedPayload>>
             orderPlacedListenerContainerFactory(
-                    ConsumerFactory<String, EventEnvelope<OrderPlacedPayload>> consumerFactory) {
+                    ConsumerFactory<String, EventEnvelope<OrderPlacedPayload>> consumerFactory,
+                    CommonErrorHandler orderPlacedErrorHandler) {
 
         ConcurrentKafkaListenerContainerFactory<String, EventEnvelope<OrderPlacedPayload>> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
@@ -115,6 +121,12 @@ public class KafkaConsumerConfig {
         // several threads in one process against the same partitions, which
         // buys nothing and makes the rebalance demonstration harder to read.
         factory.setConcurrency(1);
+
+        // Story 613: the retry-vs-DLT wiring. Everything the container
+        // does with a failed record -- classify, back off, dead-letter --
+        // is decided by ConsumerErrorHandling. Keeping it out of this
+        // class means the retry policy is one file to read at the review.
+        factory.setCommonErrorHandler(orderPlacedErrorHandler);
 
         return factory;
     }
