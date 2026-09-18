@@ -10,6 +10,7 @@ import com.yellow.executor.quotes.QuotaCounter;
 import com.yellow.executor.quotes.QuoteSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
@@ -79,6 +80,12 @@ public class MarketDataPoller {
     public MarketDataPoller(ExecutionMapper mapper,
                             QuoteSource quotes,
                             QuotaCounter quota,
+                            // Named explicitly. There are three KafkaTemplate beans in
+                            // this context and a test that mocks one of them with a RAW
+                            // KafkaTemplate makes the mock assignable to all three, so
+                            // resolving this by generic type alone is ambiguous and the
+                            // context fails to load.
+                            @Qualifier("marketDataTemplate")
                             KafkaTemplate<String, EventEnvelope<QuotePayload>> marketDataTemplate,
                             PollSchedule schedule,
                             PollProperties poll,
