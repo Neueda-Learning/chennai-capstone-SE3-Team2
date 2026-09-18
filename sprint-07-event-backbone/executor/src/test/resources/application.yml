@@ -1,0 +1,26 @@
+# =====================================================================
+# Test overrides for the executor.
+#
+# Loaded instead of src/main/resources/application.yml whenever a test
+# starts a Spring context, so nothing here affects a running service.
+# =====================================================================
+
+poller:
+  # OFF for every test that boots a context.
+  #
+  # A @SpringBootTest otherwise starts the real scheduler, which reads the
+  # symbol set from the test database and calls the live Fauxnance API with
+  # whatever key the test happened to set -- spending quota the fill path
+  # needs, depending on a network the build should not need, and making the
+  # result depend on how long the test took to finish.
+  #
+  # Tests that want the poller drive it directly: MarketDataPollerTest calls
+  # pollOnce() against doubles, which is faster and asserts more than a real
+  # tick ever could.
+  enabled: false
+
+fauxnance:
+  # Present so the context can start. FauxnanceProperties refuses a blank
+  # key on purpose, and no test should reach the real API anyway.
+  api-key: test-key-not-a-real-credential
+  base-url: http://localhost:0

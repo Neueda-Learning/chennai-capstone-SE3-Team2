@@ -84,6 +84,8 @@ class OrderServiceTest {
         // the happy path everywhere unless a test says otherwise
         when(accountMapper.debitBalance(anyLong(), any(), anyInt())).thenReturn(1);
         when(accountMapper.creditBalance(anyLong(), any(), anyInt())).thenReturn(1);
+        when(accountMapper.blockFunds(anyLong(), any(), anyInt())).thenReturn(1);
+        when(accountMapper.releaseFunds(anyLong(), any(), anyInt())).thenReturn(1);
         when(orderMapper.insert(any())).thenReturn(1);
         when(positionMapper.insertPosition(anyLong(), anyLong(), anyString(), any(), any())).thenReturn(1);
         when(positionMapper.updatePosition(anyLong(), anyLong(), anyString(), any(), any())).thenReturn(1);
@@ -163,6 +165,12 @@ class OrderServiceTest {
         verify(positionMapper, never()).insertPosition(anyLong(), anyLong(), anyString(), any(), any());
         verify(positionMapper, never()).updatePosition(anyLong(), anyLong(), anyString(), any(), any());
         verify(positionMapper, never()).deletePosition(anyLong(), anyLong(), anyString());
+
+        // But the notional IS reserved, at the LIMIT price and the version we
+        // read. Not debited -- the money is still the customer's -- just no
+        // longer available to the next order.
+        verify(accountMapper).blockFunds(ACCOUNT, new BigDecimal("14500.0000"), 7);
+
         // Event published
         verify(applicationEventPublisher).publishEvent(any());
 
@@ -201,23 +209,41 @@ class OrderServiceTest {
 
 
     // ------------------------------------------------- the optimistic lock
-    // Note: The optimistic lock is no longer checked at placement (Sprint 7).
-    // The account balance check was moved to story 611's settlement transaction.
+    // Placement writes to the account row again from Sprint 7 -- not the
+    // balance, which only the executor moves, but blocked_funds. So the lock
+    // is back on this path, guarding the reservation rather than the debit.
 
     @Test
-    @DisplayName("order placement succeeds even if a concurrent update changed the account")
-    // 213:2 - FAILED ORDER, 213:3 - CONCURRENCY (now happens at settlement, not placement)
-    void placeOrderIgnoresConcurrentAccountUpdates() {
+    @DisplayName("a concurrent account update loses the reservation its race, and the order is refused")
+    // 213:2 - FAILED ORDER, 213:3 - CONCURRENCY
+    void placeOrderFailsWhenTheAccountMovedUnderIt() {
         when(domainOrderService.placeOrder(any())).thenReturn(order(OrderSide.BUY));
+        // Somebody moved the account between the read that fed rule 6 and the
+        // reservation: the version no longer matches and zero rows change.
+        when(accountMapper.blockFunds(anyLong(), any(), anyInt())).thenReturn(0);
 
-        // No exception thrown; order is placed successfully
-        OrderResponse response = service.placeOrder(request(OrderSide.BUY));
+        // Refused rather than accepted, because affordability was decided
+        // against a balance that no longer holds. ORD-409, and the customer
+        // retries against fresh numbers.
+        assertThrows(StaleAccountVersionException.class,
+                () -> service.placeOrder(request(OrderSide.BUY)));
 
-        // No cash movement, so no optimistic lock check
-        verify(accountMapper, never()).debitBalance(anyLong(), any(), anyInt());
-        // Event published after successful placement
-        verify(applicationEventPublisher).publishEvent(any());
-        assertThat(response.status(), is(OrderStatus.NEW));
+        // And nothing is announced for an order that did not survive its own
+        // transaction.
+        verify(applicationEventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    @DisplayName("a sell reserves nothing: it brings cash in rather than committing it")
+    void sellReservesNothing() {
+        when(domainOrderService.placeOrder(any())).thenReturn(order(OrderSide.SELL));
+
+        service.placeOrder(request(OrderSide.SELL));
+
+        // Reserving the HOLDING would be the equivalent mechanism for a sell,
+        // and this schema has no column for it. Rule 7 is re-checked at
+        // execution instead.
+        verify(accountMapper, never()).blockFunds(anyLong(), any(), anyInt());
     }
 
     // ------------------------------------------------------------- cancel
@@ -234,6 +260,37 @@ class OrderServiceTest {
         verify(orderMapper).cancelIfNew(orderId, NOW);
         assertThat(response.status(), is(OrderStatus.CANCELLED));
         assertThat(response.orderId(), is("ORD-" + orderId));
+    }
+
+    @Test
+    @DisplayName("cancelling a buy gives the reservation back, exactly once")
+    void cancelReleasesTheReservation() {
+        UUID orderId = UUID.randomUUID();
+        when(orderMapper.findById(orderId)).thenReturn(orderRow(orderId, OrderStatus.NEW));
+        when(orderMapper.cancelIfNew(eq(orderId), any())).thenReturn(1);
+
+        service.cancelOrder(orderId);
+
+        // The same figure placement reserved. Without this the reservation is
+        // stranded for ever: the account keeps cash it can never commit, and
+        // slowly loses the ability to buy anything while appearing solvent.
+        verify(accountMapper).releaseFunds(ACCOUNT, new BigDecimal("14500.0000"), 7);
+    }
+
+    @Test
+    @DisplayName("a cancel that changed no row releases nothing: the guard decides who releases")
+    void aLostCancelReleasesNothing() {
+        UUID orderId = UUID.randomUUID();
+        when(orderMapper.findById(orderId)).thenReturn(orderRow(orderId, OrderStatus.NEW));
+        // Another delivery -- or another click -- moved the order off NEW first.
+        when(orderMapper.cancelIfNew(eq(orderId), any())).thenReturn(0);
+
+        assertThrows(OrderNotCancellableException.class, () -> service.cancelOrder(orderId));
+
+        // This is what keeps the release exactly-once. Two concurrent cancels
+        // both read NEW; only one moves the row, and only that one releases.
+        // Releasing on both would drive blocked_funds negative.
+        verify(accountMapper, never()).releaseFunds(anyLong(), any(), anyInt());
     }
 
     @Test

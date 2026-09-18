@@ -45,8 +45,15 @@ class FullSettlementIntegrationTest extends ExecutorPostgresSupport {
     // Stops the test context from attempting a real Kafka connection when
     // OrderExecutionService is wired. FullSettlement never touches this bean,
     // but it is in the same Spring context.
+    //
+    // NAMED, and it has to be. The field is a raw KafkaTemplate, which matches
+    // every parameterised one, and this context holds three: tradeEventTemplate,
+    // dltKafkaTemplate and marketDataTemplate. @MockBean resolves the bean it
+    // replaces by type, needs exactly one candidate or a @Primary, and throws
+    // at registration otherwise -- taking the whole context down and erroring
+    // every test in the class. Naming it skips the search entirely.
     @SuppressWarnings("rawtypes")
-    @MockBean
+    @MockBean(name = "tradeEventTemplate")
     private KafkaTemplate tradeEventTemplate;
 
     private UUID orderId;
@@ -101,9 +108,23 @@ class FullSettlementIntegrationTest extends ExecutorPostgresSupport {
     @Test
     @DisplayName("constraint violation rolls back: order stays NEW, balance unchanged")
     void constraintViolationRollsBack() {
-        // Overdraft: set balance below what a fill at 412 * 10 = 4120 would cost.
-        // The balance >= 0 constraint fires and Spring rolls back all three writes.
-        jdbc.update("UPDATE client_account SET balance = 1.00 WHERE client_id = 3");
+        // Overdraft: leave the account unable to cover a fill at 412 * 10 =
+        // 4120. The account UPDATE then writes a negative figure, a
+        // non-negativity constraint refuses it, and Spring rolls back all three
+        // writes -- which is what this test is actually about.
+        //
+        // blocked_funds has to be zeroed in the SAME statement. client_account
+        // carries two constraints on that column, and leaving it at the 4200
+        // @BeforeEach set would trip the other one here --
+        // ck_client_account_blocked_within_balance, 4200 <= 1.00 being false --
+        // on this line, before settle() is ever called. The test would fail in
+        // its own fixture and prove nothing.
+        //
+        // Zeroing it cannot be avoided by picking a different balance, either:
+        // tripping balance >= 0 needs a balance below 4120, while keeping
+        // blocked <= balance with 4200 reserved needs one above 4200. The two
+        // cannot both hold, so the reservation comes off.
+        jdbc.update("UPDATE client_account SET balance = 1.00, blocked_funds = 0 WHERE client_id = 3");
 
         assertThrows(Exception.class, () ->
                 settlement.settle(

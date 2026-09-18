@@ -60,11 +60,21 @@ public class PollScheduleConfigurer implements SchedulingConfigurer {
         ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
         scheduler.setPoolSize(1);
         scheduler.setThreadNamePrefix("market-poller-");
-        // Let a poll in flight finish on shutdown rather than tearing the HTTP
-        // call down half way and leaving the quota counter disagreeing with
-        // what Fauxnance actually recorded.
+
+        // DAEMON, so this thread can never be the reason a JVM refuses to exit.
+        // A scheduler thread is not work anybody is waiting on: if the process
+        // is going down, the poll can go with it and the next start picks up
+        // wherever the symbol set is then. Left non-daemon it held a Surefire
+        // fork open past System.exit and the runner killed it after thirty
+        // seconds.
+        scheduler.setDaemon(true);
+
+        // Still let a poll in flight finish on an ORDERLY shutdown, rather than
+        // tearing the HTTP call down half way and leaving the quota counter
+        // disagreeing with what Fauxnance actually recorded. Short, because
+        // nothing downstream is waiting for a quote.
         scheduler.setWaitForTasksToCompleteOnShutdown(true);
-        scheduler.setAwaitTerminationSeconds(15);
+        scheduler.setAwaitTerminationSeconds(5);
         scheduler.initialize();
         return scheduler;
     }

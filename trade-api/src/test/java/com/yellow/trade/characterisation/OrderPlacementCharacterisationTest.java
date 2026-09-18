@@ -88,12 +88,32 @@ class OrderPlacementCharacterisationTest extends PostgresSupport {
         assertThat(row.get("fill_price"), is(nullValue()));
         assertThat(row.get("resolved_at"), is(nullValue()));
 
-        // The money has not moved, and the version has not turned: placement no
-        // longer touches the account row at all.
+        // REPINNED AGAIN IN SPRINT 7, second change, and for a different reason
+        // from the first. The first repin recorded that placement stopped
+        // filling: no debit, no position. That still holds -- the balance below
+        // is untouched.
+        //
+        // What changed now is that placement RESERVES. Removing the synchronous
+        // debit left nothing decrementing the funds an accepted order commits,
+        // so every order in flight was assessed against money another order had
+        // already spoken for. blocked_funds is that reservation, balance is
+        // untouched because the money is still the customer's, and
+        // availableFunds() -- balance minus blocked -- is what rule 6 reads.
         var account = jdbc.queryForMap(
-                "SELECT balance, version FROM client_account WHERE client_id = 3");
+                "SELECT balance, blocked_funds, version FROM client_account WHERE client_id = 3");
+
+        // The cash itself has NOT moved. Only the executor debits.
         assertThat((BigDecimal) account.get("balance"), comparesEqualTo(new BigDecimal("750000.0000")));
-        assertThat(account.get("version"), is(7));
+
+        // 10 x 1450.00 = 14,500 reserved at the LIMIT price, on top of the
+        // 220,000 the seed already holds. The limit, not a fill price: this
+        // order has not been priced and 14,500 is the most it can cost.
+        assertThat((BigDecimal) account.get("blocked_funds"),
+                comparesEqualTo(new BigDecimal("234500.0000")));
+
+        // And the version turned, because the reservation is a write to the
+        // account row under the same optimistic lock as every other.
+        assertThat(account.get("version"), is(8));
 
         // No holding either. The customer owns nothing until the order executes.
         Integer positions = jdbc.queryForObject(
