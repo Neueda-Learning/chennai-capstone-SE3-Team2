@@ -59,6 +59,21 @@ fauxnance:
   # this wrong is orders rejected for want of a price.
   fill-reserve: 200
 
+poller:
+  # What the operator asks for. PollSchedule decides what is actually safe:
+  # a value that would overspend the daily quota is raised, and the
+  # arithmetic that raised it is logged.
+  interval-seconds: ${POLL_INTERVAL_SECONDS:60}
+  # The absolute minimum whatever the arithmetic says. Nothing faster
+  # survives being left running overnight, and an executor left up after
+  # a session is the ordinary case rather than the exception.
+  floor-seconds: 60
+  # The API's hard cap, not a tuning knob: 26 symbols is a 400.
+  batch-size: 25
+  # Lets a session that only wants the fill path stop the poller spending
+  # quota, without removing the bean and changing what is being tested.
+  enabled: ${POLLER_ENABLED:true}
+
 mybatis:
   configuration:
     map-underscore-to-camel-case: true
