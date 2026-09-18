@@ -90,6 +90,25 @@ public class OrderService {
 
         Order order = domainOrderService.placeOrder(request);
 
+        // Sprint 7: reserve the cash this order commits.
+        //
+        // The domain has just checked rule 6 against availableFunds, which is
+        // balance minus blocked_funds. Blocking here is what makes that check
+        // mean something for the NEXT order: without it every order in flight
+        // is assessed against a balance nothing is decrementing, and an account
+        // can accept orders totalling more than it holds.
+        //
+        // Reserved at the LIMIT price, because that is the most this order can
+        // cost and the executed price is not known yet. The executor releases
+        // exactly this figure when it settles, and debits the real
+        // consideration separately.
+        //
+        // SELLs reserve nothing: they bring cash in. Reserving the holding is a
+        // different mechanism and this schema has no column for it.
+        if (order.side() == OrderSide.BUY) {
+            blockFunds(account, money(order.quantity().multiply(order.limitPrice())));
+        }
+
         InstrumentRow instrument = instrumentMapper.findById(order.instrumentId());
         log.info("order {} accepted: account={} {} {} of {} at limit price {}",
                 order.orderId(), accountId, order.side(), order.quantity(),
@@ -106,6 +125,38 @@ public class OrderService {
                 order.side(),
                 order.quantity(),
                 order.limitPrice());
+    }
+
+    /**
+     * Reserves the order's notional, under the optimistic lock.
+     *
+     * <p>A lost lock is a genuine conflict rather than something to retry here:
+     * another writer moved this account between the read that fed rule 6 and
+     * this write, so the affordability check was made against a balance that no
+     * longer holds. The caller sees ORD-409 and tries again with fresh numbers,
+     * which is the same answer Sprint 6 gave when its debit lost the race.
+     */
+    private void blockFunds(AccountRow account, BigDecimal amount) {
+        int affected = accountMapper.blockFunds(
+                account.getClientId(), amount, account.getVersion());
+
+        if (affected == 0) {
+            log.warn("ORD-409: optimistic lock lost blocking {} on account {} at version {}",
+                    amount, account.getClientId(), account.getVersion());
+            throw new StaleAccountVersionException(account.getClientId(), account.getVersion());
+        }
+    }
+
+    /** Returns a reservation. Same lock, same reasoning as {@link #blockFunds}. */
+    private void releaseFunds(AccountRow account, BigDecimal amount) {
+        int affected = accountMapper.releaseFunds(
+                account.getClientId(), amount, account.getVersion());
+
+        if (affected == 0) {
+            log.warn("ORD-409: optimistic lock lost releasing {} on account {} at version {}",
+                    amount, account.getClientId(), account.getVersion());
+            throw new StaleAccountVersionException(account.getClientId(), account.getVersion());
+        }
     }
 
     // 213: The optimistic lock, and the only place cash moves.
@@ -190,6 +241,22 @@ public class OrderService {
         if (affected == 0) {
             log.warn("ORD-409: order {} was {} when cancel ran", orderId, existing.getStatus());
             throw new OrderNotCancellableException(existing.getStatus());
+        }
+
+        // Sprint 7: give the reservation back.
+        //
+        // AFTER the conditional update and only when it reported one row. That
+        // ordering is what makes the release happen exactly once: two concurrent
+        // cancels both read NEW, but only one of them moves the row, and only
+        // that one reaches this line. Releasing before the guard, or without
+        // checking it, would return the same reservation twice and drive
+        // blocked_funds negative.
+        //
+        // An order the executor settles is released there instead, inside the
+        // transaction that also debits the cash.
+        if (existing.getSide() == OrderSide.BUY) {
+            AccountRow account = accountMapper.findById(existing.getClientId());
+            releaseFunds(account, money(existing.getQuantity().multiply(existing.getPrice())));
         }
 
         InstrumentRow instrument = instrumentMapper.findById(existing.getInstrumentId());

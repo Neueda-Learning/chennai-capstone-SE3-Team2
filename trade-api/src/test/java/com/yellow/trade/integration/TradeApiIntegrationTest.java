@@ -197,15 +197,20 @@ class TradeApiIntegrationTest extends PostgresSupport {
         // Nothing has resolved it yet, so it carries no resolution timestamp.
         assertThat(row.get("resolved_at"), is(nullValue()));
 
-        // Cash has NOT moved, and the version has not turned. From Sprint 7 the
-        // account row is untouched by placement: the Trade Executor debits it,
-        // under the same optimistic lock, at the price the order actually
-        // executed at. Debiting here would charge the limit price for a trade
-        // that had not happened, and then charge again when it did.
+        // Cash has NOT moved: the executor debits, under the same optimistic
+        // lock, at the price the order actually executed at. Debiting here
+        // would charge the limit price for a trade that had not happened and
+        // then charge again when it did.
+        //
+        // But the notional IS reserved. 10 x 1450.00 = 14,500 on top of the
+        // 220,000 the seed holds, so availableFunds falls from 530,000 to
+        // 515,500 and the next order is checked against what is genuinely left.
         var account = jdbc.queryForMap(
-                "SELECT balance, version FROM client_account WHERE client_id = 3");
+                "SELECT balance, blocked_funds, version FROM client_account WHERE client_id = 3");
         assertThat((BigDecimal) account.get("balance"), comparesEqualTo(new BigDecimal("750000.0000")));
-        assertThat(account.get("version"), is(7));
+        assertThat((BigDecimal) account.get("blocked_funds"),
+                comparesEqualTo(new BigDecimal("234500.0000")));
+        assertThat(account.get("version"), is(8));
 
         // No holding either: the customer owns nothing until the order executes.
         assertThat(jdbc.queryForObject(
@@ -291,6 +296,16 @@ class TradeApiIntegrationTest extends PostgresSupport {
         // Terminal now, so it carries its resolution timestamp.
         assertThat(row.get("resolved_at"), is(notNullValue()));
 
+        // And the reservation came back. Placement blocked 10 x 1450.00 on top
+        // of the seeded 220,000; cancelling returns it, so the account is
+        // exactly where it started. An order that stops being live without the
+        // executor settling it has to release here or the money is stranded
+        // for ever -- the account would keep cash it could never commit.
+        assertThat((BigDecimal) jdbc.queryForMap(
+                        "SELECT blocked_funds FROM client_account WHERE client_id = 3")
+                        .get("blocked_funds"),
+                comparesEqualTo(new BigDecimal("220000.0000")));
+
         // cancelIfNew is conditional on the state it expects, so the second
         // cancel affects zero rows rather than cancelling a cancelled order.
         // This is the same guard shape the executor uses on settlement.
@@ -319,25 +334,17 @@ class TradeApiIntegrationTest extends PostgresSupport {
     // ------------------------------------------------------ concurrency
 
     @Test
-    @DisplayName("concurrent buys against one account are all accepted, and none of them moves money")
-    void concurrentBuysAreAllAcceptedAndMoveNoMoney() throws Exception {
-        // REWRITTEN FOR SPRINT 7, and the change is the point of the sprint.
+    @DisplayName("concurrent buys against one account: one wins, and the reservation reconciles")
+    void concurrentBuysAreSerialisedByTheVersionColumn() throws Exception {
+        // Sprint 6 proved the optimistic lock here by debiting cash inside the
+        // request. Sprint 7 does not debit at placement -- the executor does,
+        // at the executed price -- but it does RESERVE, and the reservation is
+        // a write to the same row under the same version check. So the contest
+        // is the same contest and the answer is the same answer.
         //
-        // In Sprint 6 this test proved the optimistic lock: eight concurrent
-        // buys of 5,000 against 8,000.75 available, exactly one won, because
-        // cash moved inside the request under a version check.
-        //
-        // Sprint 7 moves that contest. Placement records the order and touches
-        // no money, so all eight are accepted at NEW -- the API is not the
-        // place where affordability is finally decided any more. The executor
-        // re-checks rule 6 at the executed price against the balance as it then
-        // is, and rejects the ones the account can no longer afford. The lock
-        // itself has not gone anywhere: AccountMapper.debitBalance still carries
-        // it, and story 611 applies it inside the settlement transaction.
-        //
-        // What this test still proves is that placement is genuinely free of
-        // side effects under concurrency, which is what makes the executor the
-        // single writer of cash.
+        // Affordability is still finally decided at execution, where rule 6 is
+        // re-checked against the balance as it then is. The reservation is what
+        // stops the API accepting work the account has already committed.
         int attempts = 8;
         ExecutorService pool = Executors.newFixedThreadPool(attempts);
 
@@ -356,23 +363,43 @@ class TradeApiIntegrationTest extends PostgresSupport {
             }
         }
 
-        // Every one is accepted: each independently passes rule 6 against a
-        // balance that nothing is decrementing.
-        assertThat(created, is(8L));
+        // Exactly one. Eight threads read version 2 and all pass rule 6 against
+        // the same 8,000.75; only one of them wins the conditional update, and
+        // the other seven get ORD-409. Any that retried would then see 3,000.75
+        // available and fail rule 6 honestly.
+        //
+        // This assertion was 8 for one commit, between the synchronous debit
+        // being removed and the reservation replacing it. During that window
+        // nothing decremented the funds an accepted order had committed.
+        assertThat(created, is(1L));
 
-        // Eight rows, all NEW, one per distinct idempotency key.
+        // One row, and it is NEW: accepted, not executed.
         assertThat(jdbc.queryForObject(
                 "SELECT count(*) FROM orders WHERE client_id = 4 "
                         + "AND idempotency_key LIKE 'race-key-%' AND status = 'NEW'",
-                Integer.class), is(8));
+                Integer.class), is(1));
 
-        // Not one paisa has moved, and the version has not turned.
+        // The cash has not moved -- only the executor debits -- but the
+        // notional is reserved, so the account can no longer commit it twice.
         var account = jdbc.queryForMap(
-                "SELECT balance, version FROM client_account WHERE client_id = 4");
+                "SELECT balance, blocked_funds, version FROM client_account WHERE client_id = 4");
         assertThat((BigDecimal) account.get("balance"), comparesEqualTo(new BigDecimal("9200.7500")));
-        assertThat(account.get("version"), is(2));
+        // 1,200 seeded plus 5 x 1000.00 for the order that won.
+        assertThat((BigDecimal) account.get("blocked_funds"),
+                comparesEqualTo(new BigDecimal("6200.0000")));
+        // Turned exactly once: seven writers lost the race and wrote nothing.
+        assertThat(account.get("version"), is(3));
 
-        // And no holding exists for any of them.
+        // The reconciliation somebody would otherwise do the next morning: what
+        // is reserved equals the notional of every order still working.
+        BigDecimal reserved = jdbc.queryForObject(
+                "SELECT coalesce(sum(price * quantity), 0) FROM orders "
+                        + "WHERE client_id = 4 AND status = 'NEW' "
+                        + "AND idempotency_key LIKE 'race-key-%'", BigDecimal.class);
+        assertThat((BigDecimal) account.get("blocked_funds"),
+                comparesEqualTo(new BigDecimal("1200.0000").add(reserved)));
+
+        // And no holding exists: nothing has executed.
         assertThat(jdbc.queryForObject(
                 "SELECT count(*) FROM position WHERE client_id = 4 "
                         + "AND instrument_id = (SELECT instrument_id FROM equity WHERE ticker = 'APEX')",
