@@ -45,8 +45,15 @@ class FullSettlementIntegrationTest extends ExecutorPostgresSupport {
     // Stops the test context from attempting a real Kafka connection when
     // OrderExecutionService is wired. FullSettlement never touches this bean,
     // but it is in the same Spring context.
+    //
+    // NAMED, and it has to be. The field is a raw KafkaTemplate, which matches
+    // every parameterised one, and this context holds three: tradeEventTemplate,
+    // dltKafkaTemplate and marketDataTemplate. @MockBean resolves the bean it
+    // replaces by type, needs exactly one candidate or a @Primary, and throws
+    // at registration otherwise -- taking the whole context down and erroring
+    // every test in the class. Naming it skips the search entirely.
     @SuppressWarnings("rawtypes")
-    @MockBean
+    @MockBean(name = "tradeEventTemplate")
     private KafkaTemplate tradeEventTemplate;
 
     private UUID orderId;

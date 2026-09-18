@@ -80,11 +80,11 @@ public class MarketDataPoller {
     public MarketDataPoller(ExecutionMapper mapper,
                             QuoteSource quotes,
                             QuotaCounter quota,
-                            // Named explicitly. There are three KafkaTemplate beans in
-                            // this context and a test that mocks one of them with a RAW
-                            // KafkaTemplate makes the mock assignable to all three, so
-                            // resolving this by generic type alone is ambiguous and the
-                            // context fails to load.
+                            // Named, because this context holds three KafkaTemplate
+                            // beans and generic-type resolution is the only thing
+                            // telling them apart. That works today; naming the bean
+                            // means it keeps working if a fourth arrives, or if a test
+                            // replaces one of them with a raw mock.
                             @Qualifier("marketDataTemplate")
                             KafkaTemplate<String, EventEnvelope<QuotePayload>> marketDataTemplate,
                             PollSchedule schedule,
