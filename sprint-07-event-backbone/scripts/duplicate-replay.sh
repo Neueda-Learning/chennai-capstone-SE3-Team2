@@ -82,7 +82,7 @@ ok "token minted"
 # ---------------------------------------------------------------------
 say "1. balance BEFORE the order (baseline)"
 BAL_START="$(curl -sS "${API}/api/v1/accounts/${ACCOUNT_ID}/balance" "${AUTH[@]}" \
-  | jq -r '.balance')"
+  | jq -r '.cashBalance')"
 ok "balance = ${BAL_START}"
 
 # ---------------------------------------------------------------------
@@ -150,7 +150,7 @@ ok "first delivery settled: ${SETTLED_STATUS}"
 # ---------------------------------------------------------------------
 say "4. balance AFTER the first fill"
 BAL_BEFORE_REPLAY="$(curl -sS "${API}/api/v1/accounts/${ACCOUNT_ID}/balance" "${AUTH[@]}" \
-  | jq -r '.balance')"
+  | jq -r '.cashBalance')"
 ok "balance = ${BAL_BEFORE_REPLAY}"
 
 # ---------------------------------------------------------------------
@@ -198,7 +198,7 @@ sleep 5
 # ---------------------------------------------------------------------
 say "8. balance AFTER the replay -- must equal (4)"
 BAL_AFTER_REPLAY="$(curl -sS "${API}/api/v1/accounts/${ACCOUNT_ID}/balance" "${AUTH[@]}" \
-  | jq -r '.balance')"
+  | jq -r '.cashBalance')"
 
 printf '  balance start          : %s\n' "${BAL_START}"
 printf '  balance after first    : %s\n' "${BAL_BEFORE_REPLAY}"
