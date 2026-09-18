@@ -1,6 +1,7 @@
 package com.yellow.executor;
 
 import com.yellow.executor.config.FauxnanceProperties;
+import com.yellow.executor.config.PollProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -27,7 +28,7 @@ import java.time.Clock;
  */
 @SpringBootApplication
 @EnableScheduling
-@EnableConfigurationProperties(FauxnanceProperties.class)
+@EnableConfigurationProperties({FauxnanceProperties.class, PollProperties.class})
 public class ExecutorApplication {
 
     public static void main(String[] args) {

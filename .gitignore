@@ -1,5 +1,60 @@
+# =====================================================================
+# What does not belong in the repository.
+#
+# Three kinds of thing: secrets, build output, and working notes that
+# are ours rather than the platform's.
+# =====================================================================
+
+# --- secrets ---------------------------------------------------------
+# The real environment file. .env.example is committed and carries
+# placeholders; the file with the database password, the JWT signing
+# secret and the Fauxnance key never is.
 .env
+.env.local
+*.pem
+*.key
+
+# --- working notes ---------------------------------------------------
+# Briefs, story lists and prompts we keep locally to work against. They
+# are inputs to us, not deliverables of the platform, and an instructor
+# reading the repository should find the platform rather than our notes.
+.context/
+
+# --- Java build ------------------------------------------------------
 target/
+*.class
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+
+# --- Python build ----------------------------------------------------
+# The ETL's compiled bytecode. Regenerated on every run, and versioned
+# per interpreter -- a repository holding both cpython-313 and
+# cpython-314 copies of the same module conflicts on every merge for no
+# gain, because neither is source.
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# --- data and caches -------------------------------------------------
+# The analytics store is built by running the pipeline, not by cloning.
+*.duckdb
+*.duckdb.wal
+.cache/
+
+# --- editors and operating systems -----------------------------------
 .idea/
 *.iml
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db
 
+# --- logs ------------------------------------------------------------
+*.log
