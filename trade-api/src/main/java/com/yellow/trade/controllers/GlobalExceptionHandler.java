@@ -32,8 +32,6 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
-    // ---------------------------------------------------------------- 404
-
     @ExceptionHandler(AccountNotFoundException.class)
     public ResponseEntity<ErrorResponse> handle(AccountNotFoundException e) {
         log.warn("ACC-404: no account with key {}", e.requestedAccountId());
@@ -46,23 +44,17 @@ public class GlobalExceptionHandler {
         return envelope(HttpStatus.NOT_FOUND, e);
     }
 
-    // ---------------------------------------------------------------- 403
-
     @ExceptionHandler(AccountNotActiveException.class)
     public ResponseEntity<ErrorResponse> handle(AccountNotActiveException e) {
         log.warn("ACC-403: account status {}", e.actualStatus());
         return envelope(HttpStatus.FORBIDDEN, e);
     }
 
-    // ---------------------------------------------------------------- 400
-
     @ExceptionHandler(InsufficientFundsException.class)
     public ResponseEntity<ErrorResponse> handle(InsufficientFundsException e) {
         log.warn("ORD-400: required {}, available {}", e.required(), e.available());
         return envelope(HttpStatus.BAD_REQUEST, e);
     }
-
-    // ---------------------------------------------------------------- 409
 
     @ExceptionHandler(InsufficientHoldingsException.class)
     public ResponseEntity<ErrorResponse> handle(InsufficientHoldingsException e) {
@@ -90,15 +82,11 @@ public class GlobalExceptionHandler {
     }
 
 
-     //404 with the ORD-409 code, because the order was never accepted and so cannot be cancelled or queried.
-
     @ExceptionHandler(OrderNotFoundException.class)
     public ResponseEntity<ErrorResponse> handle(OrderNotFoundException e) {
         log.warn("order not found: {}", e.requestedOrderId());
         return envelope(HttpStatus.NOT_FOUND, e);
     }
-
-    // ---------------------------------------------------------------- 422
 
     @ExceptionHandler(InvalidOrderException.class)
     public ResponseEntity<ErrorResponse> handle(InvalidOrderException e) {
@@ -106,7 +94,6 @@ public class GlobalExceptionHandler {
         return envelope(HttpStatus.UNPROCESSABLE_ENTITY, e);
     }
 
-    /** @Valid on the request body. */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handle(MethodArgumentNotValidException e) {
         log.warn("VAL-422: body failed validation: {}", e.getFieldErrors().stream()
@@ -114,21 +101,17 @@ public class GlobalExceptionHandler {
         return envelope(HttpStatus.UNPROCESSABLE_ENTITY, "VAL-422", "Invalid input");
     }
 
-    /** @Min and friends on a path variable or request parameter. */
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ErrorResponse> handle(ConstraintViolationException e) {
         log.warn("VAL-422: parameter failed validation: {}", e.getMessage());
         return envelope(HttpStatus.UNPROCESSABLE_ENTITY, "VAL-422", "Invalid input");
     }
 
-
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handle(HttpMessageNotReadableException e) {
-        // getMessage() can quote the offending JSON. It goes to the log only.
         log.warn("VAL-422: unreadable request body: {}", e.getMessage());
         return envelope(HttpStatus.UNPROCESSABLE_ENTITY, "VAL-422", "Invalid input");
     }
-
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ErrorResponse> handle(MethodArgumentTypeMismatchException e) {
@@ -142,8 +125,6 @@ public class GlobalExceptionHandler {
         log.warn("VAL-422: missing parameter {}", e.getParameterName());
         return envelope(HttpStatus.UNPROCESSABLE_ENTITY, "VAL-422", "Invalid input");
     }
-
-    // ------------------------------------------------- transport mismatches
 
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ErrorResponse> handle(NoResourceFoundException e) {
@@ -163,9 +144,6 @@ public class GlobalExceptionHandler {
         return envelope(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "REQ-415", "Unsupported media type");
     }
 
-    // ---------------------------------------------------------------- 500
-
-
     @ExceptionHandler(TradeException.class)
     public ResponseEntity<ErrorResponse> handleUnmapped(TradeException e) {
         log.error("unmapped domain exception {} carrying {}",
@@ -179,7 +157,6 @@ public class GlobalExceptionHandler {
         return envelope(HttpStatus.INTERNAL_SERVER_ERROR, "SRV-500", "Something went wrong");
     }
 
-    // ----------------------------------------------------------------------
     private ResponseEntity<ErrorResponse> envelope(HttpStatus status, TradeException e) {
         return envelope(status, e.catalogueCode(), e.getMessage());
     }

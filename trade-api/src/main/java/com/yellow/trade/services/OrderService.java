@@ -160,9 +160,7 @@ public class OrderService {
     }
 
     // 213: The optimistic lock, and the only place cash moves.
-    // Unused by placeOrder from Sprint 7 onwards. Story 611 moves this into the
-    // executor's settlement transaction, priced at the executed price rather
-    // than the limit price.
+    // Unused by placeOrder from Sprint 7 onwards. 
 
     private void moveCash(AccountRow account, OrderSide side, BigDecimal consideration) {
         int affected = side == OrderSide.BUY

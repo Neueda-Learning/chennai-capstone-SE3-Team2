@@ -16,16 +16,6 @@ import org.springframework.kafka.support.serializer.JsonSerializer;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Kafka producer configuration for the trade API.
- * Configures an idempotent producer with:
- * - acks=all: wait for all in-sync replicas
- * - enable.idempotence=true: deduplicates producer retries
- * - high retry count: resilience to transient failures
- * - max.in.flight.requests.per.connection=5: balanced throughput and ordering
- * - request.timeout.ms=30s: reasonable timeout for broker acknowledgments
- * - delivery.timeout.ms=120s: bounds the total retry duration
- */
 @Configuration
 @EnableKafka
 public class KafkaProducerConfig {
