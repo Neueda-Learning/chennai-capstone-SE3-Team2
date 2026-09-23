@@ -1,0 +1,106 @@
+package com.yellow.trade.security;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwsHeader;
+import io.jsonwebtoken.Jws;
+import io.jsonwebtoken.JwtParser;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.MalformedJwtException;
+import io.jsonwebtoken.UnsupportedJwtException;
+import io.jsonwebtoken.security.SignatureException;
+import io.jsonwebtoken.security.Keys;
+import org.springframework.stereotype.Component;
+
+import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
+
+// * Verifies a token and answers who the caller is. Nothing else.
+
+@Component
+public class JwtTokenVerifier {
+
+    private final SecretKey key;
+    private final String expectedAlgorithm;
+    private final String expectedIssuer;
+
+    public JwtTokenVerifier(JwtProperties properties) {
+        // HMAC-SHA256 needs at least 256 bits of key. A shorter secret is a
+        // configuration mistake, and failing here at startup is far better
+        byte[] secretBytes = properties.secret().getBytes(StandardCharsets.UTF_8);
+        if (secretBytes.length < 32) {
+            throw new IllegalStateException(
+                    "JWT_SECRET must be at least 32 bytes for " + properties.algorithm());
+        }
+        this.key = Keys.hmacShaKeyFor(secretBytes);
+        this.expectedAlgorithm = properties.algorithm();
+        this.expectedIssuer = properties.issuer();
+    }
+
+    public long verifyAndExtractAccountId(String compactToken) {
+        if (compactToken == null || compactToken.isBlank()) {
+            throw new TokenVerificationException(
+                    TokenVerificationException.Reason.MISSING, "no token presented");
+        }
+
+        JwtParser parser = Jwts.parser()
+                .verifyWith(key)              // step 1: signature, MAC algorithms only
+                .requireIssuer(expectedIssuer) // step 4, below
+                .build();
+
+        Jws<Claims> verified;
+        try {
+            // Signature and expiry are both checked here, before this returns
+            // anything a caller could read.
+            verified = parser.parseSignedClaims(compactToken);
+        } catch (ExpiredJwtException e) {
+            // step 2 failed
+            throw new TokenVerificationException(
+                    TokenVerificationException.Reason.EXPIRED, "token expired at " + e.getClaims().getExpiration());
+        } catch (SignatureException e) {
+            // step 1 failed: forged, or signed with a different secret
+            throw new TokenVerificationException(
+                    TokenVerificationException.Reason.BAD_SIGNATURE, "signature did not verify");
+        } catch (UnsupportedJwtException e) {
+            // an unsigned token, or one asking for an algorithm the key cannot serve
+            throw new TokenVerificationException(
+                    TokenVerificationException.Reason.BAD_ALGORITHM, e.getMessage());
+        } catch (io.jsonwebtoken.IncorrectClaimException | io.jsonwebtoken.MissingClaimException e) {
+            // The issuer was wrong or absent.
+            throw new TokenVerificationException(
+                    TokenVerificationException.Reason.WRONG_ISSUER,
+                    "token issuer was not " + expectedIssuer);
+        } catch (MalformedJwtException | IllegalArgumentException e) {
+            throw new TokenVerificationException(
+                    TokenVerificationException.Reason.MALFORMED, "token was not a well-formed JWS");
+        }
+
+        // step 3: the algorithm, read off the verified header rather than off
+        // the untrusted string the client sent.
+        JwsHeader header = verified.getHeader();
+        if (!expectedAlgorithm.equals(header.getAlgorithm())) {
+            throw new TokenVerificationException(
+                    TokenVerificationException.Reason.BAD_ALGORITHM,
+                    "token requested " + header.getAlgorithm() + ", this service accepts " + expectedAlgorithm);
+        }
+
+        // Only now is a claim read.
+        Claims claims = verified.getPayload();
+        Object accountId = claims.get("accountId");
+        if (accountId == null) {
+            throw new TokenVerificationException(
+                    TokenVerificationException.Reason.NO_ACCOUNT_CLAIM,
+                    "token carried no accountId claim");
+        }
+        if (accountId instanceof Number number) {
+            return number.longValue();
+        }
+        try {
+            return Long.parseLong(accountId.toString());
+        } catch (NumberFormatException e) {
+            throw new TokenVerificationException(
+                    TokenVerificationException.Reason.NO_ACCOUNT_CLAIM,
+                    "accountId claim was not a number");
+        }
+    }
+}
