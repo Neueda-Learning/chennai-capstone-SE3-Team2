@@ -1,0 +1,82 @@
+# Everything that differs between a laptop and a container comes from the
+# environment. FAUXNANCE_API_KEY has no default on purpose.
+
+spring:
+  application:
+    name: trade-executor
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:trading}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      # Modest: this service does one order at a time per consumer, and a
+      # large pool would just hold connections the Trade REST API wants.
+      maximum-pool-size: ${DB_POOL_MAX:5}
+      connection-timeout: 5000
+      pool-name: trade-executor-pool
+
+  kafka:
+      bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
+executor:
+  # Fixed by contract: `orders` has exactly one logical consumer group.
+  consumer-group: trade-executor
+  topics:
+    orders: orders
+    trade-events: trade-events
+    market-data: market-data
+
+fauxnance:
+  base-url: ${FAUXNANCE_BASE_URL:https://y4t9nq2bqf.execute-api.eu-west-2.amazonaws.com/v1}
+  # No default.
+  api-key: ${FAUXNANCE_API_KEY}
+  timeout: 10s
+  # Beyond three we are holding a partition for a price we cannot get.
+  max-attempts: 3
+  initial-backoff: 500ms
+  # Capped: a parked consumer stops every account on its partitions.
+  max-backoff: 5s
+  # Per key per day, resetting 00:00 UTC.
+  daily-quota: 2000
+  # Held back from the poller: an order outranks a price update.
+  fill-reserve: 200
+
+poller:
+  # What is asked for. PollSchedule raises it if the quota says so.
+  interval-seconds: ${POLL_INTERVAL_SECONDS:60}
+  # Absolute minimum: nothing faster survives being left running overnight.
+  floor-seconds: 60
+  # The API's hard cap, not a tuning knob.
+  batch-size: 25
+  # Lets a session run the fill path without spending poller quota.
+  enabled: ${POLLER_ENABLED:true}
+
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true
+    default-executor-type: simple
+    jdbc-type-for-null: 'NULL'
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # Health only.
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+
+server:
+  port: ${SERVER_PORT:8081}
+
+logging:
+  level:
+    root: INFO
+    com.yellow: ${LOG_LEVEL:INFO}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"

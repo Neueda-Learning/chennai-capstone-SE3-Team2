@@ -1,0 +1,12 @@
+# Test overrides. Not used by a running service.
+
+poller:
+  # Off for every test that boots a context: it would otherwise start the
+  # real scheduler and call the live API. MarketDataPollerTest drives
+  # pollOnce() directly instead.
+  enabled: false
+
+fauxnance:
+  # Present so the context can start. No test should reach the real API.
+  api-key: test-key-not-a-real-credential
+  base-url: http://localhost:0
