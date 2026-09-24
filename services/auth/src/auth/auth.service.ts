@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import * as argon2 from 'argon2';
 import { JwtService } from '@nestjs/jwt';
 import { randomBytes } from 'node:crypto';
 import { Credential, CredentialRepository } from '../credentials/credential.repository';
+import { PasswordHasher } from '../credentials/password-hasher';
 import { PlatformError } from '../common/platform-error';
 import { Env } from '../config/env';
 import { LoginDto } from './dto/login.dto';
@@ -17,6 +17,7 @@ export const ACCESS_TOKEN_SECONDS = 900;
 export class AuthService {
   constructor(
     private readonly credentials: CredentialRepository,
+    private readonly hasher: PasswordHasher,
     private readonly jwt: JwtService,
     private readonly env: Env,
   ) {}
@@ -31,7 +32,7 @@ export class AuthService {
       throw PlatformError.usernameTaken();
     }
 
-    const passwordHash = await argon2.hash(dto.password, { type: argon2.argon2id });
+    const passwordHash = await this.hasher.hash(dto.password);
     const roles = dto.roles?.length ? dto.roles : ['CUSTOMER'];
 
     // Null when the account was never provisioned, or somebody claimed it first.
@@ -48,7 +49,7 @@ export class AuthService {
     if (!credential) {
       throw PlatformError.unauthorised();
     }
-    if (!(await argon2.verify(credential.passwordHash, dto.password))) {
+    if (!(await this.hasher.verify(credential.passwordHash, dto.password))) {
       throw PlatformError.unauthorised();
     }
     return this.issue(credential);
