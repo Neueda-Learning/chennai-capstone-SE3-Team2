@@ -144,10 +144,58 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Sprint 8. The only component that ever sees a password. Its own database,
+  # because it is a separate service and read access to the trading data should
+  # not come with it.
+  auth-postgres:
+    image: postgres:16-alpine
+    container_name: fauxnance-auth-postgres
+    profiles: [platform]
+    environment:
+      POSTGRES_DB: ${AUTH_DB_NAME:-auth}
+      POSTGRES_USER: ${AUTH_DB_USER:-auth}
+      POSTGRES_PASSWORD: ${AUTH_DB_PASSWORD:?AUTH_DB_PASSWORD must be set in .env}
+    ports:
+      - "${AUTH_DB_PUBLISHED_PORT:-5433}:5432"
+    volumes:
+      - auth-postgres-data:/var/lib/postgresql/data
+    networks: [trading-net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AUTH_DB_USER:-auth} -d ${AUTH_DB_NAME:-auth}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  auth:
+    build:
+      context: .
+      dockerfile: services/auth/Dockerfile
+    container_name: fauxnance-auth
+    profiles: [platform]
+    environment:
+      # The same secret the Trade REST API verifies with. That is what makes
+      # adopting this service a configuration change rather than a code change.
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      JWT_ISSUER: ${JWT_ISSUER:-auth-service}
+      AUTH_DATABASE_URL: postgresql://${AUTH_DB_USER:-auth}:${AUTH_DB_PASSWORD}@auth-postgres:5432/${AUTH_DB_NAME:-auth}
+      PORT: 3000
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      # 3000 is reserved for this service in infra/README.md.
+      - "${AUTH_PUBLISHED_PORT:-3000}:3000"
+    networks: [trading-net]
+    depends_on:
+      auth-postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
 networks:
   trading-net:
     driver: bridge
 
 volumes:
   postgres-data:
+  auth-postgres-data:
   kafka-data:
