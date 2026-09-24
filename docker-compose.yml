@@ -161,6 +161,7 @@ services:
       - auth-postgres-data:/var/lib/postgresql/data
       # Applied only when the volume is empty, same as the trading database.
       - ./services/auth/migrations/001_credentials.sql:/docker-entrypoint-initdb.d/01-credentials.sql:ro
+      - ./services/auth/migrations/002_refresh_tokens.sql:/docker-entrypoint-initdb.d/02-refresh-tokens.sql:ro
     networks: [trading-net]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${AUTH_DB_USER:-auth} -d ${AUTH_DB_NAME:-auth}"]

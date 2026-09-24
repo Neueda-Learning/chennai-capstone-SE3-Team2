@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { randomBytes } from 'node:crypto';
 import { Credential, CredentialRepository } from '../credentials/credential.repository';
 import { PasswordHasher } from '../credentials/password-hasher';
 import { AccessTokenService } from '../tokens/access-token.service';
+import { RefreshTokenService } from '../tokens/refresh-token.service';
 import { ACCESS_TOKEN_SECONDS } from '../tokens/claims';
 import { PlatformError } from '../common/platform-error';
 import { LoginDto } from './dto/login.dto';
@@ -17,6 +17,7 @@ export class AuthService {
     private readonly credentials: CredentialRepository,
     private readonly hasher: PasswordHasher,
     private readonly accessTokens: AccessTokenService,
+    private readonly refreshTokens: RefreshTokenService,
   ) {}
 
   /**
@@ -53,7 +54,12 @@ export class AuthService {
   }
 
   async refresh(dto: RefreshDto): Promise<TokenResponseDto> {
-    throw PlatformError.unauthorised();
+    const credentialId = await this.refreshTokens.rotate(dto.refreshToken);
+    const credential = await this.credentials.findById(credentialId);
+    if (!credential) {
+      throw PlatformError.unauthorised();
+    }
+    return this.issue(credential);
   }
 
   async me(userId: string): Promise<UserResponseDto> {
@@ -70,7 +76,7 @@ export class AuthService {
 
     return {
       accessToken,
-      refreshToken: randomBytes(32).toString('hex'),
+      refreshToken: await this.refreshTokens.issue(credential.id),
       tokenType: 'Bearer',
       expiresIn: ACCESS_TOKEN_SECONDS,
     };
