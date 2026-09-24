@@ -4,9 +4,10 @@ import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { PlatformError } from './common/platform-error';
 import { Env } from './config/env';
+import { RedactingLogger } from './common/redacting-logger';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { logger: new RedactingLogger() });
 
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalPipes(

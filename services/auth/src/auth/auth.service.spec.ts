@@ -1,8 +1,8 @@
 import { Test } from '@nestjs/testing';
 import { JwtModule, JwtService } from '@nestjs/jwt';
-import * as argon2 from 'argon2';
 import { AuthService } from './auth.service';
 import { CredentialRepository } from '../credentials/credential.repository';
+import { PasswordHasher } from '../credentials/password-hasher';
 import { Env } from '../config/env';
 
 describe('AuthService', () => {
@@ -13,7 +13,7 @@ describe('AuthService', () => {
   const stored = async () => ({
     id: '8f14e45f-ceea-4c1b-9d3b-1a2b3c4d5e6f',
     username: 'priya.menon',
-    passwordHash: await argon2.hash('correct horse battery staple', { type: argon2.argon2id }),
+    passwordHash: await new PasswordHasher().hash('correct horse battery staple'),
     accountId: 3,
     roles: ['CUSTOMER'],
   });
@@ -27,6 +27,7 @@ describe('AuthService', () => {
       providers: [
         AuthService,
         { provide: CredentialRepository, useValue: credentials },
+        PasswordHasher,
         { provide: Env, useValue: env },
       ],
     }).compile();
