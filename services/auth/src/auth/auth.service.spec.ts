@@ -1,9 +1,10 @@
 import { Test } from '@nestjs/testing';
-import { JwtModule, JwtService } from '@nestjs/jwt';
+import { JwtService } from '@nestjs/jwt';
 import { AuthService } from './auth.service';
 import { CredentialRepository } from '../credentials/credential.repository';
 import { PasswordHasher } from '../credentials/password-hasher';
 import { Env } from '../config/env';
+import { AccessTokenService } from '../tokens/access-token.service';
 
 describe('AuthService', () => {
   const SECRET = 'a-test-secret-of-at-least-32-bytes-length';
@@ -23,11 +24,12 @@ describe('AuthService', () => {
     const env = { jwtSecret: SECRET, jwtIssuer: 'auth-service' } as Env;
 
     const module = await Test.createTestingModule({
-      imports: [JwtModule.register({})],
       providers: [
         AuthService,
         { provide: CredentialRepository, useValue: credentials },
         PasswordHasher,
+        JwtService,
+        AccessTokenService,
         { provide: Env, useValue: env },
       ],
     }).compile();
