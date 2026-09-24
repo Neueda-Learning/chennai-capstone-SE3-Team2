@@ -1,14 +1,17 @@
 import { Test } from '@nestjs/testing';
-import { JwtModule, JwtService } from '@nestjs/jwt';
+import { JwtService } from '@nestjs/jwt';
 import { AuthService } from './auth.service';
 import { CredentialRepository } from '../credentials/credential.repository';
 import { PasswordHasher } from '../credentials/password-hasher';
 import { Env } from '../config/env';
+import { AccessTokenService } from '../tokens/access-token.service';
+import { RefreshTokenService } from '../tokens/refresh-token.service';
 
 describe('AuthService', () => {
   const SECRET = 'a-test-secret-of-at-least-32-bytes-length';
   let service: AuthService;
   let credentials: { findByUsername: jest.Mock; findById: jest.Mock; claim: jest.Mock };
+  let refreshTokens: { issue: jest.Mock; rotate: jest.Mock };
 
   const stored = async () => ({
     id: '8f14e45f-ceea-4c1b-9d3b-1a2b3c4d5e6f',
@@ -20,14 +23,17 @@ describe('AuthService', () => {
 
   beforeEach(async () => {
     credentials = { findByUsername: jest.fn(), findById: jest.fn(), claim: jest.fn() };
+    refreshTokens = { issue: jest.fn().mockResolvedValue('a'.repeat(64)), rotate: jest.fn() };
     const env = { jwtSecret: SECRET, jwtIssuer: 'auth-service' } as Env;
 
     const module = await Test.createTestingModule({
-      imports: [JwtModule.register({})],
       providers: [
         AuthService,
         { provide: CredentialRepository, useValue: credentials },
         PasswordHasher,
+        JwtService,
+        AccessTokenService,
+        { provide: RefreshTokenService, useValue: refreshTokens },
         { provide: Env, useValue: env },
       ],
     }).compile();
