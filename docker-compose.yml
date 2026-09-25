@@ -93,6 +93,7 @@ services:
       # No default: the service refuses to start rather than accept
       # tokens anybody could mint.
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      JWT_ISSUER: ${JWT_ISSUER:-auth-service}
       # kafka:29092, not localhost: inside a container localhost is that
       # container, and nothing would answer.
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
