@@ -3,6 +3,7 @@ import { Credential, CredentialRepository } from '../credentials/credential.repo
 import { PasswordHasher } from '../credentials/password-hasher';
 import { AccessTokenService } from '../tokens/access-token.service';
 import { RefreshTokenService } from '../tokens/refresh-token.service';
+import { LoginFailure } from './login-failure';
 import { ACCESS_TOKEN_SECONDS } from '../tokens/claims';
 import { PlatformError } from '../common/platform-error';
 import { LoginDto } from './dto/login.dto';
@@ -18,6 +19,7 @@ export class AuthService {
     private readonly hasher: PasswordHasher,
     private readonly accessTokens: AccessTokenService,
     private readonly refreshTokens: RefreshTokenService,
+    private readonly loginFailure: LoginFailure,
   ) {}
 
   /**
@@ -45,10 +47,12 @@ export class AuthService {
   async login(dto: LoginDto): Promise<TokenResponseDto> {
     const credential = await this.credentials.findByUsername(dto.username);
     if (!credential) {
-      throw PlatformError.unauthorised();
+      // Verifies against a dummy hash before failing, so this path costs what
+      // the wrong-password path costs.
+      return this.loginFailure.unknownUser(dto.password);
     }
     if (!(await this.hasher.verify(credential.passwordHash, dto.password))) {
-      throw PlatformError.unauthorised();
+      return this.loginFailure.wrongPassword();
     }
     return this.issue(credential);
   }

@@ -6,6 +6,7 @@ import { PasswordHasher } from '../credentials/password-hasher';
 import { Env } from '../config/env';
 import { AccessTokenService } from '../tokens/access-token.service';
 import { RefreshTokenService } from '../tokens/refresh-token.service';
+import { LoginFailure } from './login-failure';
 
 describe('AuthService', () => {
   const SECRET = 'a-test-secret-of-at-least-32-bytes-length';
@@ -34,10 +35,12 @@ describe('AuthService', () => {
         JwtService,
         AccessTokenService,
         { provide: RefreshTokenService, useValue: refreshTokens },
+        LoginFailure,
         { provide: Env, useValue: env },
       ],
     }).compile();
 
+    await module.init();
     service = module.get(AuthService);
   });
 
