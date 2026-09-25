@@ -37,7 +37,37 @@ arrays, and errors with a DTO attached.
 
 ## Login throttle
 
-<!-- 624: cooldown window and attempt count -->
+**Five failed attempts from one address, then a sixty second cooldown.**
+In-memory, so it is per-instance; behind more than one process it would need a
+shared store. A successful login clears the count.
+
+The throttle limits how fast an attacker can use a disclosure. It does not
+close one — the uniform failure below is what closes it.
+
+## One answer for every failed login
+
+`AUTH-401` with the message `Unauthorised`, and HTTP 401, for all five causes:
+unknown user, wrong password, expired token, wrongly signed token, malformed
+header.
+
+The timing is the part that fails by accident. Where the username is not found
+we verify the supplied password against a dummy hash of the same algorithm and
+the same parameters, discard the result, and fail identically. Measured, ten
+runs each:
+
+| Path | Median |
+|---|---:|
+| wrong password, user exists | 128.6 ms |
+| unknown user, dummy hash verified | 135.6 ms |
+| **ratio** | **1.05x** |
+
+Judge the shape rather than the size: one path taking twice as long as the other
+is an early return even when both numbers are small. The dummy hash is computed
+once at startup, not per request — hashing it each time would double the cost of
+every miss.
+
+Run the comparison **outside** the throttle window, or a burst of failures
+collides with it.
 
 ## OpenAPI
 
