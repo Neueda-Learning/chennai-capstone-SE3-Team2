@@ -59,14 +59,15 @@ services:
       - ./data/db/migrations/002_api_alignment.sql:/docker-entrypoint-initdb.d/03-migration-002.sql:ro
       - ./data/db/migrations/003_account_last_updated.sql:/docker-entrypoint-initdb.d/04-migration-003.sql:ro
       - ./data/db/migrations/004_execution_columns.sql:/docker-entrypoint-initdb.d/05-migration-004.sql:ro
-      - ./data/db/indexes/001_performance_indexes.sql:/docker-entrypoint-initdb.d/06-indexes.sql:ro
-      - ./data/db/seed/001_reference_data.sql:/docker-entrypoint-initdb.d/07-seed-reference.sql:ro
-      - ./data/db/seed/002_clients.sql:/docker-entrypoint-initdb.d/08-seed-clients.sql:ro
-      - ./data/db/seed/003_instruments.sql:/docker-entrypoint-initdb.d/09-seed-instruments.sql:ro
-      - ./data/db/seed/004_transactions.sql:/docker-entrypoint-initdb.d/10-seed-transactions.sql:ro
+      - ./data/db/migrations/005_drop_client_auth.sql:/docker-entrypoint-initdb.d/06-migration-005.sql:ro
+      - ./data/db/indexes/001_performance_indexes.sql:/docker-entrypoint-initdb.d/07-indexes.sql:ro
+      - ./data/db/seed/001_reference_data.sql:/docker-entrypoint-initdb.d/08-seed-reference.sql:ro
+      - ./data/db/seed/002_clients.sql:/docker-entrypoint-initdb.d/09-seed-clients.sql:ro
+      - ./data/db/seed/003_instruments.sql:/docker-entrypoint-initdb.d/10-seed-instruments.sql:ro
+      - ./data/db/seed/004_transactions.sql:/docker-entrypoint-initdb.d/11-seed-transactions.sql:ro
       # Symbols Fauxnance can price. The fictional ones above stay, and
       # become the live no-price demonstration.
-      - ./data/db/seed/005_fauxnance_instruments.sql:/docker-entrypoint-initdb.d/11-seed-fauxnance.sql:ro
+      - ./data/db/seed/005_fauxnance_instruments.sql:/docker-entrypoint-initdb.d/12-seed-fauxnance.sql:ro
     networks: [trading-net]
     healthcheck:
       # -U and -d matter: the default reports healthy too early.

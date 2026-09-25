@@ -39,17 +39,3 @@ INSERT INTO client_profile (client_id, name, dob, email, phone_number, address) 
     ( 8, 'Sana Menon',       '1998-12-21', 'sana.menon@example.com',     '+919812345608', '5 Panampilly Nagar, Kochi 682036'),
     ( 9, 'Vikram Gupta',     '1990-03-17', 'vikram.gupta@example.com',   '+919812345609', '18 Vasant Kunj, New Delhi 110070'),
     (10, 'Priya Rao',        '1983-08-09', 'priya.rao@example.com',      '+919812345610', '2 Adyar, Chennai 600020');
-
--- Password hashes are structurally valid bcrypt strings, not real
--- hashes. Seed data only - never a real credential.
-INSERT INTO client_auth (client_id, password_hash, last_login) VALUES
-    ( 1, '$2b$12$KIXQJ8fZ1kL0pQxRvNbYceH3mWs5tUuVwXyZaBcDeFgHiJkLmNoPq', '2026-08-25 09:14:00+05:30'),
-    ( 2, '$2b$12$LJYRK9gA2mM1qRySwOcZdfI4nXt6uVvWxYzAbCdEfGhIjKlMnOpQr', '2026-08-24 18:02:00+05:30'),
-    ( 3, '$2b$12$MKZSL0hB3nN2rSzTxPdAegJ5oYu7vWwXyZaBcDeFgHiJkLmNoPqRs', '2026-08-25 08:47:00+05:30'),
-    ( 4, '$2b$12$NLATM1iC4oO3sTAyQeBfhK6pZv8wXxYzAbCdEfGhIjKlMnOpQrStU', '2026-08-22 11:30:00+05:30'),
-    ( 5, '$2b$12$OMBUN2jD5pP4tUBzRfCgiL7qAw9xYyZaBcDeFgHiJkLmNoPqRsTuV', '2026-08-25 07:20:00+05:30'),
-    ( 6, '$2b$12$PNCVO3kE6qQ5uVCASgDhjM8rBx0yZzAbCdEfGhIjKlMnOpQrStUvW', '2026-08-23 16:55:00+05:30'),
-    ( 7, '$2b$12$QODWP4lF7rR6vWDBThEikN9sCy1zAaBcDeFgHiJkLmNoPqRsTuVwX', '2026-08-25 10:05:00+05:30'),
-    ( 8, '$2b$12$RPEXQ5mG8sS7wXECUiFjlO0tDz2aBbCdEfGhIjKlMnOpQrStUvWxY', '2026-08-10 12:00:00+05:30'),
-    ( 9, '$2b$12$SQFYR6nH9tT8xYFDVjGkmP1uEA3bCcDeFgHiJkLmNoPqRsTuVwXyZ', NULL),   -- never logged in
-    (10, '$2b$12$TRGZS7oI0uU9yZGEWkHlnQ2vFB4cDdEfGhIjKlMnOpQrStUvWxYzA', '2026-06-30 14:22:00+05:30');

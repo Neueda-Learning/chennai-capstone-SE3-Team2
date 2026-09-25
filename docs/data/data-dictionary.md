@@ -41,14 +41,12 @@ Personal / KYC-visible details. 1:1 with account.
 
 ---
 
-### `client_auth` — one row per client
-Login credentials, isolated from all other data.
-
-| Column | Type | Meaning |
-|---|---|---|
-| `client_id` | INTEGER, PK, FK | Same key as the account |
-| `password_hash` | VARCHAR(255) | bcrypt/argon2 hash. Never plaintext |
-| `last_login` | TIMESTAMPTZ | Nullable until first login |
+### `client_auth` — removed in Sprint 8
+Dropped by `005_drop_client_auth.sql`. Credentials moved to the auth
+service, which owns the only store in the platform that ever holds one.
+This table had no reader after Sprint 3, and leaving a table of password
+hashes in the database the Trade REST API connects to is the arrangement
+Sprint 8 exists to remove.
 
 ---
 

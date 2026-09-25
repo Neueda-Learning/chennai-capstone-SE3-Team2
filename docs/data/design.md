@@ -14,7 +14,7 @@ the table is doing more than one job.
 |---|---|---|
 | `client_account` | client | `pan`, `demat_id` |
 | `client_profile` | client | `email` |
-| `client_auth` | client | `client_id` |
+| ~~`client_auth`~~ | *removed Sprint 8 — credentials live in the auth service* | |
 | `fund_transfer` | deposit or withdrawal **attempt** | `reference_id` |
 | `exchange` | trading venue | `exchange_code` |
 | `amc` | fund house | `amc_code` |
