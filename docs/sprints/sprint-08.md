@@ -88,7 +88,34 @@ is the evidence our code still matches it.
 
 ## Adopting the service in the Trade REST API
 
-<!-- 625: what changed, and the evidence no Java did -->
+**No Java changed.** Four things moved, all of them configuration:
+
+| Change | Where |
+|---|---|
+| The auth service added on port 3000 | `docker-compose.yml` |
+| It reads the same `JWT_SECRET` the Trade REST API verifies with | root `.env` |
+| The Trade REST API's issuer names ours | `JWT_ISSUER` in its environment |
+| The credential store's connection | the auth service's environment |
+
+That works because the Sprint 6 verifier already reads its issuer from
+`${JWT_ISSUER:auth-service}`, checks the algorithm explicitly rather than
+trusting the token header, and verifies the signature before decoding any
+claim. Nothing in it was coupled to the Sprint 6 test fixture.
+
+```bash
+scripts/auth-integration-check.sh
+```
+
+Six checks: register, log in, a protected route accepting the token, the same
+route refusing no token, refusing a token signed with an untrusted key, and
+`git diff` showing no `.java` file changed.
+
+### The development JWT_SECRET
+
+`.env.example` publishes a development secret, so anyone who has read this
+repository can mint a token our consumers accept for as long as that value is in
+use. **We rotate it now that a real issuer signs with it** — see A02 in the
+security review.
 
 ## Security review
 
