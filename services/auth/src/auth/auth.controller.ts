@@ -1,8 +1,11 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common';
+import { Request } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { CurrentUser } from './current-user.decorator';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { LoginThrottleGuard } from './login-throttle.guard';
+import { LoginAttempts } from './login-attempts';
 import { AccessTokenClaims } from '../tokens/claims';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
@@ -13,7 +16,10 @@ import { UserResponseDto } from './dto/user-response.dto';
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly attempts: LoginAttempts,
+  ) {}
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
@@ -27,11 +33,23 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(LoginThrottleGuard)
   @ApiOperation({ summary: 'Log in and receive tokens' })
   @ApiResponse({ status: 200, type: TokenResponseDto })
   @ApiResponse({ status: 401, description: 'AUTH-401: one answer for every cause' })
-  login(@Body() dto: LoginDto): Promise<TokenResponseDto> {
-    return this.auth.login(dto);
+  @ApiResponse({ status: 429, description: 'AUTH-429: too many failures from this caller' })
+  async login(@Body() dto: LoginDto, @Req() request: Request): Promise<TokenResponseDto> {
+    const caller = LoginAttempts.callerKey(request);
+    try {
+      const tokens = await this.auth.login(dto);
+      this.attempts.recordSuccess(caller);
+      return tokens;
+    } catch (failure) {
+      // Counted after the work, so the throttle never shortens the uniform
+      // failure it sits in front of.
+      this.attempts.recordFailure(caller);
+      throw failure;
+    }
   }
 
   @Post('refresh')
