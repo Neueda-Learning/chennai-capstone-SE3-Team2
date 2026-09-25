@@ -71,7 +71,20 @@ collides with it.
 
 ## OpenAPI
 
-<!-- 626: the human page and the JSON document paths -->
+Generated from the decorators on the controller and the DTOs, and served by the
+running process:
+
+| | |
+|---|---|
+| Human page | `http://localhost:3000/docs` |
+| JSON document | `http://localhost:3000/docs/json` |
+
+```bash
+curl -sS http://localhost:3000/docs/json | jq '.paths | keys'
+```
+
+Four paths, OpenAPI 3.0. This does not replace `contracts/auth-api.yaml` — it
+is the evidence our code still matches it.
 
 ## Adopting the service in the Trade REST API
 
