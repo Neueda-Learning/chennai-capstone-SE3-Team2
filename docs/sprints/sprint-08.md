@@ -119,4 +119,7 @@ security review.
 
 ## Security review
 
-<!-- 627: the filename of the completed review -->
+`docs/security/sprint-08-auth-review.md`, against the 2021 OWASP Top Ten.
+Every category carries a finding and a disposition, including the two we
+accepted: registration has no activation factor, and the login throttle is
+per-instance.
