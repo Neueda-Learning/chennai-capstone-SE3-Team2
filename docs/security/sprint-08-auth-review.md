@@ -46,7 +46,7 @@ What was actually run or read, so the review is repeatable.
 | Claim set | Decoded the payload of a live token | Exactly `sub, accountId, roles, iat, exp, iss`; `exp − iat = 900` |
 | Algorithm pinning | Read `jwt-auth.guard.ts`; `access-token.service.spec.ts` asserts on the key set | HS256 pinned on verification, not read from the token header |
 | Refresh rotation and replay | Logged in, refreshed, used the new token, then replayed the old one | New token differs and works; replay answers `401`; store went to **0 still live** for that credential |
-| Replay logging | `docker compose logs auth` after the replay | `replayed refresh token for credential <uuid>: revoked 1 live token(s)` — names the credential, never the token |
+| Replay logging | `docker compose logs auth` after the replay | `SECURITY_REFRESH_REPLAY credential=<uuid> revoked=1` — names the credential, never the token. Format fixed for alerting and pinned by `refresh-token.service.spec.ts` |
 | Injection | Read all seven statements in `credential.repository.ts` and `refresh-token.repository.ts` | Every value bound with a `$n` placeholder; none concatenated |
 | Log redaction | Read `redacting-logger.ts` and its spec | Redacts by key name at any depth: nested objects, arrays, and errors carrying a DTO |
 | Secrets have no defaults | Read `config/env.ts` | Throws when `JWT_SECRET` or `AUTH_DATABASE_URL` is absent; the service refuses to start |
@@ -62,5 +62,5 @@ What was actually run or read, so the review is repeatable.
 | **Build the activation factor (A01)** — a one-time token sent to a channel the customer controls, so registration needs more than a provisioned account number. Today, knowing the number is the whole entitlement. | NL | Sprint 9 |
 | Demote the Trade REST API off the Postgres superuser role (A05) — it connects as `postgres` today and needs about six tables | AA | Sprint 9 |
 | Move the login throttle to a shared store so the 5-attempt limit holds across more than one instance, not 5 per process (A07) | SS | Sprint 9 |
-| Alert on the replayed-refresh-token warning (A09) — it is the strongest compromise signal the platform emits and today nobody is paged for it | KS | when a log sink exists |
+| Alert on the replayed-refresh-token warning (A09) — it is the strongest compromise signal the platform emits and today nobody is paged for it. **Prepared:** the warning now carries the fixed tag `SECURITY_REFRESH_REPLAY` (a unit test fails if it changes). Rule to install: any log line from `auth` containing `SECURITY_REFRESH_REPLAY` pages on-call immediately — one occurrence is enough, no threshold. **Blocked on:** a log sink to install it in | KS | when a log sink exists |
 | Upgrade `@nestjs/*` to 11, clearing the remaining 10 production advisories (A06) | SA | before Sprint 9 closes |
