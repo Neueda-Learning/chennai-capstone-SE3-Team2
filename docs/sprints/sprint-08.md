@@ -120,6 +120,7 @@ security review.
 ## Security review
 
 `docs/security/sprint-08-auth-review.md`, against the 2021 OWASP Top Ten.
-Every category carries a finding and a disposition, including the two we
-accepted: registration has no activation factor, and the login throttle is
-per-instance.
+Every category carries a finding and a disposition. Registration's missing
+activation factor, accepted here, was fixed in Sprint 9 — see
+`docs/runbooks/account-activation.md`. The per-instance login throttle
+remains an accepted risk.

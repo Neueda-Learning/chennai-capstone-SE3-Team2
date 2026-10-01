@@ -15,9 +15,29 @@ export class Env {
     return value;
   }
 
+  /** Called once at bootstrap, so a missing variable stops the process before it listens. */
+  assertRequired(): void {
+    void this.jwtSecret;
+    void this.databaseUrl;
+    void this.kafkaBrokers;
+    void this.activationInternalSecret;
+  }
+
   get jwtSecret(): string { return this.required('JWT_SECRET'); }
   get jwtIssuer(): string { return this.config.get('JWT_ISSUER') ?? 'auth-service'; }
   get port(): number { return Number(this.config.get('PORT') ?? 3000); }
 
   get databaseUrl(): string { return this.required('AUTH_DATABASE_URL'); }
+
+  get kafkaBrokers(): string[] {
+    return this.required('KAFKA_BROKERS').split(',').map((b) => b.trim()).filter(Boolean);
+  }
+
+  /** Shared with the Trade REST API's activation package; guards the token-minting route. */
+  get activationInternalSecret(): string { return this.required('ACTIVATION_INTERNAL_SECRET'); }
+
+  /** Where a customer lands after registering from the activation link. */
+  get activationHomeUrl(): string { return this.config.get('ACTIVATION_HOME_URL') ?? 'http://localhost:4200/'; }
+
+  get outboxPollMs(): number { return Number(this.config.get('OUTBOX_POLL_MS') ?? 2000); }
 }

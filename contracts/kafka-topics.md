@@ -15,6 +15,8 @@ Both problems have the same answer. The service that accepts the order records i
 | `orders` | Orders accepted by the Trade REST API and awaiting execution. A work queue with one logical consumer group. | `accountId` as a string | 3 | 1 locally, 3 in a real cluster | 7 days | delete |
 | `trade-events` | Order lifecycle outcomes: filled, rejected, cancelled. The platform's event log, read by many consumers. | `accountId` as a string | 3 | 1 locally, 3 in a real cluster | 30 days | delete |
 | `market-data` | Quotes polled from the Fauxnance API. High volume, low value per message. | `symbol` | 6 | 1 locally, 3 in a real cluster | 1 day | delete |
+| `kyc-events` | Sprint 9 addition. KYC outcomes, published by KYC and consumed by the auth service to provision an account. | `clientId` as a string | 3 | 1 locally, 3 in a real cluster | 7 days | delete |
+| `account-provisioning` | Sprint 9 addition. Accounts the auth service has made claimable, consumed by the activation mailer. | `clientId` as a string | 3 | 1 locally, 3 in a real cluster | 7 days | delete |
 
 The specification calls the first topic `trades`. This catalogue names it `orders`, because everything on it is an accepted order that has not yet been executed. `trades` is accepted where a team has already built against it, but one repository uses one name.
 
@@ -184,6 +186,48 @@ A rejection is an event. Publish it. Notifications, analytics and the blotter al
 
 Publish one message per symbol, not one message per batch. Batching the HTTP call is a quota optimisation; batching the Kafka message would break per-symbol keying and ordering.
 
+### `kyc-events` (Sprint 9)
+
+`eventType` `KYC_VERIFIED` means "provision this customer". Other types may be added; the auth service acts on `KYC_VERIFIED` only and acknowledges the rest.
+
+| Payload field | Type | Notes |
+|---|---|---|
+| `clientId` | integer, int64 | `client_account.client_id` of the customer who passed. Also the message key, as a string. The only field. |
+
+```json
+{
+  "eventId": "3f0c9a52-1d7e-4b8a-9c2e-5a6b7c8d9e0f",
+  "eventType": "KYC_VERIFIED",
+  "eventTime": "2026-10-02T09:14:22Z",
+  "source": "kyc-service",
+  "schemaVersion": 1,
+  "payload": { "clientId": 11 }
+}
+```
+
+Publish only after the verification has committed. The auth service cannot read the trading database, so it trusts this event as the statement that the customer is verified.
+
+### `account-provisioning` (Sprint 9)
+
+`eventType` is always `ACCOUNT_PROVISIONED`, published by the auth service once the `provisioned_account` row has committed.
+
+| Payload field | Type | Notes |
+|---|---|---|
+| `clientId` | integer, int64 | The provisioned account, equal to `client_account.client_id`. Also the message key, as a string. The only field. |
+
+```json
+{
+  "eventId": "a7e2d4c1-5b3f-4e8a-9d0c-1f2e3a4b5c6d",
+  "eventType": "ACCOUNT_PROVISIONED",
+  "eventTime": "2026-10-02T09:14:23Z",
+  "source": "auth-service",
+  "schemaVersion": 1,
+  "payload": { "clientId": 11 }
+}
+```
+
+No token rides this topic. The activation token is a credential: the consumer asks the auth service for one over HTTP, and its plaintext exists only in that response and in the email.
+
 ## Producer and consumer matrix
 
 | Service | `orders` | `trade-events` | `market-data` |
@@ -198,6 +242,15 @@ Publish one message per symbol, not one message per batch. Batching the HTTP cal
 | Trade advice and signals, in the Trade REST API | not used | consume, group `advice-service` | consume, group `advice-service` |
 | Automated strategy execution, in the Trade REST API | not used | consume, group `strategy-service` | consume, group `strategy-service` |
 | Angular UI | never | never | never |
+
+The two Sprint 9 onboarding topics have their own producers and consumers:
+
+| Service | `kyc-events` | `account-provisioning` |
+|---|---|---|
+| KYC | produce | not used |
+| Auth service | consume, group `auth-provisioning` | produce, through a transactional outbox |
+| Activation mailer, in the Trade REST API | not used | consume, group `activation-mailer` |
+| Angular UI | never | never |
 
 Two rules follow from the matrix.
 
@@ -252,7 +305,17 @@ kafka-topics.sh --bootstrap-server localhost:9092 --create \
 kafka-topics.sh --bootstrap-server localhost:9092 --create \
   --topic market-data --partitions 6 --replication-factor 1 \
   --config retention.ms=86400000
+
+kafka-topics.sh --bootstrap-server localhost:9092 --create \
+  --topic kyc-events --partitions 3 --replication-factor 1 \
+  --config retention.ms=604800000
+
+kafka-topics.sh --bootstrap-server localhost:9092 --create \
+  --topic account-provisioning --partitions 3 --replication-factor 1 \
+  --config retention.ms=604800000
 ```
+
+`scripts/create-topics.sh` creates all five, and a one-partition `.DLT` for each.
 
 Watch consumer lag while testing. A group whose lag climbs steadily is not keeping up, and on `market-data` that usually means the poller interval is shorter than the consumer's processing time.
 
