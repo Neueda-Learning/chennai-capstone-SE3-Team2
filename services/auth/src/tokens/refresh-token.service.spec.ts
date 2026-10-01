@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { RefreshTokenService, REFRESH_TOKEN_DAYS } from './refresh-token.service';
+import { Logger } from '@nestjs/common';
+import { RefreshTokenService, REFRESH_TOKEN_DAYS, REFRESH_REPLAY_EVENT } from './refresh-token.service';
 import { RefreshTokenRepository, StoredRefreshToken } from './refresh-token.repository';
 
 describe('RefreshTokenService', () => {
@@ -74,6 +75,17 @@ describe('RefreshTokenService', () => {
     // Either a client repeated a request or a token was stolen, and the
     // service cannot tell which, so it assumes the worse one.
     expect(store.revokeAllFor).toHaveBeenCalledWith(CREDENTIAL);
+  });
+
+  it('logs a replay under the fixed tag the alert rule matches on', async () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    store.find.mockResolvedValue(live({ exchangedAt: new Date() }));
+
+    await expect(service.rotate('already-used')).rejects.toBeDefined();
+
+    expect(REFRESH_REPLAY_EVENT).toBe('SECURITY_REFRESH_REPLAY');
+    expect(warn).toHaveBeenCalledWith(`SECURITY_REFRESH_REPLAY credential=${CREDENTIAL} revoked=2`);
+    warn.mockRestore();
   });
 
   it('refuses an expired refresh token', async () => {
