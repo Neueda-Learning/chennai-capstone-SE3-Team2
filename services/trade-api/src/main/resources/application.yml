@@ -33,6 +33,22 @@ spring:
       max-in-flight-requests-per-connection: 5
       request-timeout-ms: 30000
 
+  # Outgoing mail for account activation. Credentials have no default:
+  # without them the service refuses to start rather than failing every
+  # send later. Gmail needs an app password and STARTTLS on 587.
+  mail:
+    host: ${SMTP_HOST:smtp.gmail.com}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME}
+    password: ${SMTP_PASSWORD}
+    properties:
+      "[mail.smtp.auth]": true
+      "[mail.smtp.starttls.enable]": true
+      "[mail.smtp.starttls.required]": true
+      "[mail.smtp.connectiontimeout]": 5000
+      "[mail.smtp.timeout]": 5000
+      "[mail.smtp.writetimeout]": 5000
+
   # Fail on an unknown JSON property rather than ignoring it: the
   # contract declares additionalProperties false, and a client sending a
   # field we do not know about has misread it.
@@ -81,6 +97,21 @@ security:
     # The route prefix the token filter guards. Sprint 10 adds routes
     # under the same prefix and inherits the protection.
     protected-path-prefix: /api/v1/
+
+# The activation mailer: consumes account-provisioning, asks auth for a
+# one-time token over HTTP, and emails the link. Not Sprint 10's
+# notification module, which reads trade-events.
+activation:
+  topic: account-provisioning
+  # Names this consumer and is shared with nothing else.
+  consumer-group: activation-mailer
+  auth-base-url: ${AUTH_INTERNAL_URL:http://localhost:3000}
+  # No default: the same secret auth checks on its internal route.
+  internal-secret: ${ACTIVATION_INTERNAL_SECRET}
+  link-base-url: ${ACTIVATION_LINK_BASE_URL:http://localhost:3000/activate}
+  mail-from: ${ACTIVATION_MAIL_FROM}
+  consumer:
+    auto-startup: ${ACTIVATION_CONSUMER_ENABLED:true}
 
 management:
   endpoints:

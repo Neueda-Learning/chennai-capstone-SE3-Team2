@@ -11,7 +11,8 @@ import { LoginFailure } from './login-failure';
 describe('AuthService', () => {
   const SECRET = 'a-test-secret-of-at-least-32-bytes-length';
   let service: AuthService;
-  let credentials: { findByUsername: jest.Mock; findById: jest.Mock; claim: jest.Mock };
+  const TOKEN = 'ab'.repeat(32);
+  let credentials: { findByUsername: jest.Mock; findById: jest.Mock; registerWithActivationToken: jest.Mock };
   let refreshTokens: { issue: jest.Mock; rotate: jest.Mock };
 
   const stored = async () => ({
@@ -23,7 +24,7 @@ describe('AuthService', () => {
   });
 
   beforeEach(async () => {
-    credentials = { findByUsername: jest.fn(), findById: jest.fn(), claim: jest.fn() };
+    credentials = { findByUsername: jest.fn(), findById: jest.fn(), registerWithActivationToken: jest.fn() };
     refreshTokens = { issue: jest.fn().mockResolvedValue('a'.repeat(64)), rotate: jest.fn() };
     const env = { jwtSecret: SECRET, jwtIssuer: 'auth-service' } as Env;
 
@@ -45,15 +46,16 @@ describe('AuthService', () => {
   });
 
   describe('register', () => {
-    it('creates no trading account and issues no tokens', async () => {
-      credentials.findByUsername.mockResolvedValue(null);
-      credentials.claim.mockResolvedValue({ ...(await stored()) });
+    const request = (username = 'priya.menon') => ({
+      username,
+      password: 'correct horse battery staple',
+      activationToken: TOKEN,
+    });
 
-      const result = await service.register({
-        username: 'priya.menon',
-        password: 'correct horse battery staple',
-        accountId: 3,
-      });
+    it('creates no trading account and issues no tokens', async () => {
+      credentials.registerWithActivationToken.mockResolvedValue({ kind: 'registered', credential: await stored() });
+
+      const result = await service.register(request());
 
       expect(result).toEqual({
         id: expect.any(String),
@@ -65,30 +67,28 @@ describe('AuthService', () => {
       expect(result).not.toHaveProperty('refreshToken');
     });
 
+    it('hands the store the token hash and an argon2 hash, never either plaintext', async () => {
+      credentials.registerWithActivationToken.mockResolvedValue({ kind: 'registered', credential: await stored() });
+
+      await service.register(request());
+
+      const [, passwordHash, tokenHash] = credentials.registerWithActivationToken.mock.calls[0];
+      expect(passwordHash).toMatch(/^\$argon2id\$/);
+      expect(tokenHash).toMatch(/^[0-9a-f]{64}$/);
+      expect(tokenHash).not.toBe(TOKEN);
+    });
+
     it('refuses a username that is already registered with AUTH-409', async () => {
-      credentials.findByUsername.mockResolvedValue(await stored());
+      credentials.registerWithActivationToken.mockResolvedValue({ kind: 'username-taken' });
 
-      await expect(
-        service.register({ username: 'priya.menon', password: 'correct horse battery staple', accountId: 3 }),
-      ).rejects.toMatchObject({ response: { errorCode: 'AUTH-409' } });
+      await expect(service.register(request())).rejects.toMatchObject({ response: { errorCode: 'AUTH-409' } });
     });
 
-    it('refuses an account that was never provisioned', async () => {
-      credentials.findByUsername.mockResolvedValue(null);
-      credentials.claim.mockResolvedValue(null);
+    it('refuses a token the store would not accept with AUTH-401', async () => {
+      credentials.registerWithActivationToken.mockResolvedValue({ kind: 'invalid-token' });
 
-      await expect(
-        service.register({ username: 'new.user', password: 'correct horse battery staple', accountId: 9999 }),
-      ).rejects.toMatchObject({ response: { errorCode: 'AUTH-401' } });
-    });
-
-    it('refuses an account somebody has already claimed', async () => {
-      credentials.findByUsername.mockResolvedValue(null);
-      credentials.claim.mockResolvedValue(null);
-
-      await expect(
-        service.register({ username: 'second.user', password: 'correct horse battery staple', accountId: 3 }),
-      ).rejects.toMatchObject({ response: { errorCode: 'AUTH-401' } });
+      await expect(service.register(request('new.user')))
+        .rejects.toMatchObject({ response: { errorCode: 'AUTH-401', message: 'Unauthorised' } });
     });
   });
 

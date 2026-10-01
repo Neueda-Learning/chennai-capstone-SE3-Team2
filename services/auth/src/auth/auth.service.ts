@@ -11,6 +11,7 @@ import { RefreshDto } from './dto/refresh.dto';
 import { RegisterDto } from './dto/register.dto';
 import { TokenResponseDto } from './dto/token-response.dto';
 import { UserResponseDto } from './dto/user-response.dto';
+import { fingerprint } from '../activation/activation-token.service';
 
 @Injectable()
 export class AuthService {
@@ -23,25 +24,32 @@ export class AuthService {
   ) {}
 
   /**
-   * Binds a login to an account onboarding already opened. It creates no
-   * trading account, and issues no tokens: an unauthenticated route that
-   * mints a session is an authentication bypass once it has its first defect.
+   * Binds a login to the account the activation token was minted for. It
+   * creates no trading account, and issues no tokens: an unauthenticated route
+   * that mints a session is an authentication bypass once it has its first defect.
+   *
+   * The account comes from the token, never from the request: knowing an
+   * account number is no longer enough to claim it.
    */
   async register(dto: RegisterDto): Promise<UserResponseDto> {
-    if (await this.credentials.findByUsername(dto.username)) {
-      throw PlatformError.usernameTaken();
-    }
-
+    // Hashed before the token is checked, so a bad token costs what a good one does.
     const passwordHash = await this.hasher.hash(dto.password);
-    const roles = dto.roles?.length ? dto.roles : ['CUSTOMER'];
 
-    // Null when the account was never provisioned, or somebody claimed it first.
-    const credential = await this.credentials.claim(dto.username, passwordHash, dto.accountId, roles);
-    if (!credential) {
-      throw PlatformError.unauthorised();
+    const outcome = await this.credentials.registerWithActivationToken(
+      dto.username,
+      passwordHash,
+      fingerprint(dto.activationToken),
+    );
+
+    switch (outcome.kind) {
+      case 'registered':
+        return this.toUser(outcome.credential);
+      case 'username-taken':
+        throw PlatformError.usernameTaken();
+      case 'invalid-token':
+        // Unknown, expired, used, revoked, or its account already claimed: one answer.
+        throw PlatformError.unauthorised();
     }
-
-    return this.toUser(credential);
   }
 
   async login(dto: LoginDto): Promise<TokenResponseDto> {

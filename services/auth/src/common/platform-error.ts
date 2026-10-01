@@ -19,4 +19,13 @@ export class PlatformError extends HttpException {
   static invalidInput(message: string): PlatformError {
     return new PlatformError(ErrorCode.VAL_422, message, HttpStatus.UNPROCESSABLE_ENTITY);
   }
+
+  /** Internal callers only, which is why the answer can be specific. */
+  static notProvisioned(): PlatformError {
+    return new PlatformError(ErrorCode.ACT_404, 'Account not provisioned', HttpStatus.NOT_FOUND);
+  }
+
+  static alreadyClaimed(): PlatformError {
+    return new PlatformError(ErrorCode.ACT_409, 'Account already has a login', HttpStatus.CONFLICT);
+  }
 }

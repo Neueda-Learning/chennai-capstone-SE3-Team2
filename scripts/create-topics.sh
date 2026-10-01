@@ -16,8 +16,15 @@ create orders         3 604800000    # 7 days
 create trade-events   3 2592000000   # 30 days
 create market-data    6 86400000     # 1 day
 
+# Onboarding. Keyed by client id; low volume, so 3 partitions like orders.
+# kyc-events: KYC -> auth. account-provisioning: auth -> the activation mailer.
+create kyc-events              3 604800000    # 7 days
+create account-provisioning    3 604800000    # 7 days
+
 create orders.DLT         1 604800000
 create trade-events.DLT   1 2592000000
 create market-data.DLT    1 86400000
+create kyc-events.DLT              1 604800000
+create account-provisioning.DLT    1 604800000
 
-echo "all six topics ensured on $BROKER"
+echo "all ten topics ensured on $BROKER"
