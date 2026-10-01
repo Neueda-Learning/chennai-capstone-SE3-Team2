@@ -23,8 +23,12 @@ export class AuthController {
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Register a user', description: 'Binds a login to an account onboarding already opened. Issues no tokens and creates no trading account.' })
+  @ApiOperation({
+    summary: 'Register a user',
+    description: 'Binds a login to the account the activation token was sent for. The account is resolved from the token, never from the request. Issues no tokens and creates no trading account.',
+  })
   @ApiResponse({ status: 201, type: UserResponseDto })
+  @ApiResponse({ status: 401, description: 'AUTH-401: the activation token is unknown, expired, already used, or its account already has a login. One answer for every cause' })
   @ApiResponse({ status: 409, description: 'AUTH-409: the username is already registered' })
   @ApiResponse({ status: 422, description: 'VAL-422: a field failed validation' })
   register(@Body() dto: RegisterDto): Promise<UserResponseDto> {

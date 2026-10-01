@@ -11,6 +11,14 @@ export interface Credential {
   roles: string[];
 }
 
+export type RegistrationOutcome =
+  | { kind: 'registered'; credential: Credential }
+  | { kind: 'invalid-token' }
+  | { kind: 'username-taken' };
+
+/** Postgres unique_violation. */
+const UNIQUE_VIOLATION = '23505';
+
 @Injectable()
 export class CredentialRepository {
   constructor(@Inject(AUTH_POOL) private readonly pool: Pool) {}
@@ -34,45 +42,60 @@ export class CredentialRepository {
   }
 
   /**
-   * Claims a provisioned account and creates the credential, in one transaction.
-   * Returns null when the account is unknown or already claimed.
+   * Consumes the activation token, claims its account and creates the
+   * credential, in one transaction. A token consumed without a credential
+   * would be an account nobody could ever claim, so any refusal rolls all
+   * three back and the token stays usable.
    */
-  async claim(
+  async registerWithActivationToken(
     username: string,
     passwordHash: string,
-    accountId: number,
-    roles: string[],
-  ): Promise<Credential | null> {
+    tokenHash: string,
+  ): Promise<RegistrationOutcome> {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
 
-      // Conditional, so two simultaneous registrations cannot both claim it.
-      const claimed = await client.query(
-        `UPDATE provisioned_account
-            SET claimed_by = $1, claimed_at = now()
-          WHERE account_id = $2 AND claimed_by IS NULL`,
-        [null, accountId],
+      // Conditional, so two registrations presenting the same token cannot both
+      // consume it. Absent, expired, used and revoked all land here alike.
+      const consumed = await client.query(
+        `UPDATE activation_token SET used_at = now()
+          WHERE token_hash = $1 AND used_at IS NULL AND revoked_at IS NULL AND expires_at > now()
+         RETURNING client_id`,
+        [tokenHash],
       );
-      if (claimed.rowCount === 0) {
+      if (consumed.rowCount !== 1) {
         await client.query('ROLLBACK');
-        return null;
+        return { kind: 'invalid-token' };
+      }
+      const accountId = Number(consumed.rows[0].client_id);
+      const id = randomUUID();
+
+      // The same guarded update as before: a claim is once-only.
+      const claimed = await client.query(
+        `UPDATE provisioned_account SET claimed_by = $1, claimed_at = now()
+          WHERE account_id = $2 AND claimed_by IS NULL`,
+        [id, accountId],
+      );
+      if (claimed.rowCount !== 1) {
+        await client.query('ROLLBACK');
+        return { kind: 'invalid-token' };
       }
 
-      const id = randomUUID();
       const { rows } = await client.query(
         `INSERT INTO credential (id, username, password_hash, account_id, roles)
               VALUES ($1, $2, $3, $4, $5)
            RETURNING id, username, password_hash, account_id, roles`,
-        [id, username, passwordHash, accountId, roles],
+        [id, username, passwordHash, accountId, ['CUSTOMER']],
       );
-      await client.query(`UPDATE provisioned_account SET claimed_by = $1 WHERE account_id = $2`,
-        [id, accountId]);
 
       await client.query('COMMIT');
-      return this.toCredential(rows[0]);
+      return { kind: 'registered', credential: this.toCredential(rows[0]) };
     } catch (error) {
       await client.query('ROLLBACK');
+      if ((error as { code?: string }).code === UNIQUE_VIOLATION) {
+        return { kind: 'username-taken' };
+      }
       throw error;
     } finally {
       client.release();
