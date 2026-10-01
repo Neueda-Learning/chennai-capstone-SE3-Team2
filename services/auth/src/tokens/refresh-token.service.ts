@@ -5,6 +5,9 @@ import { PlatformError } from '../common/platform-error';
 
 export const REFRESH_TOKEN_DAYS = 7;
 
+/** The alert rule matches on this exact string; changing it silences the alert. */
+export const REFRESH_REPLAY_EVENT = 'SECURITY_REFRESH_REPLAY';
+
 @Injectable()
 export class RefreshTokenService {
   private readonly log = new Logger(RefreshTokenService.name);
@@ -39,8 +42,7 @@ export class RefreshTokenService {
       // stolen, and we cannot tell which, so we treat it as theft.
       const revoked = await this.store.revokeAllFor(stored.credentialId);
       this.log.warn(
-        `replayed refresh token for credential ${stored.credentialId}: ` +
-        `revoked ${revoked} live token(s)`,
+        `${REFRESH_REPLAY_EVENT} credential=${stored.credentialId} revoked=${revoked}`,
       );
       throw PlatformError.unauthorised();
     }
