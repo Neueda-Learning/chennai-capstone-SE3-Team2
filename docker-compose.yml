@@ -60,6 +60,7 @@ services:
       - ./data/db/migrations/003_account_last_updated.sql:/docker-entrypoint-initdb.d/04-migration-003.sql:ro
       - ./data/db/migrations/004_execution_columns.sql:/docker-entrypoint-initdb.d/05-migration-004.sql:ro
       - ./data/db/migrations/005_drop_client_auth.sql:/docker-entrypoint-initdb.d/06-migration-005.sql:ro
+      - ./data/db/migrations/006_activation_email.sql:/docker-entrypoint-initdb.d/06b-migration-006.sql:ro
       - ./data/db/indexes/001_performance_indexes.sql:/docker-entrypoint-initdb.d/07-indexes.sql:ro
       - ./data/db/seed/001_reference_data.sql:/docker-entrypoint-initdb.d/08-seed-reference.sql:ro
       - ./data/db/seed/002_clients.sql:/docker-entrypoint-initdb.d/09-seed-clients.sql:ro
@@ -100,6 +101,17 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       SERVER_PORT: 8080
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # The activation mailer. It asks auth for a token over the internal
+      # network; the secret is the same one auth checks. No defaults for
+      # secrets: missing means the service refuses to start.
+      AUTH_INTERNAL_URL: http://auth:3000
+      ACTIVATION_INTERNAL_SECRET: ${ACTIVATION_INTERNAL_SECRET:?ACTIVATION_INTERNAL_SECRET must be set in .env}
+      ACTIVATION_LINK_BASE_URL: ${ACTIVATION_LINK_BASE_URL:-http://localhost:3000/activate}
+      ACTIVATION_MAIL_FROM: ${ACTIVATION_MAIL_FROM:?ACTIVATION_MAIL_FROM must be set in .env}
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:?SMTP_USERNAME must be set in .env}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:?SMTP_PASSWORD must be set in .env}
     ports:
       - "${API_PUBLISHED_PORT:-8080}:8080"
     networks: [trading-net]
@@ -164,6 +176,8 @@ services:
       # Applied only when the volume is empty, same as the trading database.
       - ./services/auth/migrations/001_credentials.sql:/docker-entrypoint-initdb.d/01-credentials.sql:ro
       - ./services/auth/migrations/002_refresh_tokens.sql:/docker-entrypoint-initdb.d/02-refresh-tokens.sql:ro
+      - ./services/auth/migrations/003_provisioning_outbox.sql:/docker-entrypoint-initdb.d/03-provisioning-outbox.sql:ro
+      - ./services/auth/migrations/004_activation_tokens.sql:/docker-entrypoint-initdb.d/04-activation-tokens.sql:ro
     networks: [trading-net]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${AUTH_DB_USER:-auth} -d ${AUTH_DB_NAME:-auth}"]
@@ -187,6 +201,12 @@ services:
       AUTH_DATABASE_URL: postgresql://${AUTH_DB_USER:-auth}:${AUTH_DB_PASSWORD}@auth-postgres:5432/${AUTH_DB_NAME:-auth}
       PORT: 3000
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # Consumes kyc-events, publishes account-provisioning via the outbox.
+      KAFKA_BROKERS: kafka:29092
+      # Guards POST /internal/activation-tokens. Same value the Trade REST API sends.
+      ACTIVATION_INTERNAL_SECRET: ${ACTIVATION_INTERNAL_SECRET:?ACTIVATION_INTERNAL_SECRET must be set in .env}
+      # Where /activate sends a customer after they register.
+      ACTIVATION_HOME_URL: ${ACTIVATION_HOME_URL:-http://localhost:4200/}
     ports:
       # 3000 is reserved for this service in infra/README.md.
       - "${AUTH_PUBLISHED_PORT:-3000}:3000"
@@ -194,6 +214,10 @@ services:
     depends_on:
       auth-postgres:
         condition: service_healthy
+      # Started first, but not waited on: logins must work with the broker
+      # down, and the outbox catches up when it returns.
+      kafka:
+        condition: service_started
     restart: unless-stopped
 
 networks:

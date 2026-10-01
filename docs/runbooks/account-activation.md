@@ -1,0 +1,223 @@
+# Sprint 9 — account activation
+
+Closes security review item A01. A customer can no longer claim an account by
+knowing its number: once KYC passes, the auth service provisions the account,
+the Trade REST API emails the customer a one-time link, and the customer
+registers from it without ever typing an account number.
+
+## How it flows
+
+```
+KYC ──KYC_VERIFIED {clientId}──► kyc-events
+                                    │  auth, group auth-provisioning
+                                    ▼
+      auth: INSERT provisioned_account + outbox row, one transaction
+                                    │  outbox relay, after commit
+                                    ▼
+      ACCOUNT_PROVISIONED {clientId} ──► account-provisioning
+                                    │  trade-api, group activation-mailer
+                                    ▼
+      trade-api: already emailed for this eventId? → stop
+                 SELECT email FROM client_profile       (trading DB)
+                 POST auth /internal/activation-tokens  (shared secret)
+                 send the email over SMTP
+                                    ▼
+      customer opens  auth /activate?token=…  → sets username + password
+                 → POST /auth/register {username, password, activationToken}
+                 → redirected to ACTIVATION_HOME_URL, then logs in
+```
+
+The token never rides Kafka: it is a credential. Its plaintext exists only in
+the HTTP response from auth to the mailer, and in the email. Auth stores its
+SHA-256. Auth never connects to the trading database; the mailer never connects
+to the auth database.
+
+## Topics
+
+| Topic | Producer | Consumer group | Key | Partitions | Retention | DLT |
+|---|---|---|---|---|---|---|
+| `kyc-events` | KYC (not built yet — `scripts/publish-kyc-verified.sh` stands in) | `auth-provisioning` (auth) | clientId string | 3 | 7 days | `kyc-events.DLT`, 1 partition |
+| `account-provisioning` | auth, via its outbox | `activation-mailer` (trade-api) | clientId string | 3 | 7 days | `account-provisioning.DLT`, 1 partition |
+
+Why these numbers: keyed by client, so ordering per customer is what matters;
+3 partitions matches `orders` for low-volume traffic. Seven days covers a
+weekend outage of either consumer with room to spare, and onboarding volume is
+tiny. `scripts/create-topics.sh` creates all four with `--if-not-exists`, so it
+is safe to re-run.
+
+Both group ids are used nowhere else:
+
+```bash
+git grep -n "auth-provisioning\|activation-mailer" -- ':!docs' ':!contracts'
+```
+
+## Environment variables
+
+Every variable this work reads. Secrets have no defaults: a service missing one
+refuses to start and names it.
+
+| Variable | Read by | Default | What |
+|---|---|---|---|
+| `KAFKA_BROKERS` | auth | none — required | Comma-separated brokers. `kafka:29092` in compose |
+| `ACTIVATION_INTERNAL_SECRET` | auth **and** trade-api | none — required, secret | Guards `POST /internal/activation-tokens`. Same value both sides. `openssl rand -base64 48` |
+| `ACTIVATION_HOME_URL` | auth | `http://localhost:4200/` | Where `/activate` redirects after registering |
+| `OUTBOX_POLL_MS` | auth | `2000` | How often the outbox relay looks for unsent events |
+| `AUTH_INTERNAL_URL` | trade-api | `http://localhost:3000` (compose: `http://auth:3000`) | Base URL for minting tokens |
+| `ACTIVATION_LINK_BASE_URL` | trade-api | `http://localhost:3000/activate` | The link in the email; `?token=` is appended |
+| `ACTIVATION_MAIL_FROM` | trade-api | none — required | Sender address. For Gmail, the account itself |
+| `SMTP_HOST` | trade-api | `smtp.gmail.com` | |
+| `SMTP_PORT` | trade-api | `587` | STARTTLS is required |
+| `SMTP_USERNAME` | trade-api | none — required | Gmail address |
+| `SMTP_PASSWORD` | trade-api | none — required, secret | A Gmail **app password** (Google Account → Security → 2-Step Verification → App passwords), not the account password |
+| `ACTIVATION_CONSUMER_ENABLED` | trade-api | `true` | `false` stops the mailer's listener starting; the integration tests use it |
+
+Scripts additionally read `SPRINT8_END` (check 6's pinned commit, default
+`dd4a77b`), `KAFKA_CONTAINER`, `KAFKA_BROKER_INTERNAL`, `AUTH_DB_CONTAINER`,
+`AUTH_DB_USER` and `AUTH_DB_NAME`, all with defaults matching compose.
+
+Running auth outside compose (`npm run start` in `services/auth`) now also needs
+`KAFKA_BROKERS` and `ACTIVATION_INTERNAL_SECRET` in `services/auth/.env`.
+
+## The token
+
+- 32 random bytes from a CSPRNG, hex: 64 characters. Stored as SHA-256 in
+  `activation_token.token_hash`, never in plaintext.
+- **Lifetime: 24 hours.** Long enough for someone who reads email once a day;
+  short enough that a link found in an old inbox is dead.
+- **Single use.** `used_at` is set in the same transaction that claims the
+  account and creates the credential.
+- **Resend revokes.** Minting a new token for a client sets `revoked_at` on any
+  earlier unused one, so only the newest email's link works.
+- Unknown, expired, used, revoked, or for an already-claimed account: all
+  answer `AUTH-401 Unauthorised`, and `/activate` shows one "link not valid" page.
+
+## When something is down
+
+| What | What happens | What you see |
+|---|---|---|
+| Kafka, while auth provisions | The account and its outbox row commit anyway. The relay retries every `OUTBOX_POLL_MS` and sends when the broker returns. Logins are unaffected. | `OUTBOX_PUBLISH_FAILED event=<uuid> …` warnings in `docker compose logs auth`; `SELECT * FROM outbox_event WHERE published_at IS NULL` in the auth DB |
+| Kafka, at auth startup | Auth starts and serves HTTP; the `kyc-events` consumer retries every 10 s. | `kyc-events consumer not running (…); retrying in 10s` |
+| Auth database, while consuming `kyc-events` | The message is not committed and kafkajs retries it. A verification is never dropped. | kafkajs retry errors in the auth log |
+| Auth (HTTP), while the mailer runs | Retried 3 times with backoff (0.5 s, 2 s, 8 s), then dead-lettered to `account-provisioning.DLT` with `x-failure-class: TRANSIENT`. Not lost. | `activation retry n for account-provisioning-…` in the trade-api log |
+| SMTP (Gmail) | Same as auth being down: retried, then dead-lettered. | same |
+| No `client_profile` row | Dead-lettered on the first attempt, `x-failure-class: POISON`. A real inconsistency. | DLT record, reason `no client_profile row for client N` |
+| Account already has a login | Nothing sent, message acknowledged. | `client N already has a login; nothing sent` |
+| A malformed event on either topic | Dead-lettered on the first attempt with the original bytes. | DLT record with `x-failure-reason` |
+
+Read a dead-letter topic:
+
+```bash
+docker exec fauxnance-kafka /opt/kafka/bin/kafka-console-consumer.sh \
+  --bootstrap-server kafka:29092 --topic account-provisioning.DLT \
+  --from-beginning --property print.headers=true --timeout-ms 5000
+```
+
+## Replaying a lost activation
+
+Email lost, link expired, or the event dead-lettered and the cause is now fixed:
+
+```bash
+bash scripts/replay-activation.sh <clientId>
+```
+
+It queues a fresh `ACCOUNT_PROVISIONED` in the auth outbox (a new `eventId`, so
+the mailer's duplicate check does not swallow it). The mailer mints a new token,
+revoking the old link, and sends a new email. It refuses an account that is not
+provisioned or already has a login.
+
+## Running it end to end
+
+On a freshly reset stack. The ten seeded accounts are already in auth's
+`provisioned_account`, and provisioning happens once per account, so pick one
+seeded client and give it back to the provisioning path first. Point its email
+at an inbox you can read — a development-only change to seed data.
+
+```bash
+docker compose --profile platform down -v
+docker compose --profile platform up -d --build
+bash scripts/create-topics.sh
+
+# pick client 5; route its email to your inbox; un-provision it in auth
+docker exec -i fauxnance-postgres psql -U postgres -d trading \
+  -c "UPDATE client_profile SET email = 'you+activation@gmail.com' WHERE client_id = 5"
+docker exec -i fauxnance-auth-postgres psql -U auth -d auth \
+  -c "DELETE FROM provisioned_account WHERE account_id = 5 AND claimed_by IS NULL"
+
+# watch the provisioning topic in a second terminal
+docker exec fauxnance-kafka /opt/kafka/bin/kafka-console-consumer.sh \
+  --bootstrap-server kafka:29092 --topic account-provisioning \
+  --from-beginning --property print.key=true
+
+# KYC passes
+bash scripts/publish-kyc-verified.sh 5
+```
+
+Then: the `ACCOUNT_PROVISIONED` message appears keyed `5` → the email arrives →
+open the link → choose a username and password → redirected to the home page →
+log in:
+
+```bash
+curl -sS -X POST localhost:3000/auth/login -H 'Content-Type: application/json' \
+  -d '{"username":"<chosen>","password":"<chosen>"}' | jq -r .accessToken
+curl -sS localhost:8080/api/v1/accounts/5/balance -H "Authorization: Bearer <token>"
+```
+
+Open the same link again: "This link is not valid".
+
+## Live checks to run
+
+These need the running stack, so they were not run when the code was written.
+Record each result in the security review's evidence table.
+
+**Stage 1 — auth publishes**
+1. `bash scripts/create-topics.sh` twice: second run changes nothing.
+2. `publish-kyc-verified.sh 5` (after the un-provision step above) → exactly one
+   message on `account-provisioning`; key `5`; envelope fields
+   `eventId, eventType, eventTime, source, schemaVersion, payload`; payload
+   exactly `{"clientId":5}`.
+3. Publish the same `KYC_VERIFIED` again → no second message.
+4. Rollback: in the auth DB,
+   `BEGIN; INSERT INTO provisioned_account VALUES (99); INSERT INTO outbox_event (event_id, topic, message_key, envelope) VALUES (gen_random_uuid(), 'account-provisioning', '99', '{}'); ROLLBACK;`
+   → nothing published.
+5. Broker down after a provisioning committed. Provisioning itself arrives over
+   Kafka, so simulate the committed outbox row directly: `docker compose stop kafka`,
+   then `bash scripts/replay-activation.sh 6` (it writes exactly the row
+   provisioning writes) → it succeeds, and `OUTBOX_PUBLISH_FAILED` appears in
+   `docker compose logs auth`. `docker compose start kafka` → within a few
+   seconds the message is on `account-provisioning` and
+   `outbox_event.published_at` is set.
+
+**Stage 2 — the token endpoint**
+1. After `down -v` / `up`: `\d activation_token` in the auth DB.
+2. `curl -X POST localhost:3000/internal/activation-tokens -H "X-Internal-Secret: $ACTIVATION_INTERNAL_SECRET" -H 'Content-Type: application/json' -d '{"clientId":6}'`
+   → `201` with `activationToken` and `expiresAt`.
+3. `SELECT token_hash, length(token_hash) FROM activation_token` → 64 characters;
+   `SELECT count(*) FROM activation_token WHERE token_hash = '<plaintext>'` → 0.
+4. No header, and a wrong header → both `401`, bodies identical.
+5. Unset `ACTIVATION_INTERNAL_SECRET` and start auth → exits with
+   `ACTIVATION_INTERNAL_SECRET is not set`.
+
+**Stage 3 — the mailer**
+1. A real email arrives (end-to-end run above).
+2. Duplicate: consume one `ACCOUNT_PROVISIONED` off the topic and produce it
+   back with the same key (as `scripts/duplicate-replay.sh` does for `orders`)
+   → no second email; `already emailed; nothing sent` in the trade-api log.
+3. Auth unreachable. `docker compose stop auth`, then produce an
+   `ACCOUNT_PROVISIONED` by hand (auth's outbox cannot, since auth is stopped):
+   ```bash
+   printf '7\t{"eventId":"%s","eventType":"ACCOUNT_PROVISIONED","eventTime":"%s","source":"auth-service","schemaVersion":1,"payload":{"clientId":7}}\n' \
+     "$(cat /proc/sys/kernel/random/uuid)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+   | docker exec -i fauxnance-kafka /opt/kafka/bin/kafka-console-producer.sh \
+       --bootstrap-server kafka:29092 --topic account-provisioning \
+       --property parse.key=true --property key.separator=$'\t'
+   ```
+   → three `activation retry` lines in the trade-api log, then a record on
+   `account-provisioning.DLT` with `x-failure-class: TRANSIENT`. Not lost.
+4. The same command with `7` replaced by `999` (no `client_profile`), auth
+   running → `account-provisioning.DLT`, `x-failure-class: POISON`, first attempt.
+5. `docker compose logs trade-api auth | grep -c '<token or email>'` → 0.
+
+**Stage 4 — register**
+1. The link flow above registers with no account number.
+2. The same link twice → second refused; `SELECT count(*) FROM credential` unchanged.
+3. `bash scripts/auth-integration-check.sh` → six checks pass.

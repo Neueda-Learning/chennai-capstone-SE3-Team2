@@ -60,6 +60,7 @@ public abstract class PostgresSupport {
             "migrations/002_api_alignment.sql",
             "migrations/003_account_last_updated.sql",
             "migrations/004_execution_columns.sql",
+            "migrations/006_activation_email.sql",
             "indexes/001_performance_indexes.sql",
             "seed/001_reference_data.sql",
             "seed/002_clients.sql",
@@ -81,6 +82,14 @@ public abstract class PostgresSupport {
         }
         registry.add("security.jwt.secret", () -> SECRET);
         registry.add("security.jwt.issuer", () -> ISSUER);
+
+        // The activation mailer's required settings. Placeholders: its
+        // listener does not start here, and nothing is ever sent.
+        registry.add("activation.internal-secret", () -> "an-integration-test-internal-secret");
+        registry.add("activation.mail-from", () -> "noreply@example.invalid");
+        registry.add("activation.consumer.auto-startup", () -> "false");
+        registry.add("spring.mail.username", () -> "noreply@example.invalid");
+        registry.add("spring.mail.password", () -> "not-a-real-password");
     }
 
     public static void applySchema(JdbcTemplate jdbc) {

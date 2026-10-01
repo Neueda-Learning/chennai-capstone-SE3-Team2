@@ -18,27 +18,45 @@ for tool in curl jq openssl; do
   command -v "$tool" >/dev/null || { echo "need $tool on PATH" >&2; exit 2; }
 done
 
+# Registration now needs an activation token, which only the internal route
+# mints. The secret comes from the environment, or from the root .env that
+# docker compose reads -- never from this file.
+if [ -z "${ACTIVATION_INTERNAL_SECRET:-}" ] && [ -f .env ]; then
+  ACTIVATION_INTERNAL_SECRET=$(grep -E '^ACTIVATION_INTERNAL_SECRET=' .env | head -1 | cut -d= -f2-)
+fi
+[ -n "${ACTIVATION_INTERNAL_SECRET:-}" ] || { echo "set ACTIVATION_INTERNAL_SECRET, or run from the repo root with .env" >&2; exit 2; }
+
+# Check 6 measures what Sprint 8 did, so it stops at the Sprint 8 merge.
+# Sprint 9's activation mailer is Java by design and is not Sprint 8's claim.
+SPRINT8_END="${SPRINT8_END:-dd4a77b}"
+
 pass() { printf '  \033[1;32mpass\033[0m  %s\n' "$*"; }
 fail() { printf '  \033[1;31mFAIL\033[0m  %s\n' "$*"; exit 1; }
 step() { printf '\n\033[1;36m== %s\033[0m\n' "$*"; }
 
-step "1. register a user against a provisioned account"
+step "1. register a user with an activation token"
 # Each run uses a fresh username, so it needs an account nobody has claimed
-# yet. Walk the provisioned range and take the first that is still free --
-# this keeps the check re-runnable, which matters when it is rehearsed.
+# yet. Walk the provisioned range and mint a token for the first that is still
+# free -- this keeps the check re-runnable, which matters when it is rehearsed.
 ACCOUNT=""
+ACTIVATION_TOKEN=""
 for candidate in $(seq "${ACCOUNT_ID:-1}" 10); do
-  REG=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$AUTH/auth/register" \
-    -H 'Content-Type: application/json' \
-    -d "{\"username\":\"$USERNAME\",\"password\":\"$PASSWORD\",\"accountId\":$candidate}")
-  case "$REG" in
-    201) ACCOUNT=$candidate; break ;;
-    401) continue ;;                       # already claimed, try the next
-    *)   fail "register answered $REG for account $candidate" ;;
+  MINT=$(curl -sS -w '\n%{http_code}' -X POST "$AUTH/internal/activation-tokens" \
+    -H 'Content-Type: application/json' -H "X-Internal-Secret: $ACTIVATION_INTERNAL_SECRET" \
+    -d "{\"clientId\":$candidate}")
+  case "$(echo "$MINT" | tail -1)" in
+    201) ACCOUNT=$candidate; ACTIVATION_TOKEN=$(echo "$MINT" | head -1 | jq -r '.activationToken'); break ;;
+    404|409) continue ;;                   # not provisioned, or already claimed
+    *)   fail "minting a token answered $(echo "$MINT" | tail -1) for account $candidate" ;;
   esac
 done
 [ -n "$ACCOUNT" ] || fail "every provisioned account is claimed. Reset with: docker compose --profile platform down -v"
-pass "registered against account $ACCOUNT, and no tokens were issued"
+
+REG=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$AUTH/auth/register" \
+  -H 'Content-Type: application/json' \
+  -d "{\"username\":\"$USERNAME\",\"password\":\"$PASSWORD\",\"activationToken\":\"$ACTIVATION_TOKEN\"}")
+[ "$REG" = "201" ] || fail "register answered $REG for account $ACCOUNT"
+pass "registered against account $ACCOUNT with no account number in the request, and no tokens were issued"
 
 step "2. log in and read the token"
 TOKEN=$(curl -sS -X POST "$AUTH/auth/login" -H 'Content-Type: application/json' \
@@ -74,19 +92,20 @@ CODE=$(curl -sS -o /dev/null -w '%{http_code}' "$API/api/v1/accounts/$ACCOUNT/ba
 [ "$CODE" = "401" ] && pass "401 for a token signed with an untrusted key" \
                      || fail "expected 401, got $CODE -- the API trusted a forged signature"
 
-step "6. no Java changed to accept any of this"
+step "6. Sprint 8 adopted the auth service with no Java change"
 # The baseline is the commit before the auth service first appeared, so the
 # diff covers exactly the Sprint 8 work and not the Sprint 7 restructure,
-# which moved every Java file and would otherwise swamp this.
+# which moved every Java file and would otherwise swamp this. It ends at the
+# Sprint 8 merge, because the claim is about Sprint 8.
 FIRST_AUTH=$(git log --reverse --format=%H -- services/auth | head -1)
 BASE=$(git rev-parse "${FIRST_AUTH}^")
 
-if git diff --name-only "$BASE"...HEAD -- '*.java' | grep -q .; then
-  fail "Java files changed; the criterion is a configuration change only"
+if git diff --name-only "$BASE"..."$SPRINT8_END" -- '*.java' | grep -q .; then
+  fail "Java files changed in Sprint 8; the criterion is a configuration change only"
 else
-  pass "no .java file changed since $(git rev-parse --short "$BASE")"
+  pass "no .java file changed between $(git rev-parse --short "$BASE") and $(git rev-parse --short "$SPRINT8_END")"
   echo "     everything Sprint 8 touched outside services/auth:"
-  git diff --name-only "$BASE"...HEAD | grep -v '^services/auth/' | sed 's/^/       /'
+  git diff --name-only "$BASE"..."$SPRINT8_END" | grep -v '^services/auth/' | sed 's/^/       /'
 fi
 
 printf '\n\033[1;32mAll checks passed.\033[0m\n'

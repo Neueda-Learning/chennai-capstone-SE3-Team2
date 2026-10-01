@@ -59,6 +59,15 @@
         </dependency>
 
         <!--
+          Outgoing mail for account activation. Behind ActivationMailSender,
+          so tests use a fake and never send anything real.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
+        <!--
           Health endpoint. The orchestrator's health check needs one, and
           docker compose reports "healthy" rather than merely "running"
           because of it. Only the health endpoint is exposed; see
