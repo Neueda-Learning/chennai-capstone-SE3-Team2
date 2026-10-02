@@ -57,10 +57,36 @@ What was actually run or read, so the review is repeatable.
 | Activation token handling (A01) | Jest: `internal.controller.spec.ts`, `register.http.spec.ts`, `activation-page.controller.spec.ts`, against the service's real request pipeline | Stored value is the 64-character SHA-256, never the plaintext; used, expired and unknown tokens give byte-identical `401`s; a reused token creates nothing; a token for a claimed account is not consumed; `accountId` or `roles` in the request is `422`; issued JWT still has exactly six claims, `accountId` numeric |
 | Internal route secret (A01, A07) | Jest: `internal.controller.spec.ts` | Missing and wrong secret give byte-identical `401`s; the secret is checked before the body; auth refuses to start without `ACTIVATION_INTERNAL_SECRET` |
 | No token or address in logs (A09) | JUnit: `ActivationServiceTest.neverLogsTheTokenOrTheAddress`, `ActivationKafkaConfigTest.foreignMessagesAreNotCopied` | No log line, and no dead-letter header, carries a token or an email address |
-| Activation end to end (A01) | `docs/runbooks/account-activation.md`, "Running it end to end", on a freshly reset stack with a real Gmail inbox | **Pending: to be run on the Linux VM and recorded here.** KYC event → provisioned → email received → link → password set → login → protected Trade REST API route; the same link a second time refused |
+| Activation end to end (A01) | `docs/runbooks/account-activation.md`, "Running it end to end", on a freshly reset stack with a real Gmail inbox, 2026-10-02, starting from the onboarding route with real KYC rather than the script | Application → `VERIFIED` → `KYC_VERIFIED` → provisioned → email received 44 s after applying → link → password set → login → `GET /api/v1/accounts/13` `200` → order accepted. The same link a second time: "This link is not valid". **Found on the way:** after registering, the browser silently dropped the redirect to `ACTIVATION_HOME_URL`, because the page's CSP `form-action 'self'` also governs where a form's redirect may go; the customer saw nothing happen, clicked again, and found the link used. Registration now lands on `/activate/done` on auth, which links on to the home page (`f2407ee`, pinned by `activation-page.controller.spec.ts`) |
 | No Java changed | `git diff --name-only <base>...HEAD -- '*.java'` where base is the commit before `services/auth` first appeared | Empty. Outside `services/auth/`, Sprint 8 touched four files: `.env.example`, `.gitignore`, `docker-compose.yml`, `docs/sprints/sprint-08.md` |
 | Replay alert pages | Piped a real log line, `... WARN [RefreshTokenService] SECURITY_REFRESH_REPLAY credential=<uuid> revoked=2`, into `tools/log-sink/watch-auth-alerts.mjs` on stdin | A timestamped record appeared in `tools/log-sink/alerts.log` and a banner printed to the terminal, immediately, on the first line |
 | Replay alert does not false-positive | `node --test tools/log-sink/` | 3/3 pass: pages once on the exact tag; does not page on the old pre-fix message shape, a truncated tag, or a wrong-case tag |
+
+## Sprint 9 addition: onboarding and KYC, in the Trade REST API
+
+KYC lives in the Trade REST API, not in this service, but it decides who auth
+provisions, so it is reviewed here. Design and operation:
+`docs/runbooks/account-activation.md`, "Applying and KYC".
+
+| Category | Finding | Disposition |
+|---|---|---|
+| **A01 Broken access control** | `POST /onboarding/applications` is public and creates an account. What that account can do before KYC passes is the question. | **Nothing.** Created `kyc_status = PENDING`: orders are refused with `ACC-403 KYC not verified`, read from `client_account.kyc_status` in the trading database, never from an event, and an unrecognised status fails closed. No login exists until KYC passes and auth provisions the account. |
+| **A03 Injection** | Every new statement (`OnboardingMapper`, `KycMapper`, `OutboxMapper`) binds values with MyBatis `#{}`. | **None.** No `${}` anywhere in the trade-api mappers. |
+| **A04 Insecure design** | A public route that creates rows invites scripted sign-ups, and a route that says "already registered" tells anyone whether a PAN or email belongs to a customer. | **Fixed, with a residual risk.** Five applications per hour per address, then `429 RATE-429`. A duplicate PAN or email answers the same byte-identical `202` as a success and creates nothing. The insert uses `ON CONFLICT DO NOTHING` rather than catching a unique violation, so the duplicate's PAN or email never reaches the Postgres server log either. Residual: the limit is in memory, per instance, and per address — the same gap A07 names for the login throttle. Listed below. |
+| **A08 Software and data integrity failures** | Auth provisions on the word of `kyc-events`. Our broker is PLAINTEXT with no ACLs, so anything that can reach it can publish `KYC_VERIFIED` — `scripts/publish-kyc-verified.sh` does exactly that. | **Accepted for this platform, mitigated.** Real decisions are published through a transactional outbox, so only a committed `VERIFIED` is ever announced. A forged event yields a login, but not trading: the order gate reads `kyc_status` from the trading database, which the event does not touch. Broker authentication and ACLs belong to a real deployment. Listed below. |
+| **A09 Security logging and monitoring failures** | An application carries a name, date of birth, PAN, email, phone and address. | **Fixed.** Nothing personal is logged. The routes log outcomes only; the KYC job logs the client id and an exception's class, never its message, because a database error can quote the row back; the row read for a check redacts itself in `toString`; `kyc_verification.last_error` holds the class only. A customer set aside after repeated failures logs `KYC_SET_ASIDE` once, for alerting. |
+
+### Evidence
+
+| Check | How it was performed | Result |
+|---|---|---|
+| The gate (A01) | Order as seeded account 9 (`kyc_status PENDING`), then as account 3 (`VERIFIED`) | `403 ACC-403 KYC not verified`; `200` |
+| Decisions | JUnit `KycDeciderTest`, `KycJobIntegrationTest` against Postgres; live with four applications | Clean → `VERIFIED` with one outbox row; under 18, a firm's PAN, an unknown PAN → `REJECTED` with each reason and no row; nothing decided before `KYC_DELAY`; deciding twice changes nothing; a failure rolls back to `PENDING` and does not stop the next customer |
+| Non-disclosing duplicate (A04) | Applied twice with the same PAN, then the same email, against the running service | Byte-identical `202`s; one account; the second transaction rolled back |
+| Rate limit (A04) | Six applications from one address | Sixth `429 RATE-429` |
+| Outbox under a broker outage (A08) | `docker stop fauxnance-kafka`, applied, started it again | Decided `VERIFIED` regardless; `OUTBOX_PUBLISH_FAILED` three times; sent within a second of the broker returning, and auth provisioned the account |
+| Set aside | A customer whose check errors every time, live and in `KycJobIntegrationTest` | Five attempts, `KYC_SET_ASIDE` once, then no longer picked up; resetting `attempts` to 0 decides it |
+| No personal data in logs (A09) | `grep` of the trade-api, auth, executor and Postgres container logs for every applicant's name, email, PAN, phone, date of birth and address, after the end-to-end run | 0 hits in each |
 
 ## Outstanding items
 
@@ -69,3 +95,5 @@ What was actually run or read, so the review is repeatable.
 | Move the login throttle to a shared store so the 5-attempt limit holds across more than one instance, not 5 per process (A07) | SS | Sprint 9 |
 | ~~Alert on the replayed-refresh-token warning (A09)~~ **Done, 2026-09-30.** Installed `tools/log-sink/watch-auth-alerts.mjs`: any log line from `auth` containing `SECURITY_REFRESH_REPLAY` pages on-call immediately, one occurrence is enough, no threshold. Paging means an immutable record in `tools/log-sink/alerts.log` plus a terminal banner — there is no real pager wired into this training platform, and swapping the alert call for a webhook is the only change needed to point this at one. See `tools/log-sink/README.md`. | KS | done |
 | Upgrade `@nestjs/*` to 11, clearing the remaining 10 production advisories (A06) | SA | before Sprint 9 closes |
+| Move the onboarding rate limit to a shared store, as for the login throttle (A04) | SA | Sprint 10 |
+| Broker authentication and ACLs, so only KYC can produce to `kyc-events` (A08) | SA | Before any real deployment |

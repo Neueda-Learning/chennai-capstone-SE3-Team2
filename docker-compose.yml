@@ -136,6 +136,14 @@ services:
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USERNAME: ${SMTP_USERNAME:?SMTP_USERNAME must be set in .env}
       SMTP_PASSWORD: ${SMTP_PASSWORD:?SMTP_PASSWORD must be set in .env}
+      # KYC: how long a check waits before it runs, how often the job looks,
+      # and failed checks before a customer is set aside. Shorten KYC_DELAY
+      # for a demo; the defaults match application.yml.
+      KYC_DELAY: ${KYC_DELAY:-30s}
+      KYC_JOB_INTERVAL_MS: ${KYC_JOB_INTERVAL_MS:-10000}
+      KYC_MAX_ATTEMPTS: ${KYC_MAX_ATTEMPTS:-5}
+      # How often the outbox relay publishes KYC_VERIFIED to kyc-events.
+      OUTBOX_POLL_MS: ${OUTBOX_POLL_MS:-2000}
     ports:
       - "${API_PUBLISHED_PORT:-8080}:8080"
     networks: [trading-net]
