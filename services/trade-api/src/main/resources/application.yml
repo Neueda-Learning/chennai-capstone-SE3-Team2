@@ -113,6 +113,20 @@ activation:
   consumer:
     auto-startup: ${ACTIVATION_CONSUMER_ENABLED:true}
 
+# KYC: a scheduled job decides each customer's verification, through a
+# stub provider, once it is kyc.delay old. A pass queues KYC_VERIFIED in
+# outbox_event, which the auth service reads (via kyc-events) to provision
+# the login.
+kyc:
+  # contracts/kafka-topics.md.
+  topic: kyc-events
+  # A real provider is not instant; neither is this one, on purpose.
+  delay: ${KYC_DELAY:30s}
+  batch-size: ${KYC_BATCH_SIZE:50}
+  job:
+    enabled: ${KYC_JOB_ENABLED:true}
+    interval-ms: ${KYC_JOB_INTERVAL_MS:10000}
+
 management:
   endpoints:
     web:

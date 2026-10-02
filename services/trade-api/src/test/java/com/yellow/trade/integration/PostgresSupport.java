@@ -92,6 +92,10 @@ public abstract class PostgresSupport {
         registry.add("activation.consumer.auto-startup", () -> "false");
         registry.add("spring.mail.username", () -> "noreply@example.invalid");
         registry.add("spring.mail.password", () -> "not-a-real-password");
+
+        // The KYC job would decide rows a test is still arranging. Tests that
+        // need a decision call it themselves.
+        registry.add("kyc.job.enabled", () -> "false");
     }
 
     public static void applySchema(JdbcTemplate jdbc) {
