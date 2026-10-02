@@ -14,9 +14,9 @@ export { MAX_ATTEMPTS, COOLDOWN_MS } from './login-attempts';
 export class LoginThrottleGuard implements CanActivate {
   constructor(private readonly attempts: LoginAttempts) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
-    if (this.attempts.isBlocked(LoginAttempts.callerKey(request))) {
+    if (await this.attempts.isBlocked(LoginAttempts.callerKey(request))) {
       throw new PlatformError('AUTH-429', 'Too many attempts', HttpStatus.TOO_MANY_REQUESTS);
     }
     return true;

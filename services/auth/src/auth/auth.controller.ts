@@ -46,12 +46,12 @@ export class AuthController {
     const caller = LoginAttempts.callerKey(request);
     try {
       const tokens = await this.auth.login(dto);
-      this.attempts.recordSuccess(caller);
+      await this.attempts.recordSuccess(caller);
       return tokens;
     } catch (failure) {
       // Counted after the work, so the throttle never shortens the uniform
       // failure it sits in front of.
-      this.attempts.recordFailure(caller);
+      await this.attempts.recordFailure(caller);
       throw failure;
     }
   }

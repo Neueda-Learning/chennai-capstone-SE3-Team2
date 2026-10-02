@@ -13,6 +13,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { LoginAttempts } from './login-attempts';
+import { ATTEMPT_STORE, InMemoryAttemptStore } from './attempt-store';
 import { LoginFailure } from './login-failure';
 import { LoginThrottleGuard } from './login-throttle.guard';
 
@@ -77,6 +78,7 @@ describe('POST /auth/register with an activation token', () => {
         { provide: RefreshTokenService, useValue: { issue: async () => 'r'.repeat(64), rotate: jest.fn() } },
         LoginFailure,
         LoginAttempts,
+        { provide: ATTEMPT_STORE, useValue: new InMemoryAttemptStore() },
         LoginThrottleGuard,
         JwtAuthGuard,
         { provide: Env, useValue: { jwtSecret: 'a-test-secret-of-at-least-32-bytes-length', jwtIssuer: 'auth-service' } },
