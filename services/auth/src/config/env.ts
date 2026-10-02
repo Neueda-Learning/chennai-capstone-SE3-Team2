@@ -39,5 +39,11 @@ export class Env {
   /** Where a customer lands after registering from the activation link. */
   get activationHomeUrl(): string { return this.config.get('ACTIVATION_HOME_URL') ?? 'http://localhost:4200/'; }
 
+  /**
+   * The login throttle's shared counter. Optional: without it, or with Redis
+   * down, the throttle counts in memory and the limit is per instance.
+   */
+  get redisUrl(): string | undefined { return this.config.get('REDIS_URL') || undefined; }
+
   get outboxPollMs(): number { return Number(this.config.get('OUTBOX_POLL_MS') ?? 2000); }
 }

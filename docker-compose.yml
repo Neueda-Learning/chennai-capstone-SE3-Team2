@@ -207,6 +207,12 @@ services:
       ACTIVATION_INTERNAL_SECRET: ${ACTIVATION_INTERNAL_SECRET:?ACTIVATION_INTERNAL_SECRET must be set in .env}
       # Where /activate sends a customer after they register.
       ACTIVATION_HOME_URL: ${ACTIVATION_HOME_URL:-http://localhost:4200/}
+      # The login throttle's shared counter: the hosted Redis every instance
+      # counts in, so five failures means five in total rather than five
+      # each. No default: without it the throttle would quietly go back to
+      # per-instance. Never a localhost URL: inside a container localhost is
+      # that container.
+      REDIS_URL: ${REDIS_URL:?REDIS_URL must be set in .env}
     ports:
       # 3000 is reserved for this service in infra/README.md.
       - "${AUTH_PUBLISHED_PORT:-3000}:3000"
