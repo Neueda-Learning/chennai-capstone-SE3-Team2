@@ -17,5 +17,7 @@ public record KycProperties(
         /** How long a check waits before it runs: a real provider is not instant. */
         @NotNull Duration delay,
         /** How many checks one run of the job takes on. */
-        @Min(1) int batchSize) {
+        @Min(1) int batchSize,
+        /** Failed checks before a customer is set aside for a person to look at. */
+        @Min(1) int maxAttempts) {
 }

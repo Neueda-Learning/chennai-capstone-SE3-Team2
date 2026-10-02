@@ -204,11 +204,17 @@ final.
 | `checks` | JSONB | Which checks ran and which failed — the audit trail |
 | `submitted_at` | TIMESTAMPTZ | When the application arrived |
 | `decided_at` | TIMESTAMPTZ | When the decision was made. Null while PENDING |
+| `attempts` | INTEGER | Failed checks so far, added by `008_kyc_attempts.sql`. At `kyc.max-attempts` the job stops picking the customer up |
+| `last_error` | TEXT | Class name of the last failure. Never its message, which can quote personal data |
 
 The check constraints hold the shape of a decision: `decided_at` is set exactly
 when the row is no longer PENDING, and `reason` exactly when it is REJECTED. No
 personal data: the checks read `client_profile` when they run, and this table
 keeps only the outcome.
+
+A customer set aside after `kyc.max-attempts` failures stays PENDING. Once the
+cause is fixed, `UPDATE kyc_verification SET attempts = 0 WHERE client_id = …`
+puts them back in the queue.
 
 ---
 

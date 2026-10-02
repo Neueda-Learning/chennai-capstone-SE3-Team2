@@ -50,7 +50,7 @@ class KycDeciderTest {
     private final OutboxMapper outbox = mock(OutboxMapper.class);
     private final KycProvider provider = spy(new StubKycProvider());
     private final KycDecider decider = new KycDecider(kyc, outbox, provider,
-            new KycProperties("kyc-events", Duration.ofSeconds(30), 50), json, CLOCK);
+            new KycProperties("kyc-events", Duration.ofSeconds(30), 50, 5), json, CLOCK);
 
     private void applicant(String pan, LocalDate dob) {
         ApplicantRow row = new ApplicantRow();

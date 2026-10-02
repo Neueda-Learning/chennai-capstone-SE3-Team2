@@ -2,6 +2,7 @@ package com.yellow.trade.mappers;
 
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Options;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
@@ -17,16 +18,22 @@ public interface KycMapper {
     @Insert("INSERT INTO kyc_verification (client_id) VALUES (#{clientId})")
     int insertPending(@Param("clientId") long clientId);
 
-    /** Pending checks old enough to run, oldest first. Served by ix_kyc_verification_pending. */
+    /**
+     * Pending checks old enough to run, oldest first, leaving out customers set
+     * aside after maxAttempts failures. Served by ix_kyc_verification_pending.
+     */
     @Select("""
             SELECT client_id
             FROM kyc_verification
             WHERE status = 'PENDING'
               AND submitted_at <= #{cutoff}
+              AND attempts < #{maxAttempts}
             ORDER BY submitted_at
             LIMIT #{limit}
             """)
-    List<Long> findDue(@Param("cutoff") Instant cutoff, @Param("limit") int limit);
+    List<Long> findDue(@Param("cutoff") Instant cutoff,
+                       @Param("maxAttempts") int maxAttempts,
+                       @Param("limit") int limit);
 
     /** What the checks need, read when they run rather than stored with the verification. */
     @Select("""
@@ -67,4 +74,22 @@ public interface KycMapper {
                AND kyc_status = 'PENDING'
             """)
     int setAccountKycStatus(@Param("clientId") long clientId, @Param("status") String status);
+
+    /**
+     * Counts a failed check. Runs after the failed decision has rolled back,
+     * in a statement of its own. An UPDATE in a @Select so that RETURNING
+     * gives the new count back: null when the customer is no longer PENDING.
+     *
+     * @param error the exception's class name, never its message
+     */
+    @Select("""
+            UPDATE kyc_verification
+               SET attempts   = attempts + 1,
+                   last_error = #{error}
+             WHERE client_id = #{clientId}
+               AND status    = 'PENDING'
+            RETURNING attempts
+            """)
+    @Options(flushCache = Options.FlushCachePolicy.TRUE)
+    Integer recordFailure(@Param("clientId") long clientId, @Param("error") String error);
 }

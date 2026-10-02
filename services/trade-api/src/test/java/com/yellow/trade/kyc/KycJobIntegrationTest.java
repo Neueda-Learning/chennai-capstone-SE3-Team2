@@ -61,7 +61,7 @@ class KycJobIntegrationTest extends PostgresSupport {
     }
 
     private Map<String, Object> verification(long clientId) {
-        return jdbc.queryForMap("SELECT status, reason, checks::text AS checks, decided_at "
+        return jdbc.queryForMap("SELECT status, reason, checks::text AS checks, decided_at, attempts, last_error "
                 + "FROM kyc_verification WHERE client_id = ?", clientId);
     }
 
@@ -155,9 +155,38 @@ class KycJobIntegrationTest extends PostgresSupport {
         Map<String, Object> row = verification(broken);
         assertThat(row.get("status"), is("PENDING"));
         assertThat(row.get("decided_at"), is(nullValue()));
+        assertThat(row.get("attempts"), is(1));
+        assertThat(row.get("last_error"), is("IllegalStateException"));
         assertThat(outboxRows(broken), is(0));
 
         assertThat(verification(fine).get("status"), is("VERIFIED"));
         assertThat(outboxRows(fine), is(1));
+    }
+
+    @Test
+    @DisplayName("At max attempts a customer is set aside, no longer blocks the queue, and returns once attempts is reset")
+    void setAsideAfterMaxAttempts() {
+        KycVerificationJob twoTries = new KycVerificationJob(mapper, decider,
+                new KycProperties(properties.topic(), properties.delay(), properties.batchSize(), 2), clock);
+        long broken = apply("ABCPM1234Q", "priya@example.com");
+        jdbc.update("UPDATE client_account SET kyc_status = 'VERIFIED' WHERE client_id = ?", broken);
+        makeDue(broken);
+
+        twoTries.run();
+        twoTries.run();
+        assertThat(verification(broken).get("attempts"), is(2));
+
+        // Set aside: not picked up, so not counted again.
+        twoTries.run();
+        assertThat(verification(broken).get("attempts"), is(2));
+        assertThat(verification(broken).get("status"), is("PENDING"));
+
+        // Someone fixes the cause and puts the customer back in the queue.
+        jdbc.update("UPDATE client_account SET kyc_status = 'PENDING' WHERE client_id = ?", broken);
+        jdbc.update("UPDATE kyc_verification SET attempts = 0 WHERE client_id = ?", broken);
+        twoTries.run();
+
+        assertThat(verification(broken).get("status"), is("VERIFIED"));
+        assertThat(outboxRows(broken), is(1));
     }
 }

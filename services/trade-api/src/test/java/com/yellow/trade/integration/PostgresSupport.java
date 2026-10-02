@@ -63,6 +63,7 @@ public abstract class PostgresSupport {
             "migrations/005_drop_client_auth.sql",
             "migrations/006_activation_email.sql",
             "migrations/007_kyc.sql",
+            "migrations/008_kyc_attempts.sql",
             "indexes/001_performance_indexes.sql",
             "seed/001_reference_data.sql",
             "seed/002_clients.sql",
@@ -93,9 +94,10 @@ public abstract class PostgresSupport {
         registry.add("spring.mail.username", () -> "noreply@example.invalid");
         registry.add("spring.mail.password", () -> "not-a-real-password");
 
-        // The KYC job would decide rows a test is still arranging. Tests that
-        // need a decision call it themselves.
+        // The KYC job would decide rows a test is still arranging, and there
+        // is no broker for the relay. Tests that need either run it by hand.
         registry.add("kyc.job.enabled", () -> "false");
+        registry.add("outbox.relay.enabled", () -> "false");
     }
 
     public static void applySchema(JdbcTemplate jdbc) {

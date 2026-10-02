@@ -49,6 +49,13 @@ spring:
       "[mail.smtp.timeout]": 5000
       "[mail.smtp.writetimeout]": 5000
 
+  # Two scheduled jobs, the KYC checks and the outbox relay: a thread
+  # each, so a slow broker never delays a KYC decision. Boot's default is 1.
+  task:
+    scheduling:
+      pool:
+        size: 2
+
   # Fail on an unknown JSON property rather than ignoring it: the
   # contract declares additionalProperties false, and a client sending a
   # field we do not know about has misread it.
@@ -123,9 +130,20 @@ kyc:
   # A real provider is not instant; neither is this one, on purpose.
   delay: ${KYC_DELAY:30s}
   batch-size: ${KYC_BATCH_SIZE:50}
+  # Failed checks before a customer is set aside (left PENDING, no longer
+  # picked up) so a check that always fails cannot block the queue.
+  max-attempts: ${KYC_MAX_ATTEMPTS:5}
   job:
     enabled: ${KYC_JOB_ENABLED:true}
     interval-ms: ${KYC_JOB_INTERVAL_MS:10000}
+
+# Publishes outbox_event rows (KYC_VERIFIED, today) to Kafka once their
+# transaction has committed. The same design as the auth service's relay.
+outbox:
+  relay:
+    enabled: ${OUTBOX_RELAY_ENABLED:true}
+    interval-ms: ${OUTBOX_POLL_MS:2000}
+    batch-size: 20
 
 management:
   endpoints:
