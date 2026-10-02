@@ -70,6 +70,21 @@ Contact support to have a new activation email sent.</p>`,
   );
 }
 
+/**
+ * Where a successful registration lands. On this origin, because the form's
+ * CSP is form-action 'self' and browsers apply it to the redirect after a
+ * POST too: a redirect straight to the home page is silently blocked, the
+ * customer sees nothing happen, and a second click finds the link used.
+ */
+export function activatedPage(homeUrl: string): string {
+  return page(
+    'Login created',
+    `<h1>Your login is ready</h1>
+<p>Your account is activated. Log in with the username and password you just chose.</p>
+<p><a href="${escapeHtml(homeUrl)}">Go to Fauxnance and log in</a></p>`,
+  );
+}
+
 export function errorPage(): string {
   return page('Something went wrong', `<h1>Something went wrong</h1><p>Please try again in a few minutes.</p>`);
 }

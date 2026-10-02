@@ -72,14 +72,29 @@ describe('the activation link pages', () => {
     });
   });
 
+  describe('GET /activate/done', () => {
+    it('confirms the login and links on to the home page', async () => {
+      const res = await fetch(`${base}/activate/done`);
+      const html = await res.text();
+
+      expect(res.status).toBe(200);
+      expect(html).toContain('Your login is ready');
+      expect(html).toContain(`<a href="${HOME}">`);
+      expect(res.headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
+      expect(register).not.toHaveBeenCalled();
+    });
+  });
+
   describe('POST /activate', () => {
     const fields = { token: TOKEN, username: 'priya.menon', password: 'correct horse battery staple' };
 
-    it('registers, then sends the customer to the home page', async () => {
+    it('registers, then redirects on this origin to the confirmation page', async () => {
       const res = await submit(fields);
 
       expect(res.status).toBe(303);
-      expect(res.headers.get('location')).toBe(HOME);
+      // Not HOME: form-action 'self' covers the redirect, and a browser
+      // silently drops one to another origin.
+      expect(res.headers.get('location')).toBe('/activate/done');
       expect(register).toHaveBeenCalledWith(
         expect.objectContaining({ username: 'priya.menon', password: 'correct horse battery staple', activationToken: TOKEN }),
       );
