@@ -9,6 +9,10 @@ export const ErrorCode = {
   AUTH_409: 'AUTH-409',
   /** A field failed validation. */
   VAL_422: 'VAL-422',
+  /** Internal route only: no provisioned account for this client. */
+  ACT_404: 'ACT-404',
+  /** Internal route only: the account already has a login, so no token is minted. */
+  ACT_409: 'ACT-409',
 } as const;
 
 /** One message for every AUTH-401 cause: a helpful message names which half was wrong. */
