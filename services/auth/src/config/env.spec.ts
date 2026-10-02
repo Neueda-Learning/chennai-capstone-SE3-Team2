@@ -3,7 +3,7 @@ import { Env } from './env';
 
 const complete = {
   JWT_SECRET: 'a-test-secret-of-at-least-32-bytes-length',
-  AUTH_DATABASE_URL: 'postgresql://auth:x@localhost:5433/auth',
+  AUTH_DATABASE_URL: 'postgresql://auth_app:x@localhost:5432/auth',
   KAFKA_BROKERS: 'kafka:29092',
   ACTIVATION_INTERNAL_SECRET: 'an-internal-test-secret-of-32-plus-bytes',
 };
