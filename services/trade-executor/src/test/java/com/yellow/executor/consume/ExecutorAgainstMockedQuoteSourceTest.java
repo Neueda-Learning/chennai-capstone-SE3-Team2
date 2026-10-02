@@ -225,6 +225,7 @@ class ExecutorAgainstMockedQuoteSourceTest {
         row.setBalance(new BigDecimal(balance));
         row.setBlockedFunds(BigDecimal.ZERO);
         row.setStatus(status);
+        row.setKycStatus("VERIFIED");
         row.setVersion(7);
         return row;
     }

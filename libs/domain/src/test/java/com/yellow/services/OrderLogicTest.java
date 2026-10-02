@@ -6,6 +6,7 @@ import com.yellow.entities.Instrument;
 import com.yellow.entities.Order;
 import com.yellow.enums.OrderSide;
 import com.yellow.enums.AccountStatus;
+import com.yellow.enums.KycStatus;
 import com.yellow.enums.OrderStatus;
 import com.yellow.enums.Reason;
 import com.yellow.entities.Position;
@@ -52,7 +53,7 @@ class OrderLogicTest {
     }
 
     private void stubValidAccount() {
-        Account activeAccount = new Account(1L, "REF-1", 100L, new BigDecimal("5000.00"), BigDecimal.ZERO, AccountStatus.ACTIVE, 1);
+        Account activeAccount = new Account(1L, "REF-1", 100L, new BigDecimal("5000.00"), BigDecimal.ZERO, AccountStatus.ACTIVE, KycStatus.VERIFIED, 1);
         when(accountRepo.findById(1L)).thenReturn(Optional.of(activeAccount));
     }
 
@@ -108,7 +109,7 @@ class OrderLogicTest {
     @Test
     @DisplayName("Should throw AccountNotActive carrying the actual status when account is suspended or closed")
     void rule2_shouldThrowAccountNotActive_whenAccountIsSuspendedOrClosed() {
-        Account suspended = new Account(1L, "REF-1", 100L, new BigDecimal("5000.00"), BigDecimal.ZERO, AccountStatus.SUSPENDED, 1);
+        Account suspended = new Account(1L, "REF-1", 100L, new BigDecimal("5000.00"), BigDecimal.ZERO, AccountStatus.SUSPENDED, KycStatus.VERIFIED, 1);
         when(accountRepo.findById(1L)).thenReturn(Optional.of(suspended));
 
         AccountNotActiveException ex = assertThrows(AccountNotActiveException.class,
@@ -116,6 +117,36 @@ class OrderLogicTest {
 
         assertThat(ex.catalogueCode(), is(equalTo("ACC-403")));
         assertThat(ex.actualStatus(), is(equalTo(AccountStatus.SUSPENDED)));
+    }
+
+    @Test
+    @DisplayName("Should refuse an active account whose KYC is still pending, with ACC-403")
+    void kycGate_shouldRefuse_whenKycPending() {
+        Account pending = new Account(1L, "REF-1", 100L, new BigDecimal("5000.00"), BigDecimal.ZERO, AccountStatus.ACTIVE, KycStatus.PENDING, 1);
+        when(accountRepo.findById(1L)).thenReturn(Optional.of(pending));
+
+        AccountNotActiveException ex = assertThrows(AccountNotActiveException.class,
+                () -> orderService.placeOrder(validBuyRequest));
+
+        assertThat(ex.catalogueCode(), is(equalTo("ACC-403")));
+        assertThat(ex.getMessage(), is(equalTo("KYC not verified")));
+        assertThat(ex.kycStatus(), is(equalTo(KycStatus.PENDING)));
+        verifyNoInteractions(instrumentRepo);
+    }
+
+    @Test
+    @DisplayName("Should refuse an active account whose KYC was rejected, with ACC-403")
+    void kycGate_shouldRefuse_whenKycRejected() {
+        Account rejected = new Account(1L, "REF-1", 100L, new BigDecimal("5000.00"), BigDecimal.ZERO, AccountStatus.ACTIVE, KycStatus.REJECTED, 1);
+        when(accountRepo.findById(1L)).thenReturn(Optional.of(rejected));
+
+        AccountNotActiveException ex = assertThrows(AccountNotActiveException.class,
+                () -> orderService.placeOrder(validBuyRequest));
+
+        assertThat(ex.catalogueCode(), is(equalTo("ACC-403")));
+        assertThat(ex.getMessage(), is(equalTo("KYC not verified")));
+        assertThat(ex.kycStatus(), is(equalTo(KycStatus.REJECTED)));
+        verifyNoInteractions(instrumentRepo);
     }
 
     @Test
@@ -187,7 +218,7 @@ class OrderLogicTest {
     @Test
     @DisplayName("Should throw InsufficientFunds carrying required and available, without leaking the balance in the message")
     void rule6_shouldThrowInsufficientFunds_whenBuyOrderExceedsAvailableBalance() {
-        Account poorAccount = new Account(1L, "REF-1", 100L, new BigDecimal("50.00"), BigDecimal.ZERO, AccountStatus.ACTIVE, 1);
+        Account poorAccount = new Account(1L, "REF-1", 100L, new BigDecimal("50.00"), BigDecimal.ZERO, AccountStatus.ACTIVE, KycStatus.VERIFIED, 1);
         when(accountRepo.findById(1L)).thenReturn(Optional.of(poorAccount));
         stubValidInstrument();
 
@@ -261,7 +292,7 @@ class OrderLogicTest {
     @Test
     @DisplayName("Should fail Rule 2 before Rule 6 when account is suspended and has no cash")
     void precedence_shouldFailRule2BeforeRule6_whenAccountIsSuspendedAndHasNoCash() {
-        Account suspendedPoorAccount = new Account(1L, "REF-1", 100L, BigDecimal.ZERO, BigDecimal.ZERO, AccountStatus.SUSPENDED, 1);
+        Account suspendedPoorAccount = new Account(1L, "REF-1", 100L, BigDecimal.ZERO, BigDecimal.ZERO, AccountStatus.SUSPENDED, KycStatus.VERIFIED, 1);
         when(accountRepo.findById(1L)).thenReturn(Optional.of(suspendedPoorAccount));
 
         AccountNotActiveException ex = assertThrows(AccountNotActiveException.class,

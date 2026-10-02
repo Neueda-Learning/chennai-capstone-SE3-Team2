@@ -2,6 +2,7 @@ package com.yellow.repositories;
 
 import com.yellow.entities.Account;
 import com.yellow.enums.AccountStatus;
+import com.yellow.enums.KycStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
@@ -22,7 +23,7 @@ class InMemoryAccountRepositoryTest {
     }
 
     private Account account(Long id, String reference) {
-        return new Account(id, reference, 100L, new BigDecimal("500.00"), BigDecimal.ZERO, AccountStatus.ACTIVE, 1);
+        return new Account(id, reference, 100L, new BigDecimal("500.00"), BigDecimal.ZERO, AccountStatus.ACTIVE, KycStatus.VERIFIED, 1);
     }
 
     @Test

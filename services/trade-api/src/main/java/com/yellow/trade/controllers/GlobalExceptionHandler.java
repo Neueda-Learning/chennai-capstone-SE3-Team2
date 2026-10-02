@@ -46,7 +46,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AccountNotActiveException.class)
     public ResponseEntity<ErrorResponse> handle(AccountNotActiveException e) {
-        log.warn("ACC-403: account status {}", e.actualStatus());
+        log.warn("ACC-403: account status {}, kyc {}", e.actualStatus(), e.kycStatus());
         return envelope(HttpStatus.FORBIDDEN, e);
     }
 

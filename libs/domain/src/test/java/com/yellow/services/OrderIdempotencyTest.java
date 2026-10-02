@@ -4,6 +4,7 @@ import com.yellow.dto.PlaceOrderRequest;
 import com.yellow.entities.Account;
 import com.yellow.entities.Instrument;
 import com.yellow.enums.AccountStatus;
+import com.yellow.enums.KycStatus;
 import com.yellow.enums.AssetClass;
 import com.yellow.enums.OrderSide;
 import com.yellow.exceptions.DuplicateOrderException;
@@ -37,7 +38,7 @@ class OrderIdempotencyTest {
 	void setUp() {
 		InMemoryAccountRepository accounts = new InMemoryAccountRepository();
 		accounts.save(new Account(1L, "REF-1", 100L, new BigDecimal("100000.00"),
-				BigDecimal.ZERO, AccountStatus.ACTIVE, 1));
+				BigDecimal.ZERO, AccountStatus.ACTIVE, KycStatus.VERIFIED, 1));
 
 		InMemoryInstrumentRepository instruments = new InMemoryInstrumentRepository();
 		instruments.save(new Instrument(2L, "AAPL", "Apple Inc",
