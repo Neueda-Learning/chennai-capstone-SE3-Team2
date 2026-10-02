@@ -4,6 +4,7 @@ import com.yellow.entities.Account;
 import com.yellow.entities.Instrument;
 import com.yellow.entities.Position;
 import com.yellow.enums.AccountStatus;
+import com.yellow.enums.KycStatus;
 import com.yellow.enums.AssetClass;
 import com.yellow.enums.OrderSide;
 import com.yellow.enums.OrderStatus;
@@ -51,6 +52,7 @@ public final class RowMapping {
                 row.getBalance(),
                 row.getBlockedFunds(),
                 AccountStatus.valueOf(row.getStatus()),
+                KycStatus.valueOf(row.getKycStatus()),
                 row.getVersion());
     }
 

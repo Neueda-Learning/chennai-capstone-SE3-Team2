@@ -4,6 +4,7 @@ import com.yellow.entities.Account;
 import com.yellow.entities.Instrument;
 import com.yellow.entities.Position;
 import com.yellow.enums.AccountStatus;
+import com.yellow.enums.KycStatus;
 import com.yellow.enums.AssetClass;
 import com.yellow.enums.OrderSide;
 import com.yellow.enums.OrderStatus;
@@ -118,7 +119,7 @@ class PreTradeChecksTest {
             // order costing 600,000 fits the balance and not the available
             Account seeded = new Account(3L, "ACC-000003", 3L,
                     new BigDecimal("750000"), new BigDecimal("220000"),
-                    AccountStatus.ACTIVE, 7);
+                    AccountStatus.ACTIVE, KycStatus.VERIFIED, 7);
 
             assertThat(PreTradeChecks.atExecution(buy("4", "160000.00"), seeded,
                             Optional.empty(), new BigDecimal("150000.0000")),
@@ -181,7 +182,7 @@ class PreTradeChecksTest {
 
     private static Account account(String available, AccountStatus status) {
         return new Account(3L, "ACC-000003", 3L,
-                new BigDecimal(available), BigDecimal.ZERO, status, 7);
+                new BigDecimal(available), BigDecimal.ZERO, status, KycStatus.VERIFIED, 7);
     }
 
     private static Position holding(String quantity) {

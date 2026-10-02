@@ -260,6 +260,7 @@ class OrderExecutionServiceTest {
         row.setBalance(new BigDecimal(balance));
         row.setBlockedFunds(new BigDecimal(blocked));
         row.setStatus(status);
+        row.setKycStatus("VERIFIED");
         row.setVersion(7);
         when(mapper.findAccount(3L)).thenReturn(row);
     }

@@ -14,6 +14,7 @@ public interface AccountMapper {
                    ca.account_ref,
                    cp.name AS holder_name,
                    ca.status,
+                   ca.kyc_status,
                    ca.balance,
                    ca.blocked_funds,
                    ca.version,

@@ -8,6 +8,7 @@ public class AccountRow {
     private Long clientId;
     private String accountRef;
     private String status;
+    private String kycStatus;
     private BigDecimal balance;
     private BigDecimal blockedFunds;
     private int version;
@@ -20,6 +21,8 @@ public class AccountRow {
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+    public String getKycStatus() { return kycStatus; }
+    public void setKycStatus(String kycStatus) { this.kycStatus = kycStatus; }
 
     public BigDecimal getBalance() { return balance; }
     public void setBalance(BigDecimal balance) { this.balance = balance; }

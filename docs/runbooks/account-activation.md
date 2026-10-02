@@ -5,10 +5,25 @@ knowing its number: once KYC passes, the auth service provisions the account,
 the Trade REST API emails the customer a one-time link, and the customer
 registers from it without ever typing an account number.
 
+The front of the chain is built too: a customer applies on a public route, a
+scheduled job checks them, and only a pass starts what follows. Until KYC
+passes, the account exists but cannot trade (`ACC-403 KYC not verified`) and
+has no login. See [Applying and KYC](#applying-and-kyc).
+
 ## How it flows
 
 ```
-KYC ──KYC_VERIFIED {clientId}──► kyc-events
+customer ──POST /onboarding/applications──► trade-api
+      client_account (kyc_status PENDING) + client_profile
+      + kyc_verification (PENDING), one transaction
+                                    │  KYC job, every KYC_JOB_INTERVAL_MS,
+                                    │  once the application is KYC_DELAY old
+                                    ▼
+      age, then the provider → kyc_verification + client_account.kyc_status
+      + on a pass, an outbox_event row, one transaction
+                                    │  trade-api outbox relay, after commit
+                                    ▼
+      KYC_VERIFIED {clientId} ──► kyc-events
                                     │  auth, group auth-provisioning
                                     ▼
       auth: INSERT provisioned_account + outbox row, one transaction
@@ -24,7 +39,8 @@ KYC ──KYC_VERIFIED {clientId}──► kyc-events
                                     ▼
       customer opens  auth /activate?token=…  → sets username + password
                  → POST /auth/register {username, password, activationToken}
-                 → redirected to ACTIVATION_HOME_URL, then logs in
+                 → "Your login is ready" (/activate/done), which links on
+                   to ACTIVATION_HOME_URL; the customer logs in
 ```
 
 The token never rides Kafka: it is a credential. Its plaintext exists only in
@@ -32,11 +48,65 @@ the HTTP response from auth to the mailer, and in the email. Auth stores its
 SHA-256. Auth never connects to the trading database; the mailer never connects
 to the auth database.
 
+## Applying and KYC
+
+`POST /onboarding/applications` on the Trade REST API. Public: no token, since
+the customer has no login yet.
+
+```json
+{ "name": "Priya Menon", "dob": "1990-05-17", "email": "priya@example.com",
+  "phoneNumber": "+919812345611", "pan": "ABCPM1234Q", "address": "12 Anna Nagar, Chennai" }
+```
+
+| Answer | When |
+|---|---|
+| `202` `{"status":"RECEIVED", …}` | Created — **or** the PAN or email is already registered. The two are byte-identical and nothing is created for the duplicate, so the route never reveals who is a customer |
+| `422` `VAL-422` | A field fails its rule (`pan` `[A-Z]{5}[0-9]{4}[A-Z]`, `phoneNumber` `+91` then 10 digits starting 6–9, `dob` a real past date). The message names the field, never the value |
+| `429` `RATE-429` | More than 5 applications in an hour from one address. Counted in memory, per instance |
+
+The account is created `ACTIVE` with `kyc_status = PENDING`. Orders are refused
+with `ACC-403 KYC not verified` until it is `VERIFIED`; the gate reads
+`client_account.kyc_status`, never the event.
+
+**The checks.** The job runs every `KYC_JOB_INTERVAL_MS` (10 s) and takes
+applications at least `KYC_DELAY` (30 s) old, so a decision lands 30–40 s after
+applying. Age first, then the provider; the first failure decides. The provider
+is a deterministic stub standing in for a KRA, so a demonstration can produce
+any outcome:
+
+| Rule | Fails with | To demonstrate |
+|---|---|---|
+| 18 or over today, in `Asia/Kolkata` | `under 18` — and nothing is sent to the provider | `dob` less than 18 years ago |
+| PAN holder type: 4th character `P` (individual) | `PAN is not an individual's` | PAN `ABCFS1234A` (a firm) |
+| Registry: PAN digits not `0000` | `PAN not found at the registry` | PAN `ABCPS0000A` |
+
+The decision is written to `kyc_verification` and `client_account.kyc_status`
+together. `REJECTED` is final: one verification per customer, and the PAN stays
+registered. Only `VERIFIED` queues `KYC_VERIFIED`, in the same transaction, and
+trade-api's outbox relay publishes it every `OUTBOX_POLL_MS`.
+
+```bash
+docker exec -i fauxnance-postgres psql -U postgres -d trading -c \
+  "SELECT kv.status, kv.reason, kv.checks, kv.attempts, kv.last_error, ca.kyc_status
+     FROM kyc_verification kv JOIN client_account ca USING (client_id)
+    WHERE client_id = <id>"
+```
+
+**A check that keeps failing** — an error, not a rejection — leaves the customer
+`PENDING` and is retried each run. After `KYC_MAX_ATTEMPTS` (5) it is set aside:
+no longer picked up, so it cannot hold a place in every batch, and the
+trade-api log says `KYC_SET_ASIDE KYC client <id> …` once. `last_error` holds
+the exception's class, never its message. Fix the cause, then:
+
+```sql
+UPDATE kyc_verification SET attempts = 0 WHERE client_id = <id>;
+```
+
 ## Topics
 
 | Topic | Producer | Consumer group | Key | Partitions | Retention | DLT |
 |---|---|---|---|---|---|---|
-| `kyc-events` | KYC (not built yet — `scripts/publish-kyc-verified.sh` stands in) | `auth-provisioning` (auth) | clientId string | 3 | 7 days | `kyc-events.DLT`, 1 partition |
+| `kyc-events` | KYC in trade-api, through its outbox (`scripts/publish-kyc-verified.sh` publishes one by hand, for testing auth alone) | `auth-provisioning` (auth) | clientId string | 3 | 7 days | `kyc-events.DLT`, 1 partition |
 | `account-provisioning` | auth, via its outbox | `activation-mailer` (trade-api) | clientId string | 3 | 7 days | `account-provisioning.DLT`, 1 partition |
 
 Why these numbers: keyed by client, so ordering per customer is what matters;
@@ -60,8 +130,8 @@ refuses to start and names it.
 |---|---|---|---|
 | `KAFKA_BROKERS` | auth | none — required | Comma-separated brokers. `kafka:29092` in compose |
 | `ACTIVATION_INTERNAL_SECRET` | auth **and** trade-api | none — required, secret | Guards `POST /internal/activation-tokens`. Same value both sides. `openssl rand -base64 48` |
-| `ACTIVATION_HOME_URL` | auth | `http://localhost:4200/` | Where `/activate` redirects after registering |
-| `OUTBOX_POLL_MS` | auth | `2000` | How often the outbox relay looks for unsent events |
+| `ACTIVATION_HOME_URL` | auth | `http://localhost:4200/` | Linked from the "Your login is ready" page after registering |
+| `OUTBOX_POLL_MS` | auth **and** trade-api | `2000` | How often each outbox relay looks for unsent events |
 | `AUTH_INTERNAL_URL` | trade-api | `http://localhost:3000` (compose: `http://auth:3000`) | Base URL for minting tokens |
 | `ACTIVATION_LINK_BASE_URL` | trade-api | `http://localhost:3000/activate` | The link in the email; `?token=` is appended |
 | `ACTIVATION_MAIL_FROM` | trade-api | none — required | Sender address. For Gmail, the account itself |
@@ -70,9 +140,14 @@ refuses to start and names it.
 | `SMTP_USERNAME` | trade-api | none — required | Gmail address |
 | `SMTP_PASSWORD` | trade-api | none — required, secret | A Gmail **app password** (Google Account → Security → 2-Step Verification → App passwords), not the account password |
 | `ACTIVATION_CONSUMER_ENABLED` | trade-api | `true` | `false` stops the mailer's listener starting; the integration tests use it |
+| `KYC_DELAY` | trade-api | `30s` | How old an application must be before it is checked. Shorten it for a demo |
+| `KYC_JOB_INTERVAL_MS` | trade-api | `10000` | How often the KYC job looks |
+| `KYC_MAX_ATTEMPTS` | trade-api | `5` | Failed checks before a customer is set aside |
+| `KYC_BATCH_SIZE` | trade-api | `50` | Checks per run. Not passed by compose |
+| `KYC_JOB_ENABLED`, `OUTBOX_RELAY_ENABLED` | trade-api | `true` | `false` stops the job or the relay; the integration tests use both. Not passed by compose |
 
 Scripts additionally read `SPRINT8_END` (check 6's pinned commit, default
-`dd4a77b`), `KAFKA_CONTAINER`, `KAFKA_BROKER_INTERNAL`, `AUTH_DB_CONTAINER`,
+`fcd04df`), `KAFKA_CONTAINER`, `KAFKA_BROKER_INTERNAL`, `AUTH_DB_CONTAINER`,
 `AUTH_DB_USER` and `AUTH_DB_NAME`, all with defaults matching compose.
 
 Running auth outside compose (`npm run start` in `services/auth`) now also needs
@@ -103,6 +178,8 @@ Running auth outside compose (`npm run start` in `services/auth`) now also needs
 | No `client_profile` row | Dead-lettered on the first attempt, `x-failure-class: POISON`. A real inconsistency. | DLT record, reason `no client_profile row for client N` |
 | Account already has a login | Nothing sent, message acknowledged. | `client N already has a login; nothing sent` |
 | A malformed event on either topic | Dead-lettered on the first attempt with the original bytes. | DLT record with `x-failure-reason` |
+| Kafka, while trade-api relays `KYC_VERIFIED` | KYC keeps deciding; the event waits in trade-api's `outbox_event` and is retried every `OUTBOX_POLL_MS`, without limit, and sent when the broker returns. | `OUTBOX_PUBLISH_FAILED event=<uuid> …` in `docker compose logs trade-api`; `SELECT * FROM outbox_event WHERE published_at IS NULL` in the trading DB |
+| A KYC check that errors every time | Retried each run, then set aside, still `PENDING`. | `KYC_SET_ASIDE` in the trade-api log; see [Applying and KYC](#applying-and-kyc) |
 
 Read a dead-letter topic:
 
@@ -127,42 +204,64 @@ provisioned or already has a login.
 
 ## Running it end to end
 
-On a freshly reset stack. The ten seeded accounts are already in auth's
-`provisioned_account`, and provisioning happens once per account, so pick one
-seeded client and give it back to the provisioning path first. Point its email
-at an inbox you can read — a development-only change to seed data.
+On a freshly reset stack, from the application onwards. Use an inbox you can
+read; Gmail delivers `you+anything@gmail.com` to `you@gmail.com`, which gives
+as many distinct addresses as a run needs.
 
 ```bash
 docker compose --profile platform down -v
 docker compose --profile platform up -d --build
 bash scripts/create-topics.sh
+# no Kafka CLI on the host? run it inside the broker container instead:
+#   docker exec -i -e BROKER=localhost:29092 -e KAFKA_TOPICS_BIN=/opt/kafka/bin/kafka-topics.sh \
+#     fauxnance-kafka bash -s < scripts/create-topics.sh
 
-# pick client 5; route its email to your inbox; un-provision it in auth
-docker exec -i fauxnance-postgres psql -U postgres -d trading \
-  -c "UPDATE client_profile SET email = 'you+activation@gmail.com' WHERE client_id = 5"
-docker exec -i fauxnance-postgres psql -U postgres -d auth \
-  -c "DELETE FROM provisioned_account WHERE account_id = 5 AND claimed_by IS NULL"
-
-# watch the provisioning topic in a second terminal
-docker exec fauxnance-kafka /opt/kafka/bin/kafka-console-consumer.sh \
-  --bootstrap-server kafka:29092 --topic account-provisioning \
-  --from-beginning --property print.key=true
-
-# KYC passes
-bash scripts/publish-kyc-verified.sh 5
+curl -sS -X POST localhost:8080/onboarding/applications -H 'Content-Type: application/json' \
+  -d '{"name":"Demo Customer","dob":"1995-06-15","email":"you+kyc1@gmail.com",
+       "phoneNumber":"+919812345611","pan":"DEMPS1234K","address":"12 Anna Nagar, Chennai"}'
 ```
 
-Then: the `ACCOUNT_PROVISIONED` message appears keyed `5` → the email arrives →
-open the link → choose a username and password → redirected to the home page →
-log in:
+Then, about 40 seconds later: `KYC client 11 decided VERIFIED` in the trade-api
+log → `account 11 provisioned` in the auth log → the email arrives → open the
+link → choose a username and password → "Your login is ready" → log in:
 
 ```bash
 curl -sS -X POST localhost:3000/auth/login -H 'Content-Type: application/json' \
   -d '{"username":"<chosen>","password":"<chosen>"}' | jq -r .accessToken
-curl -sS localhost:8080/api/v1/accounts/5/balance -H "Authorization: Bearer <token>"
+curl -sS localhost:8080/api/v1/accounts/11 -H "Authorization: Bearer <token>"
 ```
 
 Open the same link again: "This link is not valid".
+
+A new account has no money, so its first order is `ORD-400 Insufficient funds`
+— which already shows the KYC gate let it through. There is no deposit route;
+on a development stack only, credit it directly to place a real order:
+
+```bash
+docker exec -i fauxnance-postgres psql -U postgres -d trading \
+  -c "UPDATE client_account SET balance = 100000 WHERE client_id = 11"
+```
+
+The rejection path: apply again with PAN `ABCPS0000A` and another address →
+`REJECTED`, reason `PAN not found at the registry`, no event, no email, no login.
+
+### Testing auth without KYC
+
+`scripts/publish-kyc-verified.sh <clientId>` publishes a `KYC_VERIFIED` by hand,
+with no checks. The ten seeded accounts are already provisioned, so give one
+back first:
+
+```bash
+docker exec -i fauxnance-postgres psql -U postgres -d trading \
+  -c "UPDATE client_profile SET email = 'you+activation@gmail.com' WHERE client_id = 5"
+docker exec -i fauxnance-postgres psql -U postgres -d auth \
+  -c "DELETE FROM provisioned_account WHERE account_id = 5 AND claimed_by IS NULL"
+bash scripts/publish-kyc-verified.sh 5
+```
+
+It changes nothing in the trading database: the order gate still reads
+`client_account.kyc_status`, so an account it provisions trades only if that
+already says `VERIFIED`.
 
 ## Live checks to run
 
@@ -171,7 +270,7 @@ Record each result in the security review's evidence table.
 
 **Stage 1 — auth publishes**
 1. `bash scripts/create-topics.sh` twice: second run changes nothing.
-2. `publish-kyc-verified.sh 5` (after the un-provision step above) → exactly one
+2. `publish-kyc-verified.sh 5` (after the un-provision step in "Testing auth without KYC") → exactly one
    message on `account-provisioning`; key `5`; envelope fields
    `eventId, eventType, eventTime, source, schemaVersion, payload`; payload
    exactly `{"clientId":5}`.
@@ -221,3 +320,16 @@ Record each result in the security review's evidence table.
 1. The link flow above registers with no account number.
 2. The same link twice → second refused; `SELECT count(*) FROM credential` unchanged.
 3. `bash scripts/auth-integration-check.sh` → six checks pass.
+
+**Stage 5 — onboarding and KYC**
+1. Apply with a clean PAN → `202`; nothing decided for `KYC_DELAY`; then
+   `VERIFIED` on both tables and exactly one `outbox_event` row, published.
+2. Apply with `ABCPS0000A`, `ABCFS1234A` and an under-18 `dob` → `REJECTED` with
+   each reason on both tables; no outbox row.
+3. Apply twice with the same PAN, then the same email → identical `202`s; one
+   account. A sixth application within the hour → `429 RATE-429`.
+4. `docker compose stop kafka`, apply, wait → `VERIFIED`, and
+   `OUTBOX_PUBLISH_FAILED` in the trade-api log; `docker compose start kafka` →
+   the event is sent and auth provisions the account.
+5. Order as seeded account 9 (`kyc_status PENDING`) → `403 ACC-403 KYC not verified`.
+6. `docker compose logs trade-api auth postgres | grep -c '<name|email|PAN>'` → 0.

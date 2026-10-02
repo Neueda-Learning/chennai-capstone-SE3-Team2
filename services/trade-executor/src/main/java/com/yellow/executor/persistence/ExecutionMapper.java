@@ -47,6 +47,7 @@ public interface ExecutionMapper {
             SELECT client_id,
                    account_ref,
                    status,
+                   kyc_status,
                    balance,
                    blocked_funds,
                    version

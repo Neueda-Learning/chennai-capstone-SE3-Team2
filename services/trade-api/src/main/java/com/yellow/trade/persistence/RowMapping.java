@@ -26,6 +26,7 @@ final class RowMapping {
                 row.getBalance(),
                 row.getBlockedFunds(),
                 row.getStatus(),
+                row.getKycStatus(),
                 row.getVersion());
     }
 

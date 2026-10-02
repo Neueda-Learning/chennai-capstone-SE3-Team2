@@ -75,6 +75,8 @@ services:
       - ./data/db/migrations/004_execution_columns.sql:/docker-entrypoint-initdb.d/05-migration-004.sql:ro
       - ./data/db/migrations/005_drop_client_auth.sql:/docker-entrypoint-initdb.d/06-migration-005.sql:ro
       - ./data/db/migrations/006_activation_email.sql:/docker-entrypoint-initdb.d/06b-migration-006.sql:ro
+      - ./data/db/migrations/007_kyc.sql:/docker-entrypoint-initdb.d/06c-migration-007.sql:ro
+      - ./data/db/migrations/008_kyc_attempts.sql:/docker-entrypoint-initdb.d/06d-migration-008.sql:ro
       - ./data/db/indexes/001_performance_indexes.sql:/docker-entrypoint-initdb.d/07-indexes.sql:ro
       - ./data/db/seed/001_reference_data.sql:/docker-entrypoint-initdb.d/08-seed-reference.sql:ro
       - ./data/db/seed/002_clients.sql:/docker-entrypoint-initdb.d/09-seed-clients.sql:ro
@@ -134,6 +136,14 @@ services:
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USERNAME: ${SMTP_USERNAME:?SMTP_USERNAME must be set in .env}
       SMTP_PASSWORD: ${SMTP_PASSWORD:?SMTP_PASSWORD must be set in .env}
+      # KYC: how long a check waits before it runs, how often the job looks,
+      # and failed checks before a customer is set aside. Shorten KYC_DELAY
+      # for a demo; the defaults match application.yml.
+      KYC_DELAY: ${KYC_DELAY:-30s}
+      KYC_JOB_INTERVAL_MS: ${KYC_JOB_INTERVAL_MS:-10000}
+      KYC_MAX_ATTEMPTS: ${KYC_MAX_ATTEMPTS:-5}
+      # How often the outbox relay publishes KYC_VERIFIED to kyc-events.
+      OUTBOX_POLL_MS: ${OUTBOX_POLL_MS:-2000}
     ports:
       - "${API_PUBLISHED_PORT:-8080}:8080"
     networks: [trading-net]

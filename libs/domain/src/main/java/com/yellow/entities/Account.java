@@ -1,6 +1,7 @@
 package com.yellow.entities;
 
 import com.yellow.enums.AccountStatus;
+import com.yellow.enums.KycStatus;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -19,6 +20,9 @@ public class Account {
     private BigDecimal balance;
     private BigDecimal blockedFunds;
     private AccountStatus status;
+    // Required, with no default: a missing value must fail rather than read
+    // as VERIFIED, or an unverified customer could trade.
+    private final KycStatus kycStatus;
 
     private final int loadedVersion;
 
@@ -28,6 +32,7 @@ public class Account {
                    BigDecimal balance,
                    BigDecimal blockedFunds,
                    AccountStatus status,
+                   KycStatus kycStatus,
                    int loadedVersion) {
 
         this.accountId = Objects.requireNonNull(accountId, "accountId");
@@ -35,6 +40,7 @@ public class Account {
                 Objects.requireNonNull(accountReference, "accountReference");
         this.clientId = Objects.requireNonNull(clientId, "clientId");
         this.status = Objects.requireNonNull(status, "status");
+        this.kycStatus = Objects.requireNonNull(kycStatus, "kycStatus");
 
         requireNotNegative(balance, "balance");
         requireNotNegative(blockedFunds, "blockedFunds");
@@ -63,6 +69,10 @@ public class Account {
 
     public boolean isActive() {
         return status == AccountStatus.ACTIVE;
+    }
+
+    public boolean isKycVerified() {
+        return kycStatus == KycStatus.VERIFIED;
     }
     public void block(BigDecimal amount) {
         requirePositive(amount, "amount");
@@ -131,6 +141,7 @@ public class Account {
     public BigDecimal balance()         { return balance; }
     public BigDecimal blockedFunds()    { return blockedFunds; }
     public AccountStatus status()       { return status; }
+    public KycStatus kycStatus()        { return kycStatus; }
     public int loadedVersion()          { return loadedVersion; }
 
     private static BigDecimal money(BigDecimal amount) {

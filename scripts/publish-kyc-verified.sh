@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------
-# Publish one KYC_VERIFIED event by hand, standing in for KYC until it
-# exists. The auth service consumes it, provisions the account, and the
-# activation chain takes over.
+# TESTING ONLY. Publishes one KYC_VERIFIED by hand, with no checks, to
+# exercise auth's provisioning and the activation chain on their own.
+# Real KYC now runs in the Trade REST API (POST /onboarding/applications,
+# then the KYC job and its outbox) -- see "Applying and KYC" in
+# docs/runbooks/account-activation.md.
 #
 #   scripts/publish-kyc-verified.sh <clientId>
+#
+# It changes nothing in the trading database: the order gate reads
+# client_account.kyc_status, so an account this provisions can trade only
+# if that already says VERIFIED.
 #
 # The client must exist in the trading database with a client_profile
 # row, or the activation mailer dead-letters the event for want of an

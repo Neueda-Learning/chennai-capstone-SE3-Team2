@@ -46,6 +46,11 @@ public class OrderService {
             throw new AccountNotActiveException(account.status());
         }
 
+        // and its KYC must have passed
+        if (!account.isKycVerified()) {
+            throw AccountNotActiveException.kycNotVerified(account.status(), account.kycStatus());
+        }
+
         // instrument must exist and be tradable
         // Instrument is UNKNOWN
         Instrument instrument = instrumentRepo.findBySymbol(request.getSymbol())

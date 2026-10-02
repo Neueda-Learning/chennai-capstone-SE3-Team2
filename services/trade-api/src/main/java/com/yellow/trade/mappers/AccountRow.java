@@ -1,6 +1,7 @@
 package com.yellow.trade.mappers;
 
 import com.yellow.enums.AccountStatus;
+import com.yellow.enums.KycStatus;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -11,6 +12,7 @@ public class AccountRow {
     private String accountRef;
     private String holderName;
     private AccountStatus status;
+    private KycStatus kycStatus;
     private BigDecimal balance;
     private BigDecimal blockedFunds;
     private int version;
@@ -28,6 +30,8 @@ public class AccountRow {
 
     public AccountStatus getStatus() { return status; }
     public void setStatus(AccountStatus status) { this.status = status; }
+    public KycStatus getKycStatus() { return kycStatus; }
+    public void setKycStatus(KycStatus kycStatus) { this.kycStatus = kycStatus; }
 
     public BigDecimal getBalance() { return balance; }
     public void setBalance(BigDecimal balance) { this.balance = balance; }

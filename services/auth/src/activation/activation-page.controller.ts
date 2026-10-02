@@ -9,7 +9,7 @@ import { ErrorCode } from '../common/error-codes';
 import { PlatformError } from '../common/platform-error';
 import { Env } from '../config/env';
 import { ActivationTokenService } from './activation-token.service';
-import { errorPage, invalidLinkPage, PAGE_HEADERS, registrationForm } from './activation-pages';
+import { activatedPage, errorPage, invalidLinkPage, PAGE_HEADERS, registrationForm } from './activation-pages';
 
 const TOKEN_FORMAT = /^[0-9a-f]{64}$/;
 
@@ -39,7 +39,7 @@ export class ActivationPageController {
     this.send(res, HttpStatus.OK, registrationForm(token));
   }
 
-  /** Registers, then sends the customer to the home page to log in. */
+  /** Registers, then sends the customer to the confirmation page. */
   @Post()
   async submit(@Body() body: Record<string, unknown>, @Res() res: Response): Promise<void> {
     const token = typeof body?.token === 'string' ? body.token : '';
@@ -78,9 +78,17 @@ export class ActivationPageController {
       return;
     }
 
-    // 303 so the browser follows with a GET and a refresh cannot resubmit the form.
+    // 303 so the browser follows with a GET and a refresh cannot resubmit the
+    // form. To this origin, not the home page: form-action 'self' covers the
+    // redirect too, and a browser drops one to another origin without a word.
     res.set({ 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
-    res.redirect(HttpStatus.SEE_OTHER, this.env.activationHomeUrl);
+    res.redirect(HttpStatus.SEE_OTHER, '/activate/done');
+  }
+
+  /** The confirmation, with a plain link on to the home page. Says nothing about who registered. */
+  @Get('done')
+  done(@Res() res: Response): void {
+    this.send(res, HttpStatus.OK, activatedPage(this.env.activationHomeUrl));
   }
 
   private send(res: Response, status: number, html: string): void {

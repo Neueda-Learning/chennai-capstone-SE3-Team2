@@ -191,6 +191,54 @@ that created it.
 
 ---
 
+### `kyc_verification` — one row per customer
+The KYC decision for a customer, added by `007_kyc.sql`. Keyed by `client_id`,
+so a customer is verified once: submission is idempotent and a rejection is
+final.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `client_id` | INTEGER, PK, FK | The customer being verified |
+| `status` | VARCHAR(10) | PENDING / VERIFIED / REJECTED |
+| `reason` | TEXT | Why it was rejected. Set on REJECTED and only then |
+| `checks` | JSONB | Which checks ran and which failed — the audit trail |
+| `submitted_at` | TIMESTAMPTZ | When the application arrived |
+| `decided_at` | TIMESTAMPTZ | When the decision was made. Null while PENDING |
+| `attempts` | INTEGER | Failed checks so far, added by `008_kyc_attempts.sql`. At `kyc.max-attempts` the job stops picking the customer up |
+| `last_error` | TEXT | Class name of the last failure. Never its message, which can quote personal data |
+
+The check constraints hold the shape of a decision: `decided_at` is set exactly
+when the row is no longer PENDING, and `reason` exactly when it is REJECTED. No
+personal data: the checks read `client_profile` when they run, and this table
+keeps only the outcome.
+
+A customer set aside after `kyc.max-attempts` failures stays PENDING. Once the
+cause is fixed, `UPDATE kyc_verification SET attempts = 0 WHERE client_id = …`
+puts them back in the queue.
+
+---
+
+### `outbox_event` — one row per event awaiting publication
+Events written in the same transaction as the change they announce, then
+published to Kafka by a relay. Added by `007_kyc.sql` for `KYC_VERIFIED`.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `event_id` | UUID, PK | The envelope's `eventId` |
+| `topic` | VARCHAR(249) | Destination topic |
+| `message_key` | VARCHAR(64) | Kafka message key |
+| `envelope` | JSONB | The whole message, exactly as sent |
+| `created_at` | TIMESTAMPTZ | When the change committed |
+| `published_at` | TIMESTAMPTZ | When the broker took it. Null until then |
+| `attempts` | INTEGER | Failed publish attempts so far |
+| `last_error` | TEXT | The most recent failure |
+
+A rolled-back change leaves no row and publishes nothing; a committed one is
+retried until it is published. The auth service has a table of the same shape
+in its own database.
+
+---
+
 ## Derived values — computed, never stored
 
 ```
