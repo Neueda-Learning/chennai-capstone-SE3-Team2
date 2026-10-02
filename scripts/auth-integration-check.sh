@@ -28,7 +28,9 @@ fi
 
 # Check 6 measures what Sprint 8 did, so it stops at the Sprint 8 merge.
 # Sprint 9's activation mailer is Java by design and is not Sprint 8's claim.
-SPRINT8_END="${SPRINT8_END:-dd4a77b}"
+# fcd04df is that merge (PR #21) as it stands on release/sprint8. The earlier
+# dd4a77b has the identical tree but was rewritten away and is not in a clone.
+SPRINT8_END="${SPRINT8_END:-fcd04df}"
 
 pass() { printf '  \033[1;32mpass\033[0m  %s\n' "$*"; }
 fail() { printf '  \033[1;31mFAIL\033[0m  %s\n' "$*"; exit 1; }

@@ -18,8 +18,8 @@ set -euo pipefail
 CLIENT_ID="${1:?usage: $0 <clientId>}"
 [[ "$CLIENT_ID" =~ ^[1-9][0-9]*$ ]] || { echo "clientId must be a positive integer" >&2; exit 2; }
 
-AUTH_DB_CONTAINER="${AUTH_DB_CONTAINER:-fauxnance-auth-postgres}"
-AUTH_DB_USER="${AUTH_DB_USER:-auth}"
+AUTH_DB_CONTAINER="${AUTH_DB_CONTAINER:-fauxnance-postgres}"
+AUTH_DB_USER="${AUTH_DB_USER:-auth_app}"
 AUTH_DB_NAME="${AUTH_DB_NAME:-auth}"
 
 command -v docker >/dev/null || { echo "need docker on PATH" >&2; exit 2; }

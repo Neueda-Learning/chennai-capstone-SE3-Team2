@@ -140,7 +140,7 @@ bash scripts/create-topics.sh
 # pick client 5; route its email to your inbox; un-provision it in auth
 docker exec -i fauxnance-postgres psql -U postgres -d trading \
   -c "UPDATE client_profile SET email = 'you+activation@gmail.com' WHERE client_id = 5"
-docker exec -i fauxnance-auth-postgres psql -U auth -d auth \
+docker exec -i fauxnance-postgres psql -U postgres -d auth \
   -c "DELETE FROM provisioned_account WHERE account_id = 5 AND claimed_by IS NULL"
 
 # watch the provisioning topic in a second terminal
