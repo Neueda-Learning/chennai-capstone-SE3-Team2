@@ -1,0 +1,33 @@
+{
+  "$schema": "./node_modules/@openapitools/openapi-generator-cli/config.schema.json",
+  "spaces": 2,
+  "generator-cli": {
+    "version": "7.25.0",
+    "generators": {
+      "trade": {
+        "generatorName": "typescript-angular",
+        "inputSpec": "../contracts/trade-api.yaml",
+        "output": "src/generated/trade",
+        "skipValidateSpec": true,
+        "additionalProperties": {
+          "ngVersion": "21.0.0",
+          "providedIn": "root",
+          "fileNaming": "kebab-case",
+          "supportsES6": true
+        }
+      },
+      "auth": {
+        "generatorName": "typescript-angular",
+        "inputSpec": "../contracts/auth-api.yaml",
+        "output": "src/generated/auth",
+        "skipValidateSpec": true,
+        "additionalProperties": {
+          "ngVersion": "21.0.0",
+          "providedIn": "root",
+          "fileNaming": "kebab-case",
+          "supportsES6": true
+        }
+      }
+    }
+  }
+}

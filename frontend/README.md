@@ -60,3 +60,45 @@ frontend/
 ├── e2e/                        Playwright journeys against the running stack        (637)
 └── scripts/                    the bundle secret scan                                (638)
 ```
+
+## The typed clients are generated
+
+Both clients in `src/generated/` are written by
+[OpenAPI Generator](https://openapi-generator.tech) from `../contracts/`, never
+by hand.
+
+| | |
+|---|---|
+| Generator | `typescript-angular`, jar **7.25.0** |
+| Runner | `@openapitools/openapi-generator-cli` **2.41.0**, an exact devDependency |
+| Configuration | `openapitools.json`: one entry per contract, each into its own subdirectory |
+| `trade` | `../contracts/trade-api.yaml` → `src/generated/trade/` |
+| `auth` | `../contracts/auth-api.yaml` → `src/generated/auth/` |
+
+Both versions are pinned, so two people generating on different days get the
+same files.
+
+```bash
+npm run generate:api    # regenerate both; needs Java 11+ (the generator runs on the JVM)
+npm run check:api       # regenerate into a scratch directory and diff against the committed tree
+```
+
+Run `check:api` before every review, and `generate:api` on every contract
+change, committing the result in the same commit as the code that adapts to it.
+The build itself needs neither Java nor the network: the output is committed.
+
+**Never edit a file in `src/generated/`.** Nobody reviews its formatting or its
+naming; the next generation reverts anything tidied. When a generated shape is
+awkward, wrap it in a service under `src/app/core/api/`. `check:api` fails on a
+changed file and on a file the generator did not write.
+
+**`skipValidateSpec` is set, knowingly.** The generator's OpenAPI 3.1 validator
+asks for `info.license.identifier`, which the specification makes optional and
+the contracts do not carry. The contracts are correct and are not ours to edit.
+
+**The tree contains an `NgModule`, and nothing uses it.** The generator always
+writes `api.module.ts` and re-exports it from its own `index.ts`, so it cannot
+be left out without editing generated files. This workspace provides the
+clients with the generator's standalone `provideApi()` instead, in
+`src/app/core/api/provide-clients.ts`, which is also where the clients are
+pointed at `src/environments/environment.ts`.
