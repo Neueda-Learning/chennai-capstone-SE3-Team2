@@ -54,6 +54,7 @@ public abstract class ExecutorPostgresSupport {
             "migrations/007_kyc.sql",
             "migrations/008_kyc_attempts.sql",
             "migrations/009_bank_account.sql",
+            "migrations/010_payments.sql",
             "indexes/001_performance_indexes.sql",
             "seed/001_reference_data.sql",
             "seed/002_clients.sql",

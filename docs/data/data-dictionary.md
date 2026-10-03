@@ -63,6 +63,17 @@ Audit trail for money entering and leaving the platform.
 | `reference_id` | VARCHAR(100), UK* | Payment gateway's payment ID. *Partial unique index (non-null only) |
 | `idempotency_key` | VARCHAR(64) | Caller-generated; unique per client |
 | `created_at` | TIMESTAMPTZ | Request time |
+| `reason` | TEXT | Why the gateway declined it. Added by `010_payments.sql` |
+| `decided_at` | TIMESTAMPTZ | When the gateway decided it. Null while PENDING, and on Sprint 3's seed rows |
+| `attempts` | INTEGER | Failed attempts to decide; at `payments.max-attempts` the transfer is set aside |
+| `last_error` | TEXT | Class name of the last failure, never its message |
+
+Since `010_payments.sql` the Trade REST API's payments module writes here:
+a deposit or withdrawal is recorded PENDING, and the (stub) gateway decides it
+a few seconds later. A withdrawal holds its amount in
+`client_account.blocked_funds` from the moment it is requested; SUCCESS moves
+the money and FAILED releases the hold, in the same transaction as the
+decision. Money moves only to and from the customer's `bank_account`.
 
 ---
 

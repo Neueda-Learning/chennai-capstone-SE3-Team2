@@ -65,6 +65,7 @@ public abstract class PostgresSupport {
             "migrations/007_kyc.sql",
             "migrations/008_kyc_attempts.sql",
             "migrations/009_bank_account.sql",
+            "migrations/010_payments.sql",
             "indexes/001_performance_indexes.sql",
             "seed/001_reference_data.sql",
             "seed/002_clients.sql",
@@ -100,6 +101,7 @@ public abstract class PostgresSupport {
         // is no broker for the relay. Tests that need either run it by hand.
         registry.add("kyc.job.enabled", () -> "false");
         registry.add("outbox.relay.enabled", () -> "false");
+        registry.add("payments.job.enabled", () -> "false");
     }
 
     public static void applySchema(JdbcTemplate jdbc) {

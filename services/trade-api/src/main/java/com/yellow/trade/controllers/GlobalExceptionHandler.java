@@ -12,6 +12,7 @@ import com.yellow.exceptions.OrderNotFoundException;
 import com.yellow.exceptions.StaleAccountVersionException;
 import com.yellow.exceptions.TradeException;
 import com.yellow.trade.dto.ErrorResponse;
+import com.yellow.trade.payments.PaymentRefusedException;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -141,6 +142,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handle(HttpMediaTypeNotSupportedException e) {
         log.warn("unsupported content type {}", e.getContentType());
         return envelope(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "REQ-415", "Unsupported media type");
+    }
+
+    @ExceptionHandler(PaymentRefusedException.class)
+    public ResponseEntity<ErrorResponse> handle(PaymentRefusedException e) {
+        log.warn("{}: {}", e.code(), e.getMessage());
+        return envelope(e.status(), e.code(), e.getMessage());
     }
 
     @ExceptionHandler(TradeException.class)

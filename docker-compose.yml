@@ -78,6 +78,7 @@ services:
       - ./data/db/migrations/007_kyc.sql:/docker-entrypoint-initdb.d/06c-migration-007.sql:ro
       - ./data/db/migrations/008_kyc_attempts.sql:/docker-entrypoint-initdb.d/06d-migration-008.sql:ro
       - ./data/db/migrations/009_bank_account.sql:/docker-entrypoint-initdb.d/06e-migration-009.sql:ro
+      - ./data/db/migrations/010_payments.sql:/docker-entrypoint-initdb.d/06f-migration-010.sql:ro
       - ./data/db/indexes/001_performance_indexes.sql:/docker-entrypoint-initdb.d/07-indexes.sql:ro
       - ./data/db/seed/001_reference_data.sql:/docker-entrypoint-initdb.d/08-seed-reference.sql:ro
       - ./data/db/seed/002_clients.sql:/docker-entrypoint-initdb.d/09-seed-clients.sql:ro
@@ -149,6 +150,8 @@ services:
       KYC_MAX_ATTEMPTS: ${KYC_MAX_ATTEMPTS:-5}
       # How often the outbox relay publishes KYC_VERIFIED to kyc-events.
       OUTBOX_POLL_MS: ${OUTBOX_POLL_MS:-2000}
+      # How long a deposit or withdrawal waits before the gateway decides it.
+      PAYMENT_DELAY: ${PAYMENT_DELAY:-3s}
     ports:
       - "${API_PUBLISHED_PORT:-8080}:8080"
     networks: [trading-net]
