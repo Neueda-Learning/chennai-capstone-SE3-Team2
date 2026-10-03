@@ -146,3 +146,38 @@ The Auth service answers the browser only because it allows this origin:
 
 To sign in for real you need a login: apply, pass KYC and activate as in
 `docs/runbooks/account-activation.md`, "Running it end to end".
+
+## The bearer token, and where it is not sent
+
+`src/app/core/http/auth.interceptor.ts` is the only code that sets an
+`Authorization` header, registered once in `app.config.ts` with
+`withInterceptors`. A service added tomorrow cannot forget it, and cannot set
+it somewhere it should not go.
+
+It decides by an **allow list**, built from the two configured origins:
+
+| Origin | Paths | Token |
+|---|---|---|
+| Trade REST API (`tradeApiUrl`) | `/api/v1/**` | yes |
+| Auth service (`authApiUrl`) | `/auth/me` | yes |
+| Auth service | `/auth/login`, `/auth/register`, `/auth/refresh` | no — `security: []` in the contract |
+| anything else: the market-data API, an analytics script, this app's own origin, a lookalike such as `localhost:8080.evil.example` | | **no** |
+
+The token is a bearer credential: whoever holds it is the customer until it
+expires. Sent to a third party it lands in their access log, their analytics
+and their error tracker, and stays there. An allow list fails closed when a new
+third party appears; a deny list fails open, silently.
+
+The generated clients could add a header themselves, but only if given
+credentials, and `provideClients` gives them a base path and nothing else. A
+spec proves a generated call made without the interceptor carries no header.
+
+The two assessed cases are named for what they assert, in
+`auth.interceptor.spec.ts`: *attaches the bearer token to a request to the
+Trade REST API* and *does not attach the bearer token to a request to a
+third-party origin*.
+
+The Trade REST API answers the browser only because it allows this origin:
+`CORS_ALLOWED_ORIGINS` again (`services/trade-api`, `CorsConfig`). Its CORS
+filter runs before the token filter, because a browser's preflight carries no
+token and would otherwise be refused.
