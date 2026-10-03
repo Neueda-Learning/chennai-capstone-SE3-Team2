@@ -127,6 +127,46 @@ class PreTradeChecksTest {
         }
 
         @Test
+        @DisplayName("a BUY's own reservation is its money: the blocked funds holding it do not stop it filling")
+        void ownReservationIsAvailableToTheOrder() {
+            // Found live. The Trade REST API blocked 2 x 130,000 when it
+            // accepted the order, on a balance of 299,000. Counting that
+            // reservation against the very order it was made for left 39,000,
+            // and rejected a buy of 247,495.68 the customer could pay for.
+            Account reserved = account("299000", "260000");
+
+            assertThat(PreTradeChecks.atExecution(buy("2", "130000.00"), reserved,
+                            Optional.empty(), new BigDecimal("123747.8400")),
+                    is(Optional.empty()));
+        }
+
+        @Test
+        @DisplayName("funds blocked for anything else stay out of reach: only this order's reservation is counted back")
+        void onlyTheOrdersOwnReservationIsCountedBack() {
+            // 260,000 is this order's; the other 200,000 holds a withdrawal.
+            // 500,000 less the withdrawal's 200,000 leaves 300,000 for an
+            // order costing 247,495.68.
+            Account reserved = account("500000", "460000");
+
+            assertThat(PreTradeChecks.atExecution(buy("2", "130000.00"), reserved,
+                            Optional.empty(), new BigDecimal("123747.8400")),
+                    is(Optional.empty()));
+        }
+
+        @Test
+        @DisplayName("blocked funds smaller than the order's reservation are not counted back: the reservation is not there")
+        void aReservationNotHeldIsNotCountedBack() {
+            // An order accepted before reservations existed, or one whose
+            // reservation was released: 100,000 blocked cannot be the 260,000
+            // this order would have reserved, so none of it is assumed to be.
+            Account unreserved = account("299000", "100000");
+
+            assertThat(PreTradeChecks.atExecution(buy("2", "130000.00"), unreserved,
+                            Optional.empty(), new BigDecimal("123747.8400")),
+                    is(Optional.of(RejectReason.INSUFFICIENT_FUNDS)));
+        }
+
+        @Test
         @DisplayName("a BUY that still fits is allowed through")
         void affordableBuyPasses() {
             assertThat(PreTradeChecks.atExecution(buy("4", "126000.00"),
@@ -183,6 +223,11 @@ class PreTradeChecksTest {
     private static Account account(String available, AccountStatus status) {
         return new Account(3L, "ACC-000003", 3L,
                 new BigDecimal(available), BigDecimal.ZERO, status, KycStatus.VERIFIED, 7);
+    }
+
+    private static Account account(String balance, String blocked) {
+        return new Account(3L, "ACC-000003", 3L,
+                new BigDecimal(balance), new BigDecimal(blocked), AccountStatus.ACTIVE, KycStatus.VERIFIED, 7);
     }
 
     private static Position holding(String quantity) {

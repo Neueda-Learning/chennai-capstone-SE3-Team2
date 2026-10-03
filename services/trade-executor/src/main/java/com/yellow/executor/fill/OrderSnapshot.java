@@ -31,6 +31,15 @@ public record OrderSnapshot(
         return status == OrderStatus.NEW;
     }
 
+    /**
+     * What the Trade REST API blocked for this order when it accepted it: the
+     * limit times the quantity, at the scale the account balance is held in.
+     * Settlement releases exactly this, filled or rejected.
+     */
+    public BigDecimal reservation() {
+        return ExecutionPrice.round(limitPrice.multiply(quantity));
+    }
+
     /** What the order costs at executedPrice, at the scale the account balance is held in. */
     public BigDecimal considerationAt(BigDecimal executedPrice) {
         return ExecutionPrice.round(quantity.multiply(executedPrice));

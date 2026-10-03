@@ -49,7 +49,7 @@ public final class PreTradeChecks {
         if (order.isBuy()) {
             // Rule 6, against the executed price rather than the limit.
             BigDecimal consideration = order.considerationAt(executedPrice);
-            return account.canAfford(consideration)
+            return spendableBy(order, account).compareTo(consideration) >= 0
                     ? Optional.empty()
                     : Optional.of(RejectReason.INSUFFICIENT_FUNDS);
         }
@@ -59,5 +59,23 @@ public final class PreTradeChecks {
         return position.filter(held -> held.canSell(order.quantity())).isPresent()
                 ? Optional.empty()
                 : Optional.of(RejectReason.INSUFFICIENT_HOLDINGS);
+    }
+
+    /**
+     * The cash a BUY may spend. The Trade REST API blocked the order's
+     * reservation when it accepted it, and settlement releases exactly that:
+     * it is this order's money, not money held from it. Only what is blocked
+     * for anything else -- other orders, withdrawals -- is out of reach.
+     *
+     * blocked_funds is one number for the whole account, so when it holds less
+     * than the reservation, the reservation is not there -- an order accepted
+     * before reservations existed, or one released elsewhere -- and none of it
+     * is counted back.
+     */
+    private static BigDecimal spendableBy(OrderSnapshot order, Account account) {
+        BigDecimal reservation = order.reservation();
+        BigDecimal blocked = account.blockedFunds();
+        BigDecimal heldForOthers = blocked.compareTo(reservation) >= 0 ? blocked.subtract(reservation) : blocked;
+        return account.balance().subtract(heldForOthers);
     }
 }

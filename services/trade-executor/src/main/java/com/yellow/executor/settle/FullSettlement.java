@@ -60,9 +60,8 @@ public class FullSettlement implements SettlementPort {
             return SettlementResult.ALREADY_SETTLED;
         }
 
-        // What the trade costs/yields, rounded to the column's precision.
-        BigDecimal blockedRelease = ExecutionPrice.round(
-                order.limitPrice().multiply(order.quantity()));
+        // What the Trade REST API blocked for this order when it accepted it.
+        BigDecimal blockedRelease = order.reservation();
 
         BigDecimal balanceDelta;
         BigDecimal blockedDelta;
