@@ -1,10 +1,13 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ErrorResponse as AuthErrorResponse } from '../../../generated/auth';
+import { ErrorResponse as ExtensionErrorResponse } from '../../../generated/extensions';
 import { ErrorResponse as TradeErrorResponse } from '../../../generated/trade';
 
 /** The codes each contract declares, read from the generated clients rather than typed out again. */
 export type TradeErrorCode = TradeErrorResponse.ErrorCodeEnum;
 export type AuthErrorCode = AuthErrorResponse.ErrorCodeEnum;
+/** The codes our extension routes add: onboarding, instruments, payments. */
+export type ExtensionErrorCode = ExtensionErrorResponse.ErrorCodeEnum;
 
 /**
  * Codes our services really send that neither contract lists: the login
@@ -13,7 +16,7 @@ export type AuthErrorCode = AuthErrorResponse.ErrorCodeEnum;
 export const OFF_CATALOGUE_CODES = ['AUTH-429', 'SRV-500'] as const;
 export type OffCatalogueCode = (typeof OFF_CATALOGUE_CODES)[number];
 
-export type KnownErrorCode = TradeErrorCode | AuthErrorCode | OffCatalogueCode;
+export type KnownErrorCode = TradeErrorCode | AuthErrorCode | ExtensionErrorCode | OffCatalogueCode;
 
 /**
  * One sentence a trader can act on, per code. A Record over the generated
@@ -37,6 +40,10 @@ export const ERROR_MESSAGES: Readonly<Record<KnownErrorCode, string>> = {
   'AUTH-401': 'Your session has expired or the sign-in was refused. Please sign in again.',
   'AUTH-409': 'That username is already taken. Choose another one.',
   'AUTH-429': 'Too many sign-in attempts. Wait a minute, then try again.',
+  'PAY-400': "There isn't enough available cash for that withdrawal. Cash held for open orders can't be withdrawn.",
+  'PAY-404': "There's no bank account registered on this account, so no money can move. Contact support.",
+  'PAY-409': "That request was already used for a different transfer. Start a new one.",
+  'RATE-429': 'Too many applications from this connection. Please try again in an hour.',
   'SRV-500':
     'Something went wrong on our side. Your request may not have completed, so check your orders before trying again.',
 };

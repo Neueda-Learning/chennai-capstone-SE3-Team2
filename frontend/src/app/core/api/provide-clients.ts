@@ -1,5 +1,6 @@
 import { EnvironmentProviders, makeEnvironmentProviders } from '@angular/core';
 import { provideApi as provideAuthApi } from '../../../generated/auth';
+import { provideApi as provideExtensionsApi } from '../../../generated/extensions';
 import { provideApi as provideTradeApi } from '../../../generated/trade';
 import { API_CONFIG, ApiConfig } from '../config/api-config';
 
@@ -12,5 +13,7 @@ export function provideClients(config: ApiConfig): EnvironmentProviders {
     { provide: API_CONFIG, useValue: config },
     provideTradeApi(config.tradeApiUrl),
     provideAuthApi(config.authApiUrl),
+    // Our own routes on the Trade REST API: same server, its own description.
+    provideExtensionsApi(config.tradeApiUrl),
   ]);
 }

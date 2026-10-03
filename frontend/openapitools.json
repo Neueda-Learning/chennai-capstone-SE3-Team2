@@ -27,6 +27,17 @@
           "fileNaming": "kebab-case",
           "supportsES6": true
         }
+      },
+      "extensions": {
+        "generatorName": "typescript-angular",
+        "inputSpec": "../services/trade-api/openapi/trade-api-extensions.yaml",
+        "output": "src/generated/extensions",
+        "additionalProperties": {
+          "ngVersion": "21.0.0",
+          "providedIn": "root",
+          "fileNaming": "kebab-case",
+          "supportsES6": true
+        }
       }
     }
   }

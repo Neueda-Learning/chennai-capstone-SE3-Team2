@@ -1,0 +1,347 @@
+openapi: 3.0.3
+info:
+  title: Trade REST API -- our extensions
+  version: 1.0.0
+  description: |
+    The routes the Trade REST API serves beyond `contracts/trade-api.yaml`: opening an
+    account, the instruments a customer may order, and cash in and out through the payment
+    gateway. The programme's contracts are not ours to edit, so these live here, beside the
+    service that implements them, and the trading UI generates its client from this file as it
+    does from the contracts. `OpenApiExtensionContractTest` fails the build if a route or a
+    field here stops matching the Java code. Recorded as a deviation in `contracts/DEVIATIONS.md`.
+
+    Same error envelope as the contracts: `{ "errorCode", "message" }`. Branch on `errorCode`.
+
+servers:
+  - url: http://localhost:8080
+    description: Local stack
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Onboarding
+    description: Applying for an account. Public -- the applicant has no login yet.
+  - name: Instruments
+    description: What can be ordered.
+  - name: Payments
+    description: |
+      Deposits and withdrawals, only to and from the account's registered bank account.
+      Requested PENDING; the payment gateway decides each a few seconds later.
+
+paths:
+  /onboarding/applications:
+    post:
+      tags: [Onboarding]
+      operationId: applyForAccount
+      summary: Apply for an account
+      description: |
+        Creates the customer with KYC pending. KYC decides shortly after; a customer who passes
+        is emailed an activation link. A PAN or email already registered answers exactly like a
+        new application and creates nothing, so the route never reveals who is a customer.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicationRequest'
+      responses:
+        '202':
+          description: Received
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationReceived'
+        '422':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+
+  /api/v1/instruments:
+    get:
+      tags: [Instruments]
+      operationId: getTradableInstruments
+      summary: The instruments a customer may order, by symbol
+      responses:
+        '200':
+          description: Tradable instruments; delisted ones are left out
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InstrumentResponse'
+        '401':
+          $ref: '#/components/responses/Error'
+
+  /api/v1/accounts/{id}/bank-account:
+    get:
+      tags: [Payments]
+      operationId: getBankAccount
+      summary: The registered bank account, masked
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+      responses:
+        '200':
+          description: The bank account money moves to and from
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankAccountResponse'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /api/v1/accounts/{id}/transfers:
+    get:
+      tags: [Payments]
+      operationId: getTransfers
+      summary: Every deposit and withdrawal, newest first
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+      responses:
+        '200':
+          description: Transfers, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TransferResponse'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /api/v1/accounts/{id}/deposits:
+    post:
+      tags: [Payments]
+      operationId: deposit
+      summary: Add cash from the registered bank account
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferRequest'
+      responses:
+        '202':
+          description: Accepted and PENDING; the same request with the same key returns the first transfer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferResponse'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+
+  /api/v1/accounts/{id}/withdrawals:
+    post:
+      tags: [Payments]
+      operationId: withdraw
+      summary: Send cash to the registered bank account
+      description: The amount is held from available cash at once, so it cannot also be spent on an order.
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferRequest'
+      responses:
+        '202':
+          description: Accepted, held and PENDING; the same request with the same key returns the first transfer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    AccountId:
+      name: id
+      in: path
+      required: true
+      description: The numeric account key; must be the token's own account.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+
+  responses:
+    Error:
+      description: The platform's error envelope
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    ApplicationRequest:
+      type: object
+      additionalProperties: false
+      required: [name, dob, email, phoneNumber, pan, bankAccountNumber, ifsc]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 120
+        dob:
+          type: string
+          description: Date of birth, YYYY-MM-DD. The applicant must be 18 or over.
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+        email:
+          type: string
+          format: email
+          maxLength: 200
+        phoneNumber:
+          type: string
+          pattern: '^\+91[6-9]\d{9}$'
+        pan:
+          type: string
+          pattern: '^[A-Z]{5}[0-9]{4}[A-Z]$'
+        address:
+          type: string
+          maxLength: 500
+        bankAccountNumber:
+          type: string
+          description: The account money will move to and from. Never logged.
+          pattern: '^[0-9]{9,18}$'
+        ifsc:
+          type: string
+          pattern: '^[A-Z]{4}0[A-Z0-9]{6}$'
+
+    ApplicationReceived:
+      type: object
+      required: [status, message]
+      properties:
+        status:
+          type: string
+          enum: [RECEIVED]
+        message:
+          type: string
+
+    InstrumentResponse:
+      type: object
+      required: [symbol, name, type]
+      properties:
+        symbol:
+          type: string
+          description: What an order names -- a ticker, or a fund's scheme code.
+        name:
+          type: string
+        type:
+          type: string
+          enum: [STOCK, ETF, MF]
+        exchange:
+          type: string
+          nullable: true
+          description: NSE or BSE; null for a mutual fund.
+
+    BankAccountResponse:
+      type: object
+      required: [accountNumberLast4, ifsc, holderName]
+      properties:
+        accountNumberLast4:
+          type: string
+          description: The last four digits; the full number never leaves the server.
+        ifsc:
+          type: string
+        holderName:
+          type: string
+
+    TransferRequest:
+      type: object
+      additionalProperties: false
+      required: [amount, idempotencyKey]
+      properties:
+        amount:
+          type: number
+          description: Rupees, above zero, at most two decimal places.
+          minimum: 0.01
+          multipleOf: 0.01
+        idempotencyKey:
+          type: string
+          minLength: 8
+          maxLength: 64
+          description: Sending the same transfer again with this key returns the first one.
+
+    TransferResponse:
+      type: object
+      required: [transferId, direction, amount, status, createdAt]
+      properties:
+        transferId:
+          type: integer
+          format: int64
+        direction:
+          type: string
+          enum: [DEPOSIT, WITHDRAWAL]
+        amount:
+          type: number
+        status:
+          type: string
+          enum: [PENDING, SUCCESS, FAILED]
+        reason:
+          type: string
+          nullable: true
+          description: Why the gateway declined it; null otherwise.
+        createdAt:
+          type: string
+          format: date-time
+        decidedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    ErrorResponse:
+      type: object
+      required: [errorCode, message]
+      properties:
+        errorCode:
+          type: string
+          description: |
+            The codes these routes answer with. The four new ones:
+
+            | Code | HTTP | Meaning |
+            |---|---|---|
+            | `PAY-400` | 400 | Not enough available cash for the withdrawal |
+            | `PAY-404` | 404 | No bank account on file |
+            | `PAY-409` | 409 | The idempotency key was used for a different transfer |
+            | `RATE-429` | 429 | Too many applications from this address; try later |
+          enum: [ACC-403, ACC-404, AUTH-401, VAL-422, PAY-400, PAY-404, PAY-409, RATE-429]
+        message:
+          type: string

@@ -39,7 +39,8 @@ frontend/
 │   ├── styles.css              tokens and the shared patterns (buttons, fields, alerts, tables)
 │   ├── generated/              typed clients generated from contracts/ — machine output, never edited  (630)
 │   │   ├── trade/              from contracts/trade-api.yaml
-│   │   └── auth/               from contracts/auth-api.yaml
+│   │   ├── auth/               from contracts/auth-api.yaml
+│   │   └── extensions/         from services/trade-api/openapi/trade-api-extensions.yaml — our own routes
 │   └── app/
 │       ├── app.ts / app.html   the shell: header, navigation, <router-outlet>
 │       ├── app.config.ts       providers: router, HttpClient, the one interceptor, the API base paths
@@ -74,6 +75,17 @@ by hand.
 | Configuration | `openapitools.json`: one entry per contract, each into its own subdirectory |
 | `trade` | `../contracts/trade-api.yaml` → `src/generated/trade/` |
 | `auth` | `../contracts/auth-api.yaml` → `src/generated/auth/` |
+| `extensions` | `../services/trade-api/openapi/trade-api-extensions.yaml` → `src/generated/extensions/` |
+
+**The third client is ours.** The Trade REST API serves routes the programme's
+contracts do not describe -- applying for an account, the instrument list, and
+deposits and withdrawals -- and the contracts are not ours to edit. So those
+routes are described in `services/trade-api/openapi/trade-api-extensions.yaml`,
+beside the service that implements them, and generated like the other two: no
+call in this application is hand-written. In the service's own build,
+`OpenApiExtensionContractTest` fails if a route, a field or an error code in
+that file stops matching the Java code. It is OpenAPI 3.0.3, so it is generated
+with the generator's validation on.
 
 Both versions are pinned, so two people generating on different days get the
 same files.
@@ -115,7 +127,11 @@ act on, and `<app-error-message>` (in `shared/`) renders it as an alert.
   the generator read out of both contracts, so a code added to a contract stops
   the build until it has a sentence. Its spec checks every generated code, and
   that together they are the eight the catalogues declare.
-- **Two codes outside the catalogues** are mapped too, because our services send
+- **Our extension routes' codes** come from their own generated client and are
+  held to the same rule: `PAY-400` (not enough available cash to withdraw),
+  `PAY-404` (no bank account on file), `PAY-409` (a retry key reused for a
+  different transfer) and `RATE-429` (too many applications).
+- **Two codes outside every catalogue** are mapped too, because our services send
   them: `AUTH-429` (the login throttle) and `SRV-500`.
 - **Status 0** — no response at all, usually a service that is down or a CORS
   rule that does not allow this origin — has its own sentence, and an unknown

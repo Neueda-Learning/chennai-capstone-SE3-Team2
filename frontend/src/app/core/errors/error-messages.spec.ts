@@ -80,3 +80,15 @@ describe('describeError', () => {
     expect(shown.message).toBe('That username and password do not match.');
   });
 });
+
+describe('describeError, for our extension routes', () => {
+  it('maps every code the extension contract declares to a message', async () => {
+    const { ErrorResponse } = await import('../../../generated/extensions');
+    for (const code of Object.values(ErrorResponse.ErrorCodeEnum)) {
+      const shown = describeError(platformError(code));
+
+      expect(shown.message, code).toBe(ERROR_MESSAGES[code]);
+      expect(shown.message, code).not.toBe(UNKNOWN_ERROR_MESSAGE);
+    }
+  });
+});
