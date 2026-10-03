@@ -227,3 +227,25 @@ it as finished, and links to the dashboard, where it updates.
 at all (status 0), the order may or may not have landed, so a retry of the
 same order reuses the same key: if the first attempt did land, the API answers
 `ORD-409` instead of placing it twice.
+
+## The dashboard and the blotter
+
+The dashboard (`/`) shows the token's account from `GET /api/v1/accounts/{id}`,
+who is signed in from `GET /auth/me`, and the blotter.
+
+The blotter lists every order from `GET /api/v1/accounts/{id}/orders`,
+**newest first, rejections included**: the rejection is the record that the desk
+tried and was refused. Each status has a badge carrying the **word and a shape
+as well as a colour** -- roughly one man in twelve cannot tell red from green:
+`◷ NEW`, `✓ FILLED`, `✕ REJECTED`, `– CANCELLED`.
+
+**An order at `NEW` is normal.** The Trade REST API answers before the executor
+resolves the order, and neither contract pushes to the browser. While anything
+is at `NEW` the blotter says it is still working and **re-reads order history
+every 3 seconds, at most 10 times** -- 30 seconds and 10 requests per burst. An
+order normally resolves in a second or two, so the first re-read usually ends
+it; 30 seconds covers a slow executor without polling for as long as the tab is
+open. It stops as soon as nothing is at `NEW`, says so when it gives up, and
+**Refresh** starts a new burst. It only ever re-reads: re-posting an order
+would get `ORD-409` with the same idempotency key, or a second order with a new
+one. The numbers are `REREAD_POLICY` in `features/blotter/blotter.ts`.

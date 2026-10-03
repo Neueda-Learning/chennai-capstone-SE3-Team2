@@ -1,0 +1,28 @@
+.title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.summary dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 1rem;
+  margin: 0;
+}
+
+.summary dt {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.summary dd {
+  margin: 0;
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.signed-in {
+  color: var(--muted);
+  margin: 1rem 0 0;
+}

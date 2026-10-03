@@ -1,0 +1,125 @@
+import { DatePipe, DecimalPipe } from '@angular/common';
+import { Component, DestroyRef, InjectionToken, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { RouterLink } from '@angular/router';
+import { OrderHistoryEntry, OrderStatus } from '../../../generated/trade';
+import { TradeApi } from '../../core/api/trade-api';
+import { ErrorMessage } from '../../shared/error-message/error-message';
+import { StatusBadge } from '../../shared/status-badge/status-badge';
+
+/**
+ * How the blotter brings a working order up to date, and the numbers to
+ * defend at the review.
+ *
+ * An order at NEW is normal: the Trade REST API answered before the executor
+ * resolved it, and neither contract pushes to the browser. So while anything
+ * is at NEW the blotter re-reads order history -- never re-posts the order,
+ * because the same idempotency key answers ORD-409 and a new key places a
+ * second order.
+ *
+ * Every 3 seconds, at most 10 times: 30 seconds and 10 requests per burst.
+ * An order normally resolves within a second or two, so the first re-read
+ * usually ends it; 30 seconds covers a slow executor without polling for as
+ * long as the tab is open. After that the screen says the order is still
+ * working, and Refresh starts a new burst.
+ */
+export interface RereadPolicy {
+  readonly intervalMs: number;
+  readonly maxRereads: number;
+  /** Runs `task` after `ms`; returns a cancel function. A seam for the specs. */
+  readonly schedule: (task: () => void, ms: number) => () => void;
+}
+
+export const REREAD_POLICY = new InjectionToken<RereadPolicy>('REREAD_POLICY', {
+  providedIn: 'root',
+  factory: () => ({
+    intervalMs: 3000,
+    maxRereads: 10,
+    schedule: (task, ms) => {
+      const id = setTimeout(task, ms);
+      return () => clearTimeout(id);
+    },
+  }),
+});
+
+@Component({
+  selector: 'app-blotter',
+  imports: [DatePipe, DecimalPipe, RouterLink, StatusBadge, ErrorMessage],
+  templateUrl: './blotter.html',
+  styleUrl: './blotter.css',
+})
+export class Blotter {
+  private readonly tradeApi = inject(TradeApi);
+  private readonly policy = inject(REREAD_POLICY);
+
+  /** The account whose orders to show: the session's own. */
+  readonly accountId = input.required<number>();
+
+  protected readonly orders = signal<readonly OrderHistoryEntry[] | null>(null);
+  protected readonly error = signal<unknown>(null);
+  protected readonly loading = signal(false);
+  protected readonly rereads = signal(0);
+  protected readonly gaveUp = signal(false);
+
+  /** Newest first, rejections included: the rejection is the record that the desk tried. */
+  protected readonly rows = computed(() =>
+    [...(this.orders() ?? [])].sort((a, b) => Date.parse(b.createdOn) - Date.parse(a.createdOn)),
+  );
+
+  protected readonly working = computed(() => this.rows().filter((order) => order.status === OrderStatus.New).length);
+
+  protected readonly intervalSeconds = this.policy.intervalMs / 1000;
+  protected readonly limitSeconds = (this.policy.intervalMs * this.policy.maxRereads) / 1000;
+
+  private cancelReread: (() => void) | null = null;
+
+  constructor() {
+    effect(() => {
+      const accountId = this.accountId();
+      untracked(() => void this.refresh(accountId));
+    });
+    inject(DestroyRef).onDestroy(() => this.stopRereading());
+  }
+
+  /** Re-reads now and starts a fresh burst. The button, and the first load. */
+  async refresh(accountId: number = this.accountId()): Promise<void> {
+    this.stopRereading();
+    this.rereads.set(0);
+    this.gaveUp.set(false);
+    await this.read(accountId);
+  }
+
+  private async read(accountId: number): Promise<void> {
+    this.loading.set(true);
+    try {
+      this.orders.set(await this.tradeApi.orderHistory(accountId));
+      this.error.set(null);
+    } catch (failure) {
+      // A failed re-read leaves the last good table up, with the error above it.
+      this.error.set(failure);
+      return;
+    } finally {
+      this.loading.set(false);
+    }
+    this.scheduleReread(accountId);
+  }
+
+  private scheduleReread(accountId: number): void {
+    if (this.working() === 0) {
+      return; // Nothing working: stop.
+    }
+    if (this.rereads() >= this.policy.maxRereads) {
+      this.gaveUp.set(true);
+      return;
+    }
+    this.cancelReread = this.policy.schedule(() => {
+      this.cancelReread = null;
+      this.rereads.update((n) => n + 1);
+      void this.read(accountId);
+    }, this.policy.intervalMs);
+  }
+
+  private stopRereading(): void {
+    this.cancelReread?.();
+    this.cancelReread = null;
+  }
+}

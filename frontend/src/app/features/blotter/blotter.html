@@ -1,0 +1,78 @@
+<section class="blotter" aria-labelledby="blotter-title">
+  <div class="heading">
+    <h2 id="blotter-title">Your orders</h2>
+    <button type="button" class="secondary" data-testid="blotter-refresh" [disabled]="loading()" (click)="refresh()">
+      {{ loading() ? 'Refreshing…' : 'Refresh' }}
+    </button>
+  </div>
+
+  <app-error-message [error]="error()" />
+
+  <p class="status-line" role="status" data-testid="blotter-working">
+    @if (gaveUp()) {
+      Still working after {{ limitSeconds }} seconds — the executor may be slow. Press Refresh to check again.
+    } @else if (working() > 0) {
+      {{ working() }} {{ working() === 1 ? 'order is' : 'orders are' }} still working. Checking again every
+      {{ intervalSeconds }} seconds.
+    }
+  </p>
+
+  @if (orders() === null) {
+    @if (!error()) {
+      <p>Loading your orders…</p>
+    }
+  } @else if (rows().length === 0) {
+    <p class="empty" data-testid="blotter-empty">
+      No orders yet. <a routerLink="/trade">Place your first order.</a>
+    </p>
+  } @else {
+    <div class="table-wrap">
+      <table data-testid="blotter-table">
+        <caption class="visually-hidden">Every order on this account, newest first</caption>
+        <thead>
+          <tr>
+            <th scope="col">Placed</th>
+            <th scope="col">Instrument</th>
+            <th scope="col">Side</th>
+            <th scope="col" class="number">Quantity</th>
+            <th scope="col" class="number">Limit price</th>
+            <th scope="col" class="number">Executed at</th>
+            <th scope="col">Status</th>
+            <th scope="col">Order</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (order of rows(); track order.orderId) {
+            <tr data-testid="blotter-row" [attr.data-status]="order.status">
+              <td>{{ order.createdOn | date: 'd MMM y, HH:mm:ss' }}</td>
+              <td>{{ order.symbol }}</td>
+              <td>{{ order.side }}</td>
+              <td class="number">{{ order.quantity | number: '1.0-6' }}</td>
+              <td class="number">
+                @if (order.price != null) {
+                  {{ order.price | number: '1.2-2' }}
+                } @else {
+                  <span class="muted">—</span>
+                }
+              </td>
+              <td class="number">
+                @if (order.executedPrice != null) {
+                  {{ order.executedPrice | number: '1.2-4' }}
+                } @else {
+                  <span class="muted">—</span>
+                }
+              </td>
+              <td>
+                <app-status-badge [status]="order.status" />
+                @if (order.status === 'NEW') {
+                  <span class="working">still working</span>
+                }
+              </td>
+              <td class="order-id">{{ order.orderId }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>
