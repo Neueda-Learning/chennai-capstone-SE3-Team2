@@ -5,7 +5,7 @@ import { provideRouter } from '@angular/router';
 import { testToken } from '../../../testing/tokens';
 import { provideClients } from '../../core/api/provide-clients';
 import { Session } from '../../core/session/session';
-import { REREAD_POLICY } from '../blotter/blotter';
+import { REREAD_POLICY } from '../../shared/reread/reread-policy';
 import { Dashboard } from './dashboard';
 
 const TRADE = 'http://trade.test';

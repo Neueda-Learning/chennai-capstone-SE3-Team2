@@ -4,6 +4,11 @@
   justify-content: space-between;
 }
 
+.actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
 .summary dl {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));

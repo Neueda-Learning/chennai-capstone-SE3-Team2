@@ -28,6 +28,11 @@ export class TradeApi {
     return firstValueFrom(this.accounts.getOrders(accountId));
   }
 
+  /** GET /api/v1/accounts/{id}/balance: available cash -- the balance less what open orders and withdrawals hold. */
+  async availableCash(accountId: number): Promise<number> {
+    return (await firstValueFrom(this.accounts.getBalance(accountId))).cashBalance;
+  }
+
   /** GET /api/v1/accounts/{id}. */
   account(accountId: number): Promise<AccountResponse> {
     return firstValueFrom(this.accounts.getAccount(accountId));

@@ -4,7 +4,8 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { OrderHistoryEntry } from '../../../generated/trade';
 import { provideClients } from '../../core/api/provide-clients';
-import { Blotter, REREAD_POLICY } from './blotter';
+import { REREAD_POLICY } from '../../shared/reread/reread-policy';
+import { Blotter } from './blotter';
 
 const TRADE = 'http://trade.test';
 const HISTORY = `${TRADE}/api/v1/accounts/3/orders`;

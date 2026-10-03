@@ -1,46 +1,19 @@
 import { DatePipe, DecimalPipe } from '@angular/common';
-import { Component, DestroyRef, InjectionToken, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { OrderHistoryEntry, OrderStatus } from '../../../generated/trade';
 import { TradeApi } from '../../core/api/trade-api';
 import { ErrorMessage } from '../../shared/error-message/error-message';
+import { REREAD_POLICY } from '../../shared/reread/reread-policy';
 import { StatusBadge } from '../../shared/status-badge/status-badge';
 
 /**
- * How the blotter brings a working order up to date, and the numbers to
- * defend at the review.
- *
  * An order at NEW is normal: the Trade REST API answered before the executor
  * resolved it, and neither contract pushes to the browser. So while anything
- * is at NEW the blotter re-reads order history -- never re-posts the order,
- * because the same idempotency key answers ORD-409 and a new key places a
- * second order.
- *
- * Every 3 seconds, at most 10 times: 30 seconds and 10 requests per burst.
- * An order normally resolves within a second or two, so the first re-read
- * usually ends it; 30 seconds covers a slow executor without polling for as
- * long as the tab is open. After that the screen says the order is still
- * working, and Refresh starts a new burst.
+ * is at NEW the blotter re-reads order history, on the shared REREAD_POLICY --
+ * never re-posts the order, because the same idempotency key answers ORD-409
+ * and a new key places a second order.
  */
-export interface RereadPolicy {
-  readonly intervalMs: number;
-  readonly maxRereads: number;
-  /** Runs `task` after `ms`; returns a cancel function. A seam for the specs. */
-  readonly schedule: (task: () => void, ms: number) => () => void;
-}
-
-export const REREAD_POLICY = new InjectionToken<RereadPolicy>('REREAD_POLICY', {
-  providedIn: 'root',
-  factory: () => ({
-    intervalMs: 3000,
-    maxRereads: 10,
-    schedule: (task, ms) => {
-      const id = setTimeout(task, ms);
-      return () => clearTimeout(id);
-    },
-  }),
-});
-
 @Component({
   selector: 'app-blotter',
   imports: [DatePipe, DecimalPipe, RouterLink, StatusBadge, ErrorMessage],

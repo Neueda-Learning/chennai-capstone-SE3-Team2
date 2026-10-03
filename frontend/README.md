@@ -57,8 +57,9 @@ frontend/
 │       │   ├── apply/          opening an account; public, like sign-in
 │       │   ├── dashboard/      account summary and the blotter                      (629, 636)
 │       │   ├── order-ticket/                                                         (634)
-│       │   └── blotter/        order history, status badges, the NEW re-read        (636)
-│       └── shared/             small presentational pieces used by several screens  (635, 636)
+│       │   ├── blotter/        order history, status badges, the NEW re-read        (636)
+│       │   └── cash/           adding and withdrawing cash, and every transfer
+│       └── shared/             small pieces used by several screens, and the re-read policy  (635, 636)
 ├── e2e/                        Playwright journeys against the running stack        (637)
 └── scripts/                    the bundle secret scan                                (638)
 ```
@@ -279,7 +280,33 @@ it; 30 seconds covers a slow executor without polling for as long as the tab is
 open. It stops as soon as nothing is at `NEW`, says so when it gives up, and
 **Refresh** starts a new burst. It only ever re-reads: re-posting an order
 would get `ORD-409` with the same idempotency key, or a second order with a new
-one. The numbers are `REREAD_POLICY` in `features/blotter/blotter.ts`.
+one. The numbers are `REREAD_POLICY` in `shared/reread/reread-policy.ts`, which
+the Cash page uses too.
+
+## Adding and withdrawing cash
+
+`/cash` (linked from the header and the dashboard) shows the available cash --
+the balance less what open orders and withdrawals hold, from
+`GET /api/v1/accounts/{id}/balance` -- and the bank account given on the
+application, masked to its last four digits. Money only moves to and from that
+account; the page has nowhere to type another.
+
+One amount, two buttons: **Add cash** posts to `/deposits`, **Withdraw** to
+`/withdrawals`. The form refuses an amount that is not above zero with at most
+two decimals, and a withdrawal over the available cash, before sending; the
+server refuses both too (`VAL-422`, `PAY-400`).
+
+**A transfer is `PENDING` until the payment gateway decides it**, a few seconds
+later -- the server answers `202` at once. The list shows it as `◷ PROCESSING`,
+then `✓ SUCCESS` or `✕ FAILED` with the gateway's reason. While anything is
+pending the page re-reads the transfers and the available cash on the same
+bounded policy as the blotter, and never re-sends. A withdrawal is held the
+moment it is accepted, so the available cash drops before the bank answers.
+
+Every request carries an idempotency key. If a request gets no answer at all
+(the network dropped it), pressing the button again with the same amount sends
+the **same key**, so the server returns the first transfer instead of moving
+the money twice.
 
 ## End-to-end journeys
 

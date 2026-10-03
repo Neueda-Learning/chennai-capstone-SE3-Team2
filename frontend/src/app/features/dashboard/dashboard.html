@@ -1,6 +1,9 @@
 <div class="title">
   <h1>Dashboard</h1>
-  <a class="button" routerLink="/trade" data-testid="dashboard-trade">Place an order</a>
+  <div class="actions">
+    <a class="button secondary" routerLink="/cash" data-testid="dashboard-cash">Add or withdraw cash</a>
+    <a class="button" routerLink="/trade" data-testid="dashboard-trade">Place an order</a>
+  </div>
 </div>
 
 <app-error-message [error]="error()" />
