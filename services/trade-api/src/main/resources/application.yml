@@ -89,6 +89,10 @@ mybatis:
     jdbc-type-for-null: 'NULL'
 
 security:
+  # Browser origins allowed to call this API: the trading UI (frontend/).
+  # Exact origins, comma-separated. See CorsConfig.
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200}
   jwt:
     # No default. Resolution fails at startup if the environment does
     # not supply it, which is the intended behaviour.
