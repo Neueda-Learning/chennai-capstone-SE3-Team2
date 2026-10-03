@@ -102,3 +102,21 @@ be left out without editing generated files. This workspace provides the
 clients with the generator's standalone `provideApi()` instead, in
 `src/app/core/api/provide-clients.ts`, which is also where the clients are
 pointed at `src/environments/environment.ts`.
+
+## Error messages
+
+Both contracts answer a failure with one envelope, `{ "errorCode", "message" }`.
+`src/app/core/errors/error-messages.ts` turns it into a sentence a trader can
+act on, and `<app-error-message>` (in `shared/`) renders it as an alert.
+
+- **It branches on `errorCode`, never on `message`.** The message is for a
+  developer reading a log; it changes without notice and is never shown.
+- **Complete by construction.** The mapping is a `Record` over the code types
+  the generator read out of both contracts, so a code added to a contract stops
+  the build until it has a sentence. Its spec checks every generated code, and
+  that together they are the eight the catalogues declare.
+- **Two codes outside the catalogues** are mapped too, because our services send
+  them: `AUTH-429` (the login throttle) and `SRV-500`.
+- **Status 0** — no response at all, usually a service that is down or a CORS
+  rule that does not allow this origin — has its own sentence, and an unknown
+  code falls back to one. Neither renders a blank panel.
