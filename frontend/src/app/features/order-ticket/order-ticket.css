@@ -1,0 +1,23 @@
+.ticket {
+  max-width: 32rem;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0.25rem 0 0;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+button[type='submit'] {
+  margin-top: 1.5rem;
+}
+
+.alert p {
+  margin: 0 0 0.5rem;
+}

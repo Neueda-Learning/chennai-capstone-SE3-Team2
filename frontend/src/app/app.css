@@ -13,6 +13,20 @@
   text-decoration: none;
 }
 
+nav {
+  display: flex;
+  gap: 1rem;
+}
+
+nav a {
+  text-decoration: none;
+}
+
+nav a.active {
+  font-weight: 700;
+  text-decoration: underline;
+}
+
 .account {
   margin-left: auto;
   color: var(--muted);
