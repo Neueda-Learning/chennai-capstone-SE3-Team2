@@ -1,0 +1,89 @@
+<section class="card ticket">
+  <h1>Place an order</h1>
+
+  @if (result(); as placed) {
+    <div class="alert success" role="status" data-testid="ticket-result">
+      <p>
+        Order <strong>{{ placed.orderId }}</strong>: {{ placed.side }} {{ placed.quantity }}
+        {{ placed.symbol }} at {{ placed.price }}.
+      </p>
+      <p>
+        Status <strong data-testid="ticket-status">{{ placed.status }}</strong> —
+        {{ outcome[placed.status] }}
+      </p>
+      <a routerLink="/">See your orders</a>
+    </div>
+  }
+  <app-error-message [error]="error()" />
+
+  <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+    <label for="account">Account</label>
+    <input
+      id="account"
+      readonly
+      [value]="accountId()"
+      data-testid="ticket-account"
+      aria-describedby="account-hint"
+    />
+    <p class="hint" id="account-hint">The account your sign-in may trade. It cannot be changed here.</p>
+
+    <label for="symbol">Instrument</label>
+    <input
+      id="symbol"
+      formControlName="symbol"
+      autocomplete="off"
+      spellcheck="false"
+      placeholder="INFY.NS"
+      data-testid="ticket-symbol"
+      [attr.aria-invalid]="invalid('symbol')"
+      aria-describedby="symbol-error"
+    />
+    @if (invalid('symbol')) {
+      <p class="field-error" id="symbol-error">
+        Enter a symbol such as AAPL, INFY.NS, FX:EURUSD or X:BTCUSD.
+      </p>
+    }
+
+    <label for="side">Side</label>
+    <select id="side" formControlName="side" data-testid="ticket-side">
+      @for (side of sides; track side) {
+        <option [value]="side">{{ side === 'BUY' ? 'Buy' : 'Sell' }}</option>
+      }
+    </select>
+
+    <div class="row">
+      <div>
+        <label for="quantity">Quantity</label>
+        <input
+          id="quantity"
+          formControlName="quantity"
+          inputmode="numeric"
+          data-testid="ticket-quantity"
+          [attr.aria-invalid]="invalid('quantity')"
+          aria-describedby="quantity-error"
+        />
+        @if (invalid('quantity')) {
+          <p class="field-error" id="quantity-error">Enter a whole number of units, 1 or more.</p>
+        }
+      </div>
+      <div>
+        <label for="price">Limit price</label>
+        <input
+          id="price"
+          formControlName="price"
+          inputmode="decimal"
+          data-testid="ticket-price"
+          [attr.aria-invalid]="invalid('price')"
+          aria-describedby="price-error"
+        />
+        @if (invalid('price')) {
+          <p class="field-error" id="price-error">Enter a price above zero, with at most two decimal places.</p>
+        }
+      </div>
+    </div>
+
+    <button type="submit" data-testid="ticket-submit" [disabled]="submitting()">
+      {{ submitting() ? 'Placing…' : 'Place order' }}
+    </button>
+  </form>
+</section>

@@ -203,3 +203,27 @@ Said out loud at the review: **the guard is a usability control, not a
 security control.** The bundle is public and every route in it is readable.
 Authorisation is the Trade REST API's decision, taken on every `/api/v1/**`
 call.
+
+## The order ticket
+
+`/trade` places an order with `POST /api/v1/orders`. Before anything is sent:
+
+| Field | Rule |
+|---|---|
+| Instrument | A shape the contract allows: `AAPL`, `INFY.NS` / `.BO`, `FX:EURUSD`, `X:BTCUSD`; at most 20 characters, sent upper-cased |
+| Quantity | A whole number, 1 or more |
+| Limit price | Above zero, at most two decimal places |
+| Account | **Read-only**, from the token's `accountId`. An account field the user could edit is an authorisation decision moved into the browser |
+
+The checks live in `features/order-ticket/order-validators.ts`. They are not
+enforcement: business rules 1 to 8 live in the Trade REST API, and whatever
+gets past the form comes back as a catalogue code and is rendered as one.
+
+**The result is whatever the API returned**, most often `NEW`: accepted, and
+not yet executed. The ticket says so ("still working") rather than presenting
+it as finished, and links to the dashboard, where it updates.
+
+**Idempotency.** Each new order gets a new key. If a submit gets no response
+at all (status 0), the order may or may not have landed, so a retry of the
+same order reuses the same key: if the first attempt did land, the API answers
+`ORD-409` instead of placing it twice.
