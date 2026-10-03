@@ -2,7 +2,8 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Component } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Router, provideRouter } from '@angular/router';
+import { Router, provideRouter, withComponentInputBinding } from '@angular/router';
+import { RouterTestingHarness } from '@angular/router/testing';
 import { testToken } from '../../../testing/tokens';
 import { provideClients } from '../../core/api/provide-clients';
 import { Session } from '../../core/session/session';
@@ -22,7 +23,14 @@ describe('SignIn', () => {
     sessionStorage.clear();
     TestBed.configureTestingModule({
       providers: [
-        provideRouter([{ path: '', component: Landing }]),
+        provideRouter(
+          [
+            { path: '', component: Landing },
+            { path: 'orders', component: Landing },
+            { path: 'sign-in', component: SignIn },
+          ],
+          withComponentInputBinding(),
+        ),
         provideHttpClient(),
         provideHttpClientTesting(),
         provideClients({ tradeApiUrl: 'http://trade.test', authApiUrl: AUTH }),
@@ -102,4 +110,38 @@ describe('SignIn', () => {
       expect(page.querySelector(`[data-testid="${id}"]`), id).not.toBeNull();
     }
   });
+
+  describe('with a return address', () => {
+    async function signInFrom(url: string): Promise<void> {
+      const harness = await RouterTestingHarness.create();
+      await harness.navigateByUrl(url, SignIn);
+      const form = harness.routeNativeElement!;
+      expect(form.querySelector('[data-testid="sign-in-needed"]')).not.toBeNull();
+      for (const [id, value] of [['sign-in-username', 'priya.menon'], ['sign-in-password', 'correct horse battery staple']]) {
+        const input = form.querySelector<HTMLInputElement>(`[data-testid="${id}"]`)!;
+        input.value = value;
+        input.dispatchEvent(new Event('input'));
+      }
+      form.querySelector<HTMLButtonElement>('[data-testid="sign-in-submit"]')!.click();
+      await harness.fixture.whenStable();
+      http.expectOne(`${AUTH}/auth/login`).flush({ accessToken: testToken(), refreshToken: 'r', tokenType: 'Bearer', expiresIn: 900 });
+      for (let i = 0; i < 5; i++) {
+        await Promise.resolve();
+      }
+      await harness.fixture.whenStable();
+    }
+
+    it('lands the user where they were going', async () => {
+      await signInFrom('/sign-in?returnUrl=%2Forders');
+
+      expect(TestBed.inject(Router).url).toBe('/orders');
+    });
+
+    it('refuses an off-origin return address and lands at home instead', async () => {
+      await signInFrom('/sign-in?returnUrl=https%3A%2F%2Fevil.example%2Flogin');
+
+      expect(TestBed.inject(Router).url).toBe('/');
+    });
+  });
 });
+
