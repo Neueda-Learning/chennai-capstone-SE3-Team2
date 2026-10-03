@@ -291,3 +291,32 @@ Each test starts in a fresh browser context and shares nothing: no token in a
 module variable, no order one spec places for another to find. The refused
 sign-in counts against the login throttle (five failures per address, then a
 minute's cooldown), so do not loop it.
+
+## Nothing secret in the bundle
+
+`npm run build` writes files every browser downloading this application
+receives. There is no private part of a front-end build: minification is not
+obfuscation, and a source map is the source back again. **This application
+never calls the market-data API**; prices reach the browser, when they do,
+through a service of ours that holds the key server-side.
+
+```bash
+npm run check:bundle     # production build, then search every file in dist/
+npm run test:scripts     # the scanner's own tests
+```
+
+`scripts/check-bundle-secrets.mjs` fails the run on any of:
+
+| Search | Why |
+|---|---|
+| `x-api-key`, `api_key`, `api-key`, `fauxnance` | a market-data key in the bundle is a key published |
+| an `execute-api.<region>.amazonaws.com` host | the browser never talks to the market-data API |
+| `jwt_secret`, a secret assigned a long literal, a three-part JWT | a signing secret in the browser lets any reader mint a token the whole platform accepts |
+| a `.map` file | the source, back again |
+| **the literal value of every secret in the repository's `.env`** (`*SECRET*`, `*PASSWORD*`, `*KEY*`, `*TOKEN*`, `REDIS_URL`, `*DATABASE_URL`), and of the same names in the environment | catches a value pasted in under a name none of the patterns would match. A hit names the variable, never prints the value |
+
+Point it at another env file with `BUNDLE_SECRETS_ENV_FILE=/path/to/.env`.
+
+**A key or secret that reached a bundle has been published. Revoke it** --
+deleting the line does not unpublish it. Run this before every review, and in
+front of the panel.
