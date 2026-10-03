@@ -28,21 +28,26 @@
     <p class="hint" id="account-hint">The account your sign-in may trade. It cannot be changed here.</p>
 
     <label for="symbol">Instrument</label>
-    <input
+    <select
       id="symbol"
       formControlName="symbol"
-      autocomplete="off"
-      spellcheck="false"
-      placeholder="INFY.NS"
       data-testid="ticket-symbol"
       [attr.aria-invalid]="invalid('symbol')"
       aria-describedby="symbol-error"
-    />
+    >
+      <option value="" disabled>{{ instruments() === null ? 'Loading instruments…' : 'Choose an instrument' }}</option>
+      @for (group of groups(); track group.label) {
+        <optgroup [label]="group.label">
+          @for (instrument of group.instruments; track instrument.symbol) {
+            <option [value]="instrument.symbol">{{ instrument.symbol }} — {{ instrument.name }}</option>
+          }
+        </optgroup>
+      }
+    </select>
     @if (invalid('symbol')) {
-      <p class="field-error" id="symbol-error">
-        Enter a symbol such as AAPL, INFY.NS, FX:EURUSD or X:BTCUSD.
-      </p>
+      <p class="field-error" id="symbol-error">Choose an instrument from the list.</p>
     }
+    <app-error-message [error]="instrumentsError()" />
 
     <label for="side">Side</label>
     <select id="side" formControlName="side" data-testid="ticket-side">

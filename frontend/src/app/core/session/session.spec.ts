@@ -15,24 +15,37 @@ describe('Session', () => {
     expect(sessionStorage.getItem('trading-ui.accessToken')).toBe(session.accessToken());
   });
 
-  it('clears the session on sign-out, from memory and from storage', () => {
+  it('keeps the refresh token beside it, for a reload', () => {
     const session = TestBed.inject(Session);
-    session.start(testToken());
+
+    session.start(testToken(), 'refresh-1');
+
+    expect(session.refreshToken()).toBe('refresh-1');
+    expect(sessionStorage.getItem('trading-ui.refreshToken')).toBe('refresh-1');
+  });
+
+  it('clears the session on sign-out, both tokens, from memory and from storage', () => {
+    const session = TestBed.inject(Session);
+    session.start(testToken(), 'refresh-1');
 
     session.end();
 
     expect(session.isSignedIn()).toBe(false);
     expect(session.accessToken()).toBeNull();
     expect(session.accountId()).toBeNull();
+    expect(session.refreshToken()).toBeNull();
     expect(sessionStorage.getItem('trading-ui.accessToken')).toBeNull();
+    expect(sessionStorage.getItem('trading-ui.refreshToken')).toBeNull();
   });
 
-  it('treats an expired token as signed out, and clears it', () => {
+  it('treats an expired token as signed out, and clears it -- but keeps the refresh token that can renew it', () => {
     const session = TestBed.inject(Session);
-    session.start(testToken({ exp: Math.floor(Date.now() / 1000) - 1 }));
+    session.start(testToken({ exp: Math.floor(Date.now() / 1000) - 1 }), 'refresh-1');
 
     expect(session.isSignedIn()).toBe(false);
     expect(session.accessToken()).toBeNull();
+    expect(sessionStorage.getItem('trading-ui.accessToken')).toBeNull();
+    expect(session.refreshToken()).toBe('refresh-1');
   });
 
   it('refuses a token it cannot read', () => {

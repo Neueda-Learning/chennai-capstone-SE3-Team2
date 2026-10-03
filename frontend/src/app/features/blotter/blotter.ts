@@ -1,5 +1,5 @@
 import { DatePipe, DecimalPipe } from '@angular/common';
-import { Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { Component, DestroyRef, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { OrderHistoryEntry, OrderStatus } from '../../../generated/trade';
 import { TradeApi } from '../../core/api/trade-api';
@@ -13,6 +13,10 @@ import { StatusBadge } from '../../shared/status-badge/status-badge';
  * is at NEW the blotter re-reads order history, on the shared REREAD_POLICY --
  * never re-posts the order, because the same idempotency key answers ORD-409
  * and a new key places a second order.
+ *
+ * An order still NEW can be cancelled from its row. Whether it was is the
+ * server's call -- the executor may fill it first -- so the blotter re-reads
+ * afterwards either way and shows what actually happened.
  */
 @Component({
   selector: 'app-blotter',
@@ -27,11 +31,24 @@ export class Blotter {
   /** The account whose orders to show: the session's own. */
   readonly accountId = input.required<number>();
 
+  /**
+   * An order left NEW -- filled, rejected or cancelled -- so the cash and the
+   * holdings it touches have changed. The dashboard re-reads them.
+   */
+  readonly settled = output<void>();
+
   protected readonly orders = signal<readonly OrderHistoryEntry[] | null>(null);
   protected readonly error = signal<unknown>(null);
   protected readonly loading = signal(false);
   protected readonly rereads = signal(0);
   protected readonly gaveUp = signal(false);
+  /** The order a cancel is in flight for. */
+  protected readonly cancelling = signal<string | null>(null);
+  protected readonly cancelError = signal<unknown>(null);
+  /** On this screen ORD-409 can only mean the order had already finished. */
+  protected readonly cancelMessages = {
+    'ORD-409': 'That order had already finished, so there was nothing to cancel. The list below shows what happened to it.',
+  };
 
   /** Newest first, rejections included: the rejection is the record that the desk tried. */
   protected readonly rows = computed(() =>
@@ -53,6 +70,20 @@ export class Blotter {
     inject(DestroyRef).onDestroy(() => this.stopRereading());
   }
 
+  /** Asks the server to cancel an order still NEW, then re-reads whatever the answer. */
+  async cancel(orderId: string): Promise<void> {
+    this.cancelling.set(orderId);
+    this.cancelError.set(null);
+    try {
+      await this.tradeApi.cancelOrder(orderId);
+    } catch (failure) {
+      this.cancelError.set(failure);
+    } finally {
+      this.cancelling.set(null);
+    }
+    await this.refresh();
+  }
+
   /** Re-reads now and starts a fresh burst. The button, and the first load. */
   async refresh(accountId: number = this.accountId()): Promise<void> {
     this.stopRereading();
@@ -63,9 +94,14 @@ export class Blotter {
 
   private async read(accountId: number): Promise<void> {
     this.loading.set(true);
+    const wasWorking = new Set((this.orders() ?? []).filter((o) => o.status === OrderStatus.New).map((o) => o.orderId));
     try {
-      this.orders.set(await this.tradeApi.orderHistory(accountId));
+      const orders = await this.tradeApi.orderHistory(accountId);
+      this.orders.set(orders);
       this.error.set(null);
+      if (orders.some((o) => wasWorking.has(o.orderId) && o.status !== OrderStatus.New)) {
+        this.settled.emit();
+      }
     } catch (failure) {
       // A failed re-read leaves the last good table up, with the error above it.
       this.error.set(failure);

@@ -48,7 +48,7 @@ frontend/
 │       ├── core/               rules that are not a screen
 │       │   ├── config/         where the two APIs are                                (630)
 │       │   ├── api/            our services around the generated clients            (630, 631, 634, 636)
-│       │   ├── session/        the signed-in session: token, account, sign-out      (631)
+│       │   ├── session/        the signed-in session: tokens, account, sign-out, renewal  (631)
 │       │   ├── http/           the one interceptor that sets Authorization          (632)
 │       │   ├── guards/         the route guard and the return-address check         (633)
 │       │   └── errors/         every error code mapped to a sentence                (635)
@@ -57,7 +57,8 @@ frontend/
 │       │   ├── apply/          opening an account; public, like sign-in
 │       │   ├── dashboard/      account summary and the blotter                      (629, 636)
 │       │   ├── order-ticket/                                                         (634)
-│       │   ├── blotter/        order history, status badges, the NEW re-read        (636)
+│       │   ├── blotter/        order history, status badges, the NEW re-read, cancel  (636)
+│       │   ├── holdings/       what the account holds, on the dashboard
 │       │   └── cash/           adding and withdrawing cash, and every transfer
 │       └── shared/             small pieces used by several screens, and the re-read policy  (635, 636)
 ├── e2e/                        Playwright journeys against the running stack        (637)
@@ -156,12 +157,12 @@ customer who passes is emailed the activation link.
 ## Signing in
 
 `/sign-in` posts the username and password to `POST /auth/login` on the Auth
-service and keeps the access token it returns.
+service and keeps the token pair it returns.
 
-- **Where the token lives:** `sessionStorage`, through `core/session/session.ts`
+- **Where the tokens live:** `sessionStorage`, through `core/session/session.ts`
   and nowhere else. A reload keeps the customer signed in; closing the tab, or
-  **Sign out** in the header, clears it. An expired token counts as signed out
-  and is cleared.
+  **Sign out** in the header, clears both. An expired access token counts as
+  signed out and is cleared; the refresh token stays, to renew it.
 - **The account comes from the token.** Its `accountId` claim is the one
   account this session may trade. The browser reads the claims but cannot
   verify them -- it holds no secret -- and does not need to: every API checks
@@ -178,6 +179,42 @@ The Auth service answers the browser only because it allows this origin:
 
 To sign in for real you need a login: apply, pass KYC and activate as in
 `docs/runbooks/account-activation.md`, "Running it end to end".
+
+## Staying signed in
+
+The access token lasts **15 minutes**; the refresh token **7 days**, and works
+**once**. `core/session/session-refresh.ts` exchanges the refresh token with
+`POST /auth/refresh` **a minute before the access token runs out**, and keeps
+the new pair. Nobody is signed out in the middle of a demo.
+
+| The exchange... | Then |
+|---|---|
+| succeeds | the new pair replaces the old; the next renewal is scheduled from the new token |
+| is refused (`401`: expired, revoked, or already used; `422`: malformed) | the session ends and the customer is taken to sign-in, returning to the same page |
+| gets no answer, or a `5xx` | the session stays; tried again every 30 seconds while the access token lasts |
+
+The route guard renews too: an access token that ran out while the laptop
+slept, or before a reload, is renewed on the next navigation if the refresh
+token still works, instead of sending the customer to sign-in.
+
+**One exchange at a time.** The Auth service treats a refresh token presented
+twice as stolen and **revokes every refresh token the user has**, so two
+renewals racing -- the timer and the guard -- share one request.
+
+**Two consequences worth knowing:**
+
+- **A duplicated tab** (the browser's *Duplicate*) copies `sessionStorage`, so
+  both tabs hold the same refresh token. The first to renew rotates it; the
+  second then presents a used token, and the theft rule signs both out. Open a
+  new tab and sign in instead.
+- **Sign out** clears both tokens from the browser, but the Auth contract has
+  no route to revoke a refresh token, so it stays valid on the server until
+  it expires. Nothing in the browser holds it any more.
+
+The refresh token sits in `sessionStorage` beside the access token. It is
+worth more -- days, not minutes -- but the contract hands it over in the
+response body rather than as an `HttpOnly` cookie, so script can reach it
+wherever it is kept; rotation and the theft rule are what limit a stolen one.
 
 ## The bearer token, and where it is not sent
 
@@ -242,7 +279,7 @@ call.
 
 | Field | Rule |
 |---|---|
-| Instrument | A shape the contract allows: `AAPL`, `INFY.NS` / `.BO`, `FX:EURUSD`, `X:BTCUSD`; at most 20 characters, sent upper-cased |
+| Instrument | **Picked from a list**, not typed: every tradable instrument from `GET /api/v1/instruments`, grouped as Stocks, ETFs and Mutual funds. Delisted ones are not offered, so the API cannot be sent a symbol it does not know |
 | Quantity | A whole number, 1 or more |
 | Limit price | Above zero, at most two decimal places |
 | Account | **Read-only**, from the token's `accountId`. An account field the user could edit is an authorisation decision moved into the browser |
@@ -250,6 +287,10 @@ call.
 The checks live in `features/order-ticket/order-validators.ts`. They are not
 enforcement: business rules 1 to 8 live in the Trade REST API, and whatever
 gets past the form comes back as a catalogue code and is rendered as one.
+
+**Opened from a holding's Sell link** (`/trade?symbol=TCS.NS&side=SELL`), the
+ticket starts with that instrument and Sell chosen -- once the list confirms
+the symbol is tradable; anything else in the link is ignored.
 
 **The result is whatever the API returned**, most often `NEW`: accepted, and
 not yet executed. The ticket says so ("still working") rather than presenting
@@ -263,7 +304,17 @@ same order reuses the same key: if the first attempt did land, the API answers
 ## The dashboard and the blotter
 
 The dashboard (`/`) shows the token's account from `GET /api/v1/accounts/{id}`,
-who is signed in from `GET /auth/me`, and the blotter.
+who is signed in from `GET /auth/me`, the holdings, and the blotter.
+
+**Holdings** come from `GET /api/v1/accounts/{id}/positions`: each instrument
+held, its quantity, its average cost and what it cost in total, with a **Sell**
+link that opens the ticket filled in. There is no market value: the platform
+prices an order when it executes and keeps no live prices to show. A position
+sold to zero is gone from the list.
+
+**When an order settles** -- leaves `NEW` for `FILLED`, `REJECTED` or
+`CANCELLED` -- the blotter tells the dashboard, which reads the cash and the
+holdings again. A buy that fills appears in the holdings without a reload.
 
 The blotter lists every order from `GET /api/v1/accounts/{id}/orders`,
 **newest first, rejections included**: the rejection is the record that the desk
@@ -282,6 +333,13 @@ open. It stops as soon as nothing is at `NEW`, says so when it gives up, and
 would get `ORD-409` with the same idempotency key, or a second order with a new
 one. The numbers are `REREAD_POLICY` in `shared/reread/reread-policy.ts`, which
 the Cash page uses too.
+
+**Cancel.** An order still `NEW` has a **Cancel** button, which sends
+`DELETE /api/v1/orders/{id}` -- with the bare UUID: the route refuses the
+`ORD-` prefix the order is displayed with (`VAL-422`). The executor may fill the
+order first; then the API answers `ORD-409` and the blotter says the order had
+already finished. Either way it re-reads, and shows what actually happened. A
+cancelled buy gives its reserved cash back.
 
 ## Adding and withdrawing cash
 
@@ -332,7 +390,7 @@ and no others:
 | `E2E_AUTH_API` | `http://localhost:3000` |
 | `E2E_USERNAME`, `E2E_PASSWORD` | a login you created through activation |
 | `E2E_ACCOUNT_ID` | that login's account, e.g. `3` |
-| `E2E_SYMBOL` | a tradable instrument, e.g. `ITC.NS` |
+| `E2E_SYMBOL` | a tradable instrument, e.g. `ITC.NS` -- one the ticket's list offers, since it is picked, not typed |
 
 The account needs cash for the order journey; a brand-new account has none.
 

@@ -7,6 +7,7 @@
   </div>
 
   <app-error-message [error]="error()" />
+  <app-error-message [error]="cancelError()" [overrides]="cancelMessages" />
 
   <p class="status-line" role="status" data-testid="blotter-working">
     @if (gaveUp()) {
@@ -66,6 +67,16 @@
                 <app-status-badge [status]="order.status" />
                 @if (order.status === 'NEW') {
                   <span class="working">still working</span>
+                  <button
+                    type="button"
+                    class="secondary cancel"
+                    data-testid="blotter-cancel"
+                    [disabled]="cancelling() !== null"
+                    [attr.aria-label]="'Cancel order ' + order.orderId"
+                    (click)="cancel(order.orderId)"
+                  >
+                    {{ cancelling() === order.orderId ? 'Cancelling…' : 'Cancel' }}
+                  </button>
                 }
               </td>
               <td class="order-id">{{ order.orderId }}</td>

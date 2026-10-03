@@ -29,7 +29,7 @@ test.describe('place an order', () => {
       }
     });
 
-    await page.getByTestId('ticket-symbol').fill(env.symbol);
+    await page.getByTestId('ticket-symbol').selectOption(env.symbol);
     await page.getByTestId('ticket-quantity').fill('0');
     await page.getByTestId('ticket-price').fill('10.555');
     await page.getByTestId('ticket-submit').click();
@@ -40,7 +40,7 @@ test.describe('place an order', () => {
   });
 
   test('a placed order shows whatever status the API returned', async ({ page }) => {
-    await page.getByTestId('ticket-symbol').fill(env.symbol);
+    await page.getByTestId('ticket-symbol').selectOption(env.symbol);
     await page.getByTestId('ticket-side').selectOption('BUY');
     await page.getByTestId('ticket-quantity').fill('1');
     await page.getByTestId('ticket-price').fill('100.00');

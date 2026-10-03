@@ -7,6 +7,7 @@ import {
   OrderResponse,
   OrdersService,
   PlaceOrderRequest,
+  PositionResponse,
 } from '../../../generated/trade';
 
 /**
@@ -21,6 +22,20 @@ export class TradeApi {
   /** POST /api/v1/orders. Resolves with what the API returned -- usually NEW. */
   placeOrder(order: PlaceOrderRequest): Promise<OrderResponse> {
     return firstValueFrom(this.orders.placeOrder(order));
+  }
+
+  /**
+   * DELETE /api/v1/orders/{id}: only an order still NEW; any other is ORD-409.
+   * The route takes the bare UUID, without the `ORD-` prefix the order is
+   * displayed with; sent with it, the API answers VAL-422.
+   */
+  cancelOrder(orderId: string): Promise<OrderResponse> {
+    return firstValueFrom(this.orders.cancelOrder(orderId.replace(/^ORD-/, '')));
+  }
+
+  /** GET /api/v1/accounts/{id}/positions: what the account holds, by symbol. A position sold to zero is gone. */
+  positions(accountId: number): Promise<PositionResponse[]> {
+    return firstValueFrom(this.accounts.getPositions(accountId));
   }
 
   /** GET /api/v1/accounts/{id}/orders: every order, rejections included. */

@@ -51,6 +51,7 @@ describe('Dashboard', () => {
       id: 3, accountId: 'ACC-000003', holderName: 'Rohan Nair', cashBalance: 750000, status: 'ACTIVE', version: 7, lastUpdated: '2026-10-02T09:00:00Z',
     });
     http.expectOne(`${AUTH}/auth/me`).flush({ id: 'u-1', username: 'rohan.nair', accountId: 3, roles: ['CUSTOMER'] });
+    http.expectOne(`${TRADE}/api/v1/accounts/3/positions`).flush([]);
     http.expectOne(`${TRADE}/api/v1/accounts/3/orders`).flush([]);
     await settle(fixture);
 
@@ -66,11 +67,66 @@ describe('Dashboard', () => {
 
     http.expectOne(`${TRADE}/api/v1/accounts/3`).flush({ errorCode: 'ACC-403', message: 'x' }, { status: 403, statusText: 'Forbidden' });
     http.expectOne(`${AUTH}/auth/me`).flush({ id: 'u-1', username: 'rohan.nair', accountId: 3, roles: ['CUSTOMER'] });
+    http.expectOne(`${TRADE}/api/v1/accounts/3/positions`).flush([]);
     http.expectOne(`${TRADE}/api/v1/accounts/3/orders`).flush([]);
     await settle(fixture);
 
     expect((fixture.nativeElement as HTMLElement).querySelector('[role="alert"]')?.textContent).toContain(
       "This account can't place orders right now.",
     );
+  });
+
+  const account = (cashBalance: number) => ({
+    id: 3, accountId: 'ACC-000003', holderName: 'Rohan Nair', cashBalance, status: 'ACTIVE', version: 7, lastUpdated: '2026-10-02T09:00:00Z',
+  });
+  const position = (symbol: string, quantity: number, averageCost: number) => ({ accountId: 3, symbol, quantity, averageCost });
+
+  it('shows what the account holds, at its cost, each with a link to sell it', async () => {
+    const fixture = await render();
+    http.expectOne(`${TRADE}/api/v1/accounts/3`).flush(account(750000));
+    http.expectOne(`${AUTH}/auth/me`).flush({ id: 'u-1', username: 'rohan.nair', accountId: 3, roles: ['CUSTOMER'] });
+    http.expectOne(`${TRADE}/api/v1/accounts/3/positions`).flush([position('TCS.NS', 4, 3500.25), position('120503', 12.5, 41.2)]);
+    http.expectOne(`${TRADE}/api/v1/accounts/3/orders`).flush([]);
+    await settle(fixture);
+
+    const page = fixture.nativeElement as HTMLElement;
+    const rows = [...page.querySelectorAll('[data-testid="holdings-row"]')];
+    expect(rows).toHaveLength(2);
+    expect(rows[0].textContent).toContain('TCS.NS');
+    expect(rows[0].textContent).toContain('3,500.25');
+    expect(rows[0].textContent).toContain('14,001.00');
+    expect(rows[1].textContent).toContain('12.5');
+    expect(rows[0].querySelector('[data-testid="holdings-sell"]')?.getAttribute('href')).toBe('/trade?symbol=TCS.NS&side=SELL');
+  });
+
+  it('says so when the account holds nothing', async () => {
+    const fixture = await render();
+    http.expectOne(`${TRADE}/api/v1/accounts/3`).flush(account(750000));
+    http.expectOne(`${AUTH}/auth/me`).flush({ id: 'u-1', username: 'rohan.nair', accountId: 3, roles: ['CUSTOMER'] });
+    http.expectOne(`${TRADE}/api/v1/accounts/3/positions`).flush([]);
+    http.expectOne(`${TRADE}/api/v1/accounts/3/orders`).flush([]);
+    await settle(fixture);
+
+    expect((fixture.nativeElement as HTMLElement).querySelector('[data-testid="holdings-empty"]')).not.toBeNull();
+  });
+
+  it('reads the cash and the holdings again when an order settles', async () => {
+    const fixture = await render();
+    http.expectOne(`${TRADE}/api/v1/accounts/3`).flush(account(750000));
+    http.expectOne(`${AUTH}/auth/me`).flush({ id: 'u-1', username: 'rohan.nair', accountId: 3, roles: ['CUSTOMER'] });
+    http.expectOne(`${TRADE}/api/v1/accounts/3/positions`).flush([]);
+    http.expectOne(`${TRADE}/api/v1/accounts/3/orders`).flush([]);
+    await settle(fixture);
+
+    fixture.debugElement.query((el) => el.name === 'app-blotter').componentInstance.settled.emit();
+    await fixture.whenStable();
+    http.expectOne(`${TRADE}/api/v1/accounts/3`).flush(account(735998.99));
+    http.expectOne(`${TRADE}/api/v1/accounts/3/positions`).flush([position('TCS.NS', 4, 3500.25)]);
+    http.expectNone(`${AUTH}/auth/me`);
+    await settle(fixture);
+
+    const page = fixture.nativeElement as HTMLElement;
+    expect(page.querySelector('[data-testid="cash-balance"]')?.textContent).toContain('735,998.99');
+    expect(page.querySelectorAll('[data-testid="holdings-row"]')).toHaveLength(1);
   });
 });

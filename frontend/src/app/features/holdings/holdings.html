@@ -1,0 +1,45 @@
+<section class="holdings" aria-labelledby="holdings-title">
+  <h2 id="holdings-title">Your holdings</h2>
+
+  @if (positions(); as positions) {
+    @if (positions.length === 0) {
+      <p class="empty" data-testid="holdings-empty">You hold nothing yet. A filled buy shows here.</p>
+    } @else {
+      <div class="table-wrap">
+      <table data-testid="holdings-table">
+        <caption class="visually-hidden">Every instrument this account holds, at its average cost</caption>
+        <thead>
+          <tr>
+            <th scope="col">Instrument</th>
+            <th scope="col" class="number">Quantity</th>
+            <th scope="col" class="number">Average cost (₹)</th>
+            <th scope="col" class="number">Cost (₹)</th>
+            <th scope="col"><span class="visually-hidden">Action</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (position of positions; track position.symbol) {
+            <tr data-testid="holdings-row">
+              <td>{{ position.symbol }}</td>
+              <td class="number">{{ position.quantity | number: '1.0-6' }}</td>
+              <td class="number">{{ position.averageCost | number: '1.2-4' }}</td>
+              <td class="number">{{ position.quantity * position.averageCost | number: '1.2-2' }}</td>
+              <td>
+                <a
+                  routerLink="/trade"
+                  [queryParams]="{ symbol: position.symbol, side: 'SELL' }"
+                  data-testid="holdings-sell"
+                  [attr.aria-label]="'Sell ' + position.symbol"
+                  >Sell</a
+                >
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      </div>
+    }
+  } @else {
+    <p>Loading your holdings…</p>
+  }
+</section>

@@ -36,6 +36,10 @@
   }
 </section>
 
+@if (positions() !== null || !error()) {
+  <app-holdings [positions]="positions()" />
+}
+
 @if (accountId(); as accountId) {
-  <app-blotter [accountId]="accountId" />
+  <app-blotter [accountId]="accountId" (settled)="orderSettled()" />
 }

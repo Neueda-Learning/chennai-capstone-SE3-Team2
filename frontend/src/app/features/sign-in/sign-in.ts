@@ -51,7 +51,8 @@ export class SignIn {
     this.error.set(null);
     try {
       const { username, password } = this.form.getRawValue();
-      this.session.start(await this.authApi.signIn(username, password));
+      const tokens = await this.authApi.signIn(username, password);
+      this.session.start(tokens.accessToken, tokens.refreshToken);
       await this.router.navigateByUrl(safeReturnUrl(this.returnUrl()));
     } catch (failure) {
       this.form.controls.password.reset();

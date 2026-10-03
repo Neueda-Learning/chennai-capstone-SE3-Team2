@@ -77,6 +77,7 @@ describe('SignIn', () => {
     const session = TestBed.inject(Session);
     expect(session.isSignedIn()).toBe(true);
     expect(session.accessToken()).toBe(token);
+    expect(session.refreshToken()).toBe('r'.repeat(64));
     expect(TestBed.inject(Router).url).toBe('/');
   });
 

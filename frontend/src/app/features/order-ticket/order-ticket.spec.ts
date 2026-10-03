@@ -10,6 +10,12 @@ import { OrderTicket } from './order-ticket';
 
 const TRADE = 'http://trade.test';
 const ORDERS = `${TRADE}/api/v1/orders`;
+const INSTRUMENTS = [
+  { symbol: 'INFY.NS', name: 'Infosys Ltd', type: 'STOCK', exchange: 'NSE' },
+  { symbol: 'TCS.NS', name: 'Tata Consultancy Services Ltd', type: 'STOCK', exchange: 'NSE' },
+  { symbol: 'NIFTYBEES', name: 'Nifty 50 ETF', type: 'ETF', exchange: 'NSE' },
+  { symbol: '120503', name: 'Bluechip Equity Fund', type: 'MF', exchange: null },
+];
 
 describe('OrderTicket', () => {
   let fixture: ComponentFixture<OrderTicket>;
@@ -33,13 +39,20 @@ describe('OrderTicket', () => {
     await fixture.whenStable();
   });
 
+  /** Answers the ticket's read of the tradable instruments. */
+  async function listInstruments(): Promise<void> {
+    http.expectOne(`${TRADE}/api/v1/instruments`).flush(INSTRUMENTS);
+    await settle();
+  }
+
   afterEach(() => http.verify());
 
   const field = (id: string) => page.querySelector<HTMLInputElement & HTMLSelectElement>(`[data-testid="${id}"]`)!;
 
   function fill(order: { symbol?: string; side?: string; quantity?: string; price?: string }): void {
+    field('ticket-symbol').value = order.symbol ?? 'INFY.NS';
+    field('ticket-symbol').dispatchEvent(new Event('change'));
     for (const [id, value] of Object.entries({
-      'ticket-symbol': order.symbol ?? 'INFY.NS',
       'ticket-quantity': order.quantity ?? '10',
       'ticket-price': order.price ?? '1450.50',
     })) {
@@ -70,7 +83,8 @@ describe('OrderTicket', () => {
   }
 
   it('submits a valid order and shows the status the API returned, including NEW', async () => {
-    fill({ symbol: 'infy.ns', side: 'SELL' });
+    await listInstruments();
+    fill({ symbol: 'INFY.NS', side: 'SELL' });
     await submit();
 
     const request = http.expectOne(ORDERS);
@@ -91,6 +105,7 @@ describe('OrderTicket', () => {
   });
 
   it('blocks an invalid quantity before submission', async () => {
+    await listInstruments();
     for (const quantity of ['0', '-5', '1.5', 'ten']) {
       fill({ quantity });
       await submit();
@@ -101,6 +116,7 @@ describe('OrderTicket', () => {
   });
 
   it('blocks a price with more than two decimal places, or not above zero, before submission', async () => {
+    await listInstruments();
     for (const price of ['10.555', '0', '0.00']) {
       fill({ price });
       await submit();
@@ -110,15 +126,51 @@ describe('OrderTicket', () => {
     }
   });
 
-  it('blocks a symbol the contract does not allow before submission', async () => {
-    fill({ symbol: 'INFY.LN' });
+  it('offers only the tradable instruments, grouped by type, and sends nothing until one is chosen', async () => {
+    await listInstruments();
+
+    const groups = [...field('ticket-symbol').querySelectorAll('optgroup')].map((group) => group.label);
+    expect(groups).toEqual(['Stocks', 'ETFs', 'Mutual funds']);
+    const choices = [...field('ticket-symbol').querySelectorAll('optgroup option')].map((option) => (option as HTMLOptionElement).value);
+    expect(choices).toEqual(['INFY.NS', 'TCS.NS', 'NIFTYBEES', '120503']);
+
+    field('ticket-quantity').value = '10';
+    field('ticket-quantity').dispatchEvent(new Event('input'));
+    field('ticket-price').value = '100';
+    field('ticket-price').dispatchEvent(new Event('input'));
     await submit();
 
     http.expectNone(ORDERS);
-    expect(page.textContent).toContain('Enter a symbol such as AAPL');
+    expect(page.textContent).toContain('Choose an instrument from the list.');
+  });
+
+  it("opens filled in from a holding's Sell link, once the list shows the symbol is tradable", async () => {
+    fixture.componentRef.setInput('symbol', 'tcs.ns');
+    fixture.componentRef.setInput('side', 'SELL');
+    await listInstruments();
+
+    expect(field('ticket-symbol').value).toBe('TCS.NS');
+    expect(field('ticket-side').value).toBe('SELL');
+  });
+
+  it('ignores a linked symbol that is not tradable, and a side that is neither BUY nor SELL', async () => {
+    fixture.componentRef.setInput('symbol', 'NOPE.NS');
+    fixture.componentRef.setInput('side', 'SHORT');
+    await listInstruments();
+
+    expect(field('ticket-symbol').value).toBe('');
+    expect(field('ticket-side').value).toBe('BUY');
+  });
+
+  it('says so when the instruments cannot be read', async () => {
+    http.expectOne(`${TRADE}/api/v1/instruments`).flush({ errorCode: 'AUTH-401', message: 'x' }, { status: 401, statusText: 'Unauthorized' });
+    await settle();
+
+    expect(page.querySelector('[role="alert"]')?.textContent).toContain('Your session has expired');
   });
 
   it('shows the mapped message for a business-rule rejection, not the API text', async () => {
+    await listInstruments();
     fill({});
     await submit();
 
@@ -131,6 +183,7 @@ describe('OrderTicket', () => {
   });
 
   it('renders the account from the token, read-only, and sends that account', async () => {
+    await listInstruments();
     expect(field('ticket-account').value).toBe('3');
     expect(field('ticket-account').readOnly).toBe(true);
 
@@ -144,6 +197,7 @@ describe('OrderTicket', () => {
   });
 
   it('reuses the idempotency key when retrying an order whose response never arrived', async () => {
+    await listInstruments();
     fill({});
     await submit();
     const first = http.expectOne(ORDERS);

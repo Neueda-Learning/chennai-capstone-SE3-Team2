@@ -12,12 +12,18 @@ export interface SessionClaims {
 }
 
 const STORAGE_KEY = 'trading-ui.accessToken';
+const REFRESH_STORAGE_KEY = 'trading-ui.refreshToken';
 
 /**
- * The signed-in session: the access token and what it says.
+ * The signed-in session: the access token and what it says, and the refresh
+ * token that renews it (SessionRefresh does that).
  *
  * Kept in sessionStorage, so a reload keeps the customer signed in and closing
- * the tab signs them out, and the token never outlives the browser session.
+ * the tab signs them out, and neither token outlives the browser session. The
+ * refresh token is worth more than the access token -- days, not minutes -- but
+ * the Auth service rotates it on every use and treats a second use as theft,
+ * revoking every one the user has; and the contract hands it over in the body,
+ * not as an HttpOnly cookie, so script can always reach it whatever we do.
  * The signature is not checked here and cannot be -- the browser holds no
  * secret. Every API verifies the token on every call; this only reads it to
  * know which account to show and when the session has run out.
@@ -25,6 +31,7 @@ const STORAGE_KEY = 'trading-ui.accessToken';
 @Injectable({ providedIn: 'root' })
 export class Session {
   private readonly token = signal<string | null>(readStored());
+  private refresh: string | null = readStoredRefresh();
 
   /** The raw bearer token, for the interceptor. Null when signed out. */
   readonly accessToken = this.token.asReadonly();
@@ -37,40 +44,61 @@ export class Session {
   /** The account this session may trade, from the token. */
   readonly accountId = computed(() => this.claims()?.accountId ?? null);
 
-  /** Signed in with a token that has not yet expired. An expired one is cleared. */
+  /**
+   * Signed in with a token that has not yet expired. An expired one is
+   * cleared; the refresh token is kept, so SessionRefresh can still renew it.
+   */
   isSignedIn(): boolean {
     const claims = this.claims();
     if (claims === null) {
       return false;
     }
     if (claims.exp * 1000 <= Date.now()) {
-      this.end();
+      this.token.set(null);
+      store(STORAGE_KEY, null);
       return false;
     }
     return true;
   }
 
-  /** Starts a session from a fresh access token. Refuses one that is not a readable JWT. */
-  start(accessToken: string): void {
+  /** The refresh token, for SessionRefresh only. Null when there is none. */
+  refreshToken(): string | null {
+    return this.refresh;
+  }
+
+  /**
+   * Starts a session from a fresh token pair: a sign-in, or a renewal. Refuses
+   * an access token that is not a readable JWT.
+   */
+  start(accessToken: string, refreshToken: string | null = null): void {
     if (decodeClaims(accessToken) === null) {
       throw new Error('The sign-in response did not contain a usable access token');
     }
     this.token.set(accessToken);
-    try {
-      sessionStorage.setItem(STORAGE_KEY, accessToken);
-    } catch {
-      // Storage refused (private mode, quota): the session lasts until reload.
-    }
+    this.refresh = refreshToken;
+    store(STORAGE_KEY, accessToken);
+    store(REFRESH_STORAGE_KEY, refreshToken);
   }
 
-  /** Signs out: the token is gone from memory and from storage. */
+  /** Signs out: both tokens are gone from memory and from storage. */
   end(): void {
     this.token.set(null);
-    try {
-      sessionStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // Nothing stored to remove.
+    this.refresh = null;
+    store(STORAGE_KEY, null);
+    store(REFRESH_STORAGE_KEY, null);
+  }
+}
+
+/** Writes or, for null, removes. Storage refused (private mode, quota): the session lasts until reload. */
+function store(key: string, value: string | null): void {
+  try {
+    if (value === null) {
+      sessionStorage.removeItem(key);
+    } else {
+      sessionStorage.setItem(key, value);
     }
+  } catch {
+    // Nothing more to do: memory still holds it.
   }
 }
 
@@ -78,6 +106,14 @@ function readStored(): string | null {
   try {
     const stored = sessionStorage.getItem(STORAGE_KEY);
     return stored !== null && decodeClaims(stored) !== null ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
+function readStoredRefresh(): string | null {
+  try {
+    return sessionStorage.getItem(REFRESH_STORAGE_KEY);
   } catch {
     return null;
   }

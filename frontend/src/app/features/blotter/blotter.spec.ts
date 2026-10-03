@@ -146,4 +146,73 @@ describe('Blotter', () => {
     expect(rows().length).toBe(1);
     expect(page.querySelector('[role="alert"]')?.textContent).toContain('Something went wrong on our side');
   });
+
+  describe('cancelling', () => {
+    const cancelButtons = () => [...page.querySelectorAll<HTMLButtonElement>('[data-testid="blotter-cancel"]')];
+    let settled: number;
+
+    /** Lets the cancel's answer reach the blotter, which then re-reads. */
+    async function answered(): Promise<void> {
+      for (let i = 0; i < 5; i++) {
+        await Promise.resolve();
+      }
+    }
+
+    beforeEach(() => {
+      settled = 0;
+      fixture.componentInstance.settled.subscribe(() => settled++);
+    });
+
+    it('offers Cancel only on an order still NEW', async () => {
+      await respond([order('a', 'NEW', '2026-10-02T09:00:00Z'), order('b', 'FILLED', '2026-10-02T08:00:00Z')]);
+
+      expect(cancelButtons()).toHaveLength(1);
+      expect(rows()[0].contains(cancelButtons()[0])).toBe(true);
+      expect(cancelButtons()[0].getAttribute('aria-label')).toBe('Cancel order ORD-a');
+    });
+
+    it('cancels the order, re-reads, and says the order settled', async () => {
+      await respond([order('a', 'NEW', '2026-10-02T09:00:00Z')]);
+
+      cancelButtons()[0].click();
+      await fixture.whenStable();
+      // The bare UUID: the route refuses the ORD- display prefix.
+      const cancel = http.expectOne(`${TRADE}/api/v1/orders/a`);
+      expect(cancel.request.method).toBe('DELETE');
+      cancel.flush({ orderId: 'ORD-a', status: 'CANCELLED', message: 'Order cancelled' });
+      await answered();
+      await respond([order('a', 'CANCELLED', '2026-10-02T09:00:00Z')]);
+
+      expect(rows()[0].getAttribute('data-status')).toBe('CANCELLED');
+      expect(cancelButtons()).toHaveLength(0);
+      expect(settled).toBe(1);
+      expect(scheduled.length).toBe(0);
+    });
+
+    it('explains an order that finished before the cancel arrived, and shows what happened to it', async () => {
+      await respond([order('a', 'NEW', '2026-10-02T09:00:00Z')]);
+
+      cancelButtons()[0].click();
+      await fixture.whenStable();
+      http.expectOne(`${TRADE}/api/v1/orders/a`).flush({ errorCode: 'ORD-409', message: 'Order is not cancellable' }, { status: 409, statusText: 'Conflict' });
+      await answered();
+      await respond([order('a', 'FILLED', '2026-10-02T09:00:00Z')]);
+
+      expect(page.querySelector('[role="alert"]')?.textContent).toContain('That order had already finished');
+      expect(rows()[0].getAttribute('data-status')).toBe('FILLED');
+      expect(settled).toBe(1);
+    });
+
+    it('does not report a settle on the first read, or when nothing left NEW', async () => {
+      await respond([order('a', 'FILLED', '2026-10-02T09:00:00Z'), order('b', 'NEW', '2026-10-02T09:01:00Z')]);
+      elapse();
+      await respond([order('a', 'FILLED', '2026-10-02T09:00:00Z'), order('b', 'NEW', '2026-10-02T09:01:00Z')]);
+
+      expect(settled).toBe(0);
+
+      elapse();
+      await respond([order('a', 'FILLED', '2026-10-02T09:00:00Z'), order('b', 'REJECTED', '2026-10-02T09:01:00Z')]);
+      expect(settled).toBe(1);
+    });
+  });
 });
