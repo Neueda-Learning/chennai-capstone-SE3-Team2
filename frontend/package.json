@@ -17,6 +17,7 @@
     "e2e": "playwright test",
     "e2e:login": "playwright test e2e/login.spec.ts",
     "e2e:order": "playwright test e2e/place-order.spec.ts",
+    "e2e:cash": "playwright test e2e/cash.spec.ts",
     "check:bundle": "ng build && node scripts/check-bundle-secrets.mjs",
     "test:scripts": "node --test scripts/"
   },

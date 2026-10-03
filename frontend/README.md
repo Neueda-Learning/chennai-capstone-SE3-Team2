@@ -368,7 +368,7 @@ the money twice.
 
 ## End-to-end journeys
 
-Two Playwright journeys in `e2e/`, against the **real running stack** -- the UI,
+Three Playwright journeys in `e2e/`, against the **real running stack** -- the UI,
 the Trade REST API and the Auth service. An end-to-end test that talks to a
 stub proves nothing about integration.
 
@@ -376,6 +376,7 @@ stub proves nothing about integration.
 |---|---|
 | `e2e/login.spec.ts` | the guard redirect, a refused sign-in, a successful sign-in arriving where it was going -- and that the token went only to `/api/v1/**` and `/auth/me`, never to `/auth/login` |
 | `e2e/place-order.spec.ts` | the read-only account, an invalid order stopped before it is sent, a placed order and whatever status came back |
+| `e2e/cash.spec.ts` | the bank account masked, a deposit shown processing and then decided without a reload, a withdrawal over the available cash stopped before it is sent |
 
 A placed order passes on `NEW`, `FILLED` or `REJECTED`. Asserting `FILLED`
 would fail the week the executor is switched off, which is the wrong signal.
@@ -392,15 +393,18 @@ and no others:
 | `E2E_ACCOUNT_ID` | that login's account, e.g. `3` |
 | `E2E_SYMBOL` | a tradable instrument, e.g. `ITC.NS` -- one the ticket's list offers, since it is picked, not typed |
 
-The account needs cash for the order journey; a brand-new account has none.
+The account needs cash for the order journey; a brand-new account has none,
+so run the cash journey first (each run deposits ₹100), or add cash on the
+Cash page.
 
 ```bash
 docker compose --profile platform up -d      # the stack, from the repository root
 npm start                                    # the UI, in another terminal
 npx playwright install chromium              # once per machine
 npm run e2e:login                            # each journey in its own process --
-npm run e2e:order                            # one that only passes after its neighbour fails here
-npm run e2e                                  # both
+npm run e2e:cash                             # one that only passes after its neighbour fails here
+npm run e2e:order
+npm run e2e                                  # all three
 ```
 
 Each test starts in a fresh browser context and shares nothing: no token in a

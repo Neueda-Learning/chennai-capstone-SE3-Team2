@@ -237,13 +237,39 @@ curl -sS localhost:8080/api/v1/accounts/11 -H "Authorization: Bearer <token>"
 Open the same link again: "This link is not valid".
 
 A new account has no money, so its first order is `ORD-400 Insufficient funds`
-— which already shows the KYC gate let it through. There is no deposit route;
-on a development stack only, credit it directly to place a real order:
+— which already shows the KYC gate let it through. Add cash from the bank
+account given on the application, and it is credited a few seconds later
+(`payments.md`):
 
 ```bash
-docker exec -i fauxnance-postgres psql -U postgres -d trading \
-  -c "UPDATE client_account SET balance = 100000 WHERE client_id = 11"
+curl -sS -X POST localhost:8080/api/v1/accounts/11/deposits -H "Authorization: Bearer <token>" \
+  -H 'Content-Type: application/json' -d '{"amount":100000,"idempotencyKey":"first-deposit-11"}'
 ```
+
+### The same, in the browser
+
+With the UI running (`cd frontend && npm start`), all of it is screens:
+
+1. `http://localhost:4200/sign-in` → **New customer? Open an account** → the
+   application, bank account included → "Application received".
+2. About 40 seconds later the email arrives → open the link → choose a username
+   and password → "Your login is ready" → **Sign in**.
+3. **Cash** → an amount → **Add cash** → `◷ PROCESSING`, then `✓ SUCCESS` a few
+   seconds later; the available cash goes up.
+4. **Place an order** → pick the instrument from the list → Buy → the result,
+   usually `NEW` → the dashboard's blotter updates it; a fill appears under
+   **Your holdings**.
+5. **Sell** on a holding → the ticket opens with that instrument and Sell chosen.
+6. **Cash** → **Withdraw** → held at once, `✓ SUCCESS` a few seconds later.
+
+An order is `FILLED` only when the executor can price it: a valid
+`FAUXNANCE_API_KEY`, an instrument Fauxnance knows (`seed/005`: `TCS.NS`,
+`ITC.NS`, `HDFCBANK.NS`, `MRF.NS`), and a quote Fauxnance does not flag
+`stale` -- the executor refuses a stale one. When Fauxnance's Indian data is
+behind (`GET /health` reports the `IN` market `stale`), the `.NS` quotes come
+from its cache and every one is rejected `NO_PRICE`, except `MRF.NS`, which it
+prices synthetically. The fictional tickers from `seed/003` are always
+`REJECTED` for want of a price.
 
 The rejection path: apply again with PAN `ABCPS0000A` and another address →
 `REJECTED`, reason `PAN not found at the registry`, no event, no email, no login.

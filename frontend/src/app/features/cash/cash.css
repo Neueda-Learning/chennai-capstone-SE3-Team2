@@ -46,11 +46,14 @@
 .status-line {
   min-height: 1.5em;
   color: var(--warning);
+  margin: 0.25rem 0 0.75rem;
 }
 
-table {
+.table-wrap {
+  overflow-x: auto;
   background: var(--surface);
   border: 1px solid var(--border);
+  border-radius: var(--radius);
 }
 
 .badge {
@@ -86,5 +89,8 @@ table {
 }
 
 .empty {
-  color: var(--muted);
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
 }

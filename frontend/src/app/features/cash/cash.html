@@ -70,6 +70,7 @@
     @if (transfers.length === 0) {
       <p class="empty">No transfers yet.</p>
     } @else {
+      <div class="table-wrap">
       <table>
         <caption class="visually-hidden">Every deposit and withdrawal, newest first</caption>
         <thead>
@@ -99,6 +100,7 @@
           }
         </tbody>
       </table>
+      </div>
     }
   }
 </section>
