@@ -46,4 +46,15 @@ export class Env {
   get redisUrl(): string | undefined { return this.config.get('REDIS_URL') || undefined; }
 
   get outboxPollMs(): number { return Number(this.config.get('OUTBOX_POLL_MS') ?? 2000); }
+
+  /**
+   * Browser origins allowed to call this service: the trading UI. Exact
+   * origins, comma-separated -- an allow list, never a pattern.
+   */
+  get corsAllowedOrigins(): string[] {
+    return (this.config.get<string>('CORS_ALLOWED_ORIGINS') ?? 'http://localhost:4200')
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean);
+  }
 }

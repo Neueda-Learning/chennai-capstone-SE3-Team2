@@ -213,6 +213,9 @@ services:
       ACTIVATION_INTERNAL_SECRET: ${ACTIVATION_INTERNAL_SECRET:?ACTIVATION_INTERNAL_SECRET must be set in .env}
       # Where /activate sends a customer after they register.
       ACTIVATION_HOME_URL: ${ACTIVATION_HOME_URL:-http://localhost:4200/}
+      # Browser origins allowed to call this service: the trading UI
+      # (frontend/). Exact origins, comma-separated.
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200}
       # The login throttle's shared counter: the hosted Redis every instance
       # counts in, so five failures means five in total rather than five
       # each. No default: without it the throttle would quietly go back to

@@ -1,5 +1,6 @@
-import { Component } from '@angular/core';
-import { RouterLink, RouterOutlet } from '@angular/router';
+import { Component, inject } from '@angular/core';
+import { Router, RouterLink, RouterOutlet } from '@angular/router';
+import { Session } from './core/session/session';
 
 /** The shell: a header, and the routed feature below it. */
 @Component({
@@ -8,4 +9,12 @@ import { RouterLink, RouterOutlet } from '@angular/router';
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
-export class App {}
+export class App {
+  protected readonly session = inject(Session);
+  private readonly router = inject(Router);
+
+  async signOut(): Promise<void> {
+    this.session.end();
+    await this.router.navigateByUrl('/sign-in');
+  }
+}

@@ -13,6 +13,11 @@
   text-decoration: none;
 }
 
+.account {
+  margin-left: auto;
+  color: var(--muted);
+}
+
 .app-main {
   max-width: 64rem;
   margin: 1.5rem auto;

@@ -6,6 +6,11 @@ import { Routes } from '@angular/router';
  */
 export const routes: Routes = [
   {
+    path: 'sign-in',
+    title: 'Sign in',
+    loadComponent: () => import('./features/sign-in/sign-in').then((m) => m.SignIn),
+  },
+  {
     path: '',
     title: 'Dashboard',
     loadComponent: () => import('./features/dashboard/dashboard').then((m) => m.Dashboard),
