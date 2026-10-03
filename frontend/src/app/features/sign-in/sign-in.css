@@ -1,0 +1,9 @@
+.sign-in {
+  max-width: 24rem;
+  margin: 3rem auto;
+}
+
+button[type='submit'] {
+  margin-top: 1.5rem;
+  width: 100%;
+}

@@ -3,6 +3,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { configureApp } from './app-setup';
 import { Env } from './config/env';
+import { corsOptions } from './common/cors';
 import { RedactingLogger } from './common/redacting-logger';
 
 async function bootstrap(): Promise<void> {
@@ -12,6 +13,10 @@ async function bootstrap(): Promise<void> {
   app.get(Env).assertRequired();
 
   configureApp(app);
+
+  // The trading UI calls this service from another origin. Only the origins
+  // listed are answered; every other browser origin is refused.
+  app.enableCors(corsOptions(app.get(Env).corsAllowedOrigins));
 
   // Generated from the decorators on the controller and the DTOs. A YAML file
   // maintained by hand beside the code drifts within a fortnight; this is the

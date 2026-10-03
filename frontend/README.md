@@ -120,3 +120,29 @@ act on, and `<app-error-message>` (in `shared/`) renders it as an alert.
 - **Status 0** — no response at all, usually a service that is down or a CORS
   rule that does not allow this origin — has its own sentence, and an unknown
   code falls back to one. Neither renders a blank panel.
+
+## Signing in
+
+`/sign-in` posts the username and password to `POST /auth/login` on the Auth
+service and keeps the access token it returns.
+
+- **Where the token lives:** `sessionStorage`, through `core/session/session.ts`
+  and nowhere else. A reload keeps the customer signed in; closing the tab, or
+  **Sign out** in the header, clears it. An expired token counts as signed out
+  and is cleared.
+- **The account comes from the token.** Its `accountId` claim is the one
+  account this session may trade. The browser reads the claims but cannot
+  verify them -- it holds no secret -- and does not need to: every API checks
+  the token on every call.
+- **A refused sign-in** shows "That username and password don't match" for
+  `AUTH-401`, and the catalogue's sentence for everything else, including the
+  throttle's `AUTH-429`.
+- The username field, the password field and the submit button carry
+  `data-testid="sign-in-username"`, `"sign-in-password"` and `"sign-in-submit"`,
+  so the Playwright journeys find them by identifier, not by label text.
+
+The Auth service answers the browser only because it allows this origin:
+`CORS_ALLOWED_ORIGINS` (default `http://localhost:4200`) in `.env`.
+
+To sign in for real you need a login: apply, pass KYC and activate as in
+`docs/runbooks/account-activation.md`, "Running it end to end".

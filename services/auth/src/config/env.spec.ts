@@ -20,6 +20,13 @@ describe('Env', () => {
     expect(() => envWith({ ...complete, [missing]: undefined }).assertRequired()).toThrow(`${missing} is not set`);
   });
 
+  it('allows the trading UI on localhost:4200 by default, and a list when given one', () => {
+    expect(envWith(complete).corsAllowedOrigins).toEqual(['http://localhost:4200']);
+    expect(
+      envWith({ ...complete, CORS_ALLOWED_ORIGINS: 'http://localhost:4200, https://ui.example' }).corsAllowedOrigins,
+    ).toEqual(['http://localhost:4200', 'https://ui.example']);
+  });
+
   it('reads a comma-separated broker list', () => {
     expect(envWith({ ...complete, KAFKA_BROKERS: 'a:9092, b:9092' }).kafkaBrokers).toEqual(['a:9092', 'b:9092']);
   });
