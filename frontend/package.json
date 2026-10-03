@@ -16,7 +16,9 @@
     "check:api": "node scripts/check-generated.mjs",
     "e2e": "playwright test",
     "e2e:login": "playwright test e2e/login.spec.ts",
-    "e2e:order": "playwright test e2e/place-order.spec.ts"
+    "e2e:order": "playwright test e2e/place-order.spec.ts",
+    "check:bundle": "ng build && node scripts/check-bundle-secrets.mjs",
+    "test:scripts": "node --test scripts/"
   },
   "dependencies": {
     "@angular/common": "^21.2.0",
