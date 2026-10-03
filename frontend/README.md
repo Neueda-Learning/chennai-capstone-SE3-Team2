@@ -181,3 +181,25 @@ The Trade REST API answers the browser only because it allows this origin:
 `CORS_ALLOWED_ORIGINS` again (`services/trade-api`, `CorsConfig`). Its CORS
 filter runs before the token filter, because a browser's preflight carries no
 token and would otherwise be refused.
+
+## Route guards and the return address
+
+Sign-in is the only route an unauthenticated visitor may reach. Every other
+route is a child of one guarded parent in `app.routes.ts`
+(`canActivateChild: [authGuard]`), so a route added later is guarded without
+anyone remembering to; a spec checks that every top-level route but sign-in
+carries the guard.
+
+A signed-out visitor is redirected to `/sign-in?returnUrl=<where they were
+going>` and told "Sign in to continue to that page" -- never shown an empty
+screen. After signing in they land there, but only if `safeReturnUrl()`
+(`core/guards/return-url.ts`) accepts it as a **path on this origin**. Absolute
+URLs, `//host`, backslash and control-character tricks, and `javascript:` all
+fall back to the dashboard: a return address followed unchecked is an open
+redirect, and on a trading sign-in page that is a phishing kit somebody else
+assembles for free.
+
+Said out loud at the review: **the guard is a usability control, not a
+security control.** The bundle is public and every route in it is readable.
+Authorisation is the Trade REST API's decision, taken on every `/api/v1/**`
+call.

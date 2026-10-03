@@ -1,8 +1,9 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, input, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthApi } from '../../core/api/auth-api';
 import { KnownErrorCode } from '../../core/errors/error-messages';
+import { safeReturnUrl } from '../../core/guards/return-url';
 import { Session } from '../../core/session/session';
 import { ErrorMessage } from '../../shared/error-message/error-message';
 
@@ -22,6 +23,13 @@ export class SignIn {
   private readonly authApi = inject(AuthApi);
   private readonly session = inject(Session);
   private readonly router = inject(Router);
+
+  /**
+   * Where the guard was taking the user, from the `returnUrl` query parameter
+   * (bound by the router's withComponentInputBinding). Checked before it is
+   * followed.
+   */
+  readonly returnUrl = input<string | undefined>(undefined);
 
   protected readonly wording = SIGN_IN_WORDING;
 
@@ -44,7 +52,7 @@ export class SignIn {
     try {
       const { username, password } = this.form.getRawValue();
       this.session.start(await this.authApi.signIn(username, password));
-      await this.router.navigateByUrl('/');
+      await this.router.navigateByUrl(safeReturnUrl(this.returnUrl()));
     } catch (failure) {
       this.form.controls.password.reset();
       this.error.set(failure);
