@@ -43,3 +43,8 @@ Thumbs.db
 # Committing it means a clone builds with no Java runtime and no network, and
 # a contract change arrives as a diff a reviewer has to read. It is machine
 # output: regenerate with `npm run generate:api`, never edit it by hand.
+
+# Playwright output
+/test-results
+/playwright-report
+/blob-report
