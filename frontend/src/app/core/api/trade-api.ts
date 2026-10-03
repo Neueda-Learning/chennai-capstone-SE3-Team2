@@ -1,6 +1,13 @@
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import { OrderResponse, OrdersService, PlaceOrderRequest } from '../../../generated/trade';
+import {
+  AccountResponse,
+  AccountsService,
+  OrderHistoryEntry,
+  OrderResponse,
+  OrdersService,
+  PlaceOrderRequest,
+} from '../../../generated/trade';
 
 /**
  * The Trade REST API, as this application uses it. Wraps the generated
@@ -9,9 +16,20 @@ import { OrderResponse, OrdersService, PlaceOrderRequest } from '../../../genera
 @Injectable({ providedIn: 'root' })
 export class TradeApi {
   private readonly orders = inject(OrdersService);
+  private readonly accounts = inject(AccountsService);
 
   /** POST /api/v1/orders. Resolves with what the API returned -- usually NEW. */
   placeOrder(order: PlaceOrderRequest): Promise<OrderResponse> {
     return firstValueFrom(this.orders.placeOrder(order));
+  }
+
+  /** GET /api/v1/accounts/{id}/orders: every order, rejections included. */
+  orderHistory(accountId: number): Promise<OrderHistoryEntry[]> {
+    return firstValueFrom(this.accounts.getOrders(accountId));
+  }
+
+  /** GET /api/v1/accounts/{id}. */
+  account(accountId: number): Promise<AccountResponse> {
+    return firstValueFrom(this.accounts.getAccount(accountId));
   }
 }

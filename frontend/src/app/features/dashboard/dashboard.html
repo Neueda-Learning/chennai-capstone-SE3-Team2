@@ -1,2 +1,38 @@
-<h1>Dashboard</h1>
-<p>Your account and your orders appear here.</p>
+<div class="title">
+  <h1>Dashboard</h1>
+  <a class="button" routerLink="/trade" data-testid="dashboard-trade">Place an order</a>
+</div>
+
+<app-error-message [error]="error()" />
+
+<section class="card summary" aria-label="Account summary" data-testid="account-summary">
+  @if (account(); as account) {
+    <dl>
+      <div>
+        <dt>Account</dt>
+        <dd data-testid="account-ref">{{ account.accountId }}</dd>
+      </div>
+      <div>
+        <dt>Holder</dt>
+        <dd>{{ account.holderName }}</dd>
+      </div>
+      <div>
+        <dt>Status</dt>
+        <dd>{{ account.status }}</dd>
+      </div>
+      <div>
+        <dt>Cash balance</dt>
+        <dd data-testid="cash-balance">{{ account.cashBalance | currency: 'INR' : 'symbol' : '1.2-2' }}</dd>
+      </div>
+    </dl>
+    @if (user(); as user) {
+      <p class="signed-in" data-testid="signed-in-as">Signed in as {{ user.username }}</p>
+    }
+  } @else if (!error()) {
+    <p>Loading your account…</p>
+  }
+</section>
+
+@if (accountId(); as accountId) {
+  <app-blotter [accountId]="accountId" />
+}
