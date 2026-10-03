@@ -53,10 +53,16 @@ class KycDeciderTest {
             new KycProperties("kyc-events", Duration.ofSeconds(30), 50, 5), json, CLOCK);
 
     private void applicant(String pan, LocalDate dob) {
+        applicant(pan, dob, "509876543210");
+    }
+
+    private void applicant(String pan, LocalDate dob, String bankAccount) {
         ApplicantRow row = new ApplicantRow();
         row.setPan(pan);
         row.setName("Priya Menon");
         row.setDob(dob);
+        row.setBankAccountNumber(bankAccount);
+        row.setIfsc("DEMO0000001");
         when(kyc.findApplicant(CLIENT)).thenReturn(row);
     }
 
@@ -74,7 +80,7 @@ class KycDeciderTest {
         assertThat(decider.decide(CLIENT), is(Optional.of(KycStatus.VERIFIED)));
 
         verify(kyc).decide(CLIENT, "VERIFIED", null,
-                "{\"age\":\"pass\",\"panHolderType\":\"pass\",\"registry\":\"pass\"}");
+                "{\"age\":\"pass\",\"panHolderType\":\"pass\",\"registry\":\"pass\",\"bankAccount\":\"pass\"}");
         verify(kyc).setAccountKycStatus(CLIENT, "VERIFIED");
     }
 
@@ -118,6 +124,18 @@ class KycDeciderTest {
 
         verify(kyc).decide(CLIENT, "REJECTED", StubKycProvider.NOT_FOUND,
                 "{\"age\":\"pass\",\"panHolderType\":\"pass\",\"registry\":\"fail\"}");
+    }
+
+    @Test
+    @DisplayName("A bank account that cannot be verified is REJECTED, and queues no event")
+    void bankNotVerified() {
+        applicant("ABCPM1234Q", LocalDate.of(1990, 5, 17), "509876540000");
+
+        assertThat(decider.decide(CLIENT), is(Optional.of(KycStatus.REJECTED)));
+
+        verify(kyc).decide(CLIENT, "REJECTED", StubKycProvider.BANK_NOT_VERIFIED,
+                "{\"age\":\"pass\",\"panHolderType\":\"pass\",\"registry\":\"pass\",\"bankAccount\":\"fail\"}");
+        verifyNoInteractions(outbox);
     }
 
     @Test

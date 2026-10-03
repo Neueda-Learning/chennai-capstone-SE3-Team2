@@ -35,11 +35,17 @@ public interface KycMapper {
                        @Param("maxAttempts") int maxAttempts,
                        @Param("limit") int limit);
 
-    /** What the checks need, read when they run rather than stored with the verification. */
+    /**
+     * What the checks need, read when they run rather than stored with the
+     * verification. The bank account is a LEFT JOIN: a customer without one
+     * is read, and refused by the checks, rather than silently skipped.
+     */
     @Select("""
-            SELECT ca.pan, cp.name, cp.dob
+            SELECT ca.pan, cp.name, cp.dob,
+                   ba.account_number AS bank_account_number, ba.ifsc
             FROM client_account ca
             JOIN client_profile cp ON cp.client_id = ca.client_id
+            LEFT JOIN bank_account ba ON ba.client_id = ca.client_id
             WHERE ca.client_id = #{clientId}
             """)
     ApplicantRow findApplicant(@Param("clientId") long clientId);

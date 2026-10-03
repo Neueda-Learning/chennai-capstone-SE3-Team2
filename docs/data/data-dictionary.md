@@ -218,6 +218,25 @@ puts them back in the queue.
 
 ---
 
+### `bank_account` — one row per customer
+The customer's one registered bank account, added by `009_bank_account.sql`.
+Money moves only between the trading account and this account: deposits come
+from it, withdrawals go to it. It is given on the application and checked by
+KYC before the customer can trade.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `client_id` | INTEGER, PK, FK | The customer |
+| `account_number` | VARCHAR(18) | 9 to 18 digits. Personal data: never logged, shown only as its last four digits |
+| `ifsc` | CHAR(11) | Branch code: four letters, a zero, six letters or digits |
+| `holder_name` | VARCHAR(120) | Who a payout is addressed to: the applicant's name |
+| `created_at` | TIMESTAMPTZ | When it was registered |
+
+The ten seeded customers get fake accounts at bank `DEMO` from
+`seed/006_bank_accounts.sql`.
+
+---
+
 ### `outbox_event` — one row per event awaiting publication
 Events written in the same transaction as the change they announce, then
 published to Kafka by a relay. Added by `007_kyc.sql` for `KYC_VERIFIED`.

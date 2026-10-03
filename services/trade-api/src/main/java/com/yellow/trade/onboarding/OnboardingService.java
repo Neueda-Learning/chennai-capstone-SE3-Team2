@@ -11,8 +11,8 @@ import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 
 /**
- * Creates a customer: an ACTIVE account with KYC PENDING, their profile, and a
- * queued verification -- all in one transaction.
+ * Creates a customer: an ACTIVE account with KYC PENDING, their profile, their
+ * bank account, and a queued verification -- all in one transaction.
  */
 @Service
 public class OnboardingService {
@@ -54,6 +54,8 @@ public class OnboardingService {
             // profile is the duplicate.
             throw new DuplicateApplicationException();
         }
+        // In the applicant's own name: payouts go only to the customer.
+        mapper.insertBankAccount(clientId, request.bankAccountNumber(), request.ifsc(), request.name());
 
         kyc.submit(clientId);
         return clientId;

@@ -77,6 +77,7 @@ services:
       - ./data/db/migrations/006_activation_email.sql:/docker-entrypoint-initdb.d/06b-migration-006.sql:ro
       - ./data/db/migrations/007_kyc.sql:/docker-entrypoint-initdb.d/06c-migration-007.sql:ro
       - ./data/db/migrations/008_kyc_attempts.sql:/docker-entrypoint-initdb.d/06d-migration-008.sql:ro
+      - ./data/db/migrations/009_bank_account.sql:/docker-entrypoint-initdb.d/06e-migration-009.sql:ro
       - ./data/db/indexes/001_performance_indexes.sql:/docker-entrypoint-initdb.d/07-indexes.sql:ro
       - ./data/db/seed/001_reference_data.sql:/docker-entrypoint-initdb.d/08-seed-reference.sql:ro
       - ./data/db/seed/002_clients.sql:/docker-entrypoint-initdb.d/09-seed-clients.sql:ro
@@ -85,6 +86,7 @@ services:
       # Symbols Fauxnance can price. The fictional ones above stay, and
       # become the live no-price demonstration.
       - ./data/db/seed/005_fauxnance_instruments.sql:/docker-entrypoint-initdb.d/12-seed-fauxnance.sql:ro
+      - ./data/db/seed/006_bank_accounts.sql:/docker-entrypoint-initdb.d/12b-seed-bank-accounts.sql:ro
       # Auth's schema, applied to the auth database by 13-auth-schema.sh. The
       # files are mounted OUTSIDE the init folder: the image runs every .sql
       # in there against trading, where auth's tables do not belong.

@@ -55,13 +55,14 @@ the customer has no login yet.
 
 ```json
 { "name": "Priya Menon", "dob": "1990-05-17", "email": "priya@example.com",
-  "phoneNumber": "+919812345611", "pan": "ABCPM1234Q", "address": "12 Anna Nagar, Chennai" }
+  "phoneNumber": "+919812345611", "pan": "ABCPM1234Q", "address": "12 Anna Nagar, Chennai",
+  "bankAccountNumber": "509876543210", "ifsc": "DEMO0000001" }
 ```
 
 | Answer | When |
 |---|---|
 | `202` `{"status":"RECEIVED", …}` | Created — **or** the PAN or email is already registered. The two are byte-identical and nothing is created for the duplicate, so the route never reveals who is a customer |
-| `422` `VAL-422` | A field fails its rule (`pan` `[A-Z]{5}[0-9]{4}[A-Z]`, `phoneNumber` `+91` then 10 digits starting 6–9, `dob` a real past date). The message names the field, never the value |
+| `422` `VAL-422` | A field fails its rule (`pan` `[A-Z]{5}[0-9]{4}[A-Z]`, `phoneNumber` `+91` then 10 digits starting 6–9, `dob` a real past date, `bankAccountNumber` 9–18 digits, `ifsc` four letters, `0`, six letters or digits). The message names the field, never the value |
 | `429` `RATE-429` | More than 5 applications in an hour from one address. Counted in memory, per instance |
 
 The account is created `ACTIVE` with `kyc_status = PENDING`. Orders are refused
@@ -79,6 +80,7 @@ any outcome:
 | 18 or over today, in `Asia/Kolkata` | `under 18` — and nothing is sent to the provider | `dob` less than 18 years ago |
 | PAN holder type: 4th character `P` (individual) | `PAN is not an individual's` | PAN `ABCFS1234A` (a firm) |
 | Registry: PAN digits not `0000` | `PAN not found at the registry` | PAN `ABCPS0000A` |
+| Bank account: on file, number not ending `0000` (a real provider sends it a rupee) | `bank account could not be verified` | `bankAccountNumber` `509876540000` |
 
 The decision is written to `kyc_verification` and `client_account.kyc_status`
 together. `REJECTED` is final: one verification per customer, and the PAN stays
@@ -218,7 +220,8 @@ bash scripts/create-topics.sh
 
 curl -sS -X POST localhost:8080/onboarding/applications -H 'Content-Type: application/json' \
   -d '{"name":"Demo Customer","dob":"1995-06-15","email":"you+kyc1@gmail.com",
-       "phoneNumber":"+919812345611","pan":"DEMPS1234K","address":"12 Anna Nagar, Chennai"}'
+       "phoneNumber":"+919812345611","pan":"DEMPS1234K","address":"12 Anna Nagar, Chennai",
+       "bankAccountNumber":"509876543210","ifsc":"DEMO0000001"}'
 ```
 
 Then, about 40 seconds later: `KYC client 11 decided VERIFIED` in the trade-api

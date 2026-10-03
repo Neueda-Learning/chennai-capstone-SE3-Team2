@@ -5,14 +5,21 @@ import java.util.Map;
 
 /**
  * Where a real KYC vendor -- a KRA, in India -- plugs in. Only what such a
- * vendor's PAN verification takes is passed: the PAN, the name and the date of
- * birth. Nothing else about the customer leaves the platform.
+ * vendor's checks take is passed: the PAN, the name and the date of birth, and
+ * the bank account to verify. Nothing else about the customer leaves the
+ * platform.
  */
 interface KycProvider {
 
     Verdict verify(Applicant applicant);
 
-    record Applicant(String pan, String name, LocalDate dateOfBirth) {
+    record Applicant(String pan, String name, LocalDate dateOfBirth, String bankAccountNumber, String ifsc) {
+
+        /** Deliberately not the fields: an accidental log line must not print personal data. */
+        @Override
+        public String toString() {
+            return "Applicant[redacted]";
+        }
     }
 
     /**

@@ -50,8 +50,12 @@ class KycJobIntegrationTest extends PostgresSupport {
     }
 
     private long apply(String pan, String email) {
+        return apply(pan, email, "509876543210");
+    }
+
+    private long apply(String pan, String email, String bankAccount) {
         return onboarding.apply(new ApplicationRequest("Priya Menon", "1990-05-17", email,
-                "+919812345611", pan, "12 Anna Nagar, Chennai"));
+                "+919812345611", pan, "12 Anna Nagar, Chennai", bankAccount, "DEMO0000001"));
     }
 
     /** As though submitted longer ago than the delay. */
@@ -189,4 +193,30 @@ class KycJobIntegrationTest extends PostgresSupport {
         assertThat(verification(broken).get("status"), is("VERIFIED"));
         assertThat(outboxRows(broken), is(1));
     }
+
+    @Test
+    @DisplayName("The application's bank account is stored, and one that cannot be verified is REJECTED on both tables")
+    void bankAccountChecked() {
+        long clientId = apply("ABCPM1234Q", "priya@example.com", "509876540000");
+        assertThat(jdbc.queryForMap("SELECT account_number, ifsc, holder_name FROM bank_account WHERE client_id = ?", clientId),
+                is(Map.of("account_number", "509876540000", "ifsc", "DEMO0000001", "holder_name", "Priya Menon")));
+        makeDue(clientId);
+
+        job.run();
+
+        Map<String, Object> row = verification(clientId);
+        assertThat(row.get("status"), is("REJECTED"));
+        assertThat(row.get("reason"), is(StubKycProvider.BANK_NOT_VERIFIED));
+        assertThat(accountKyc(clientId), is("REJECTED"));
+        assertThat(outboxRows(clientId), is(0));
+    }
+
+    @Test
+    @DisplayName("Every seeded customer has a bank account that passes the check")
+    void seededBankAccounts() {
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM bank_account WHERE client_id BETWEEN 1 AND 10 AND account_number NOT LIKE '%0000'",
+                Integer.class), is(10));
+    }
 }
+

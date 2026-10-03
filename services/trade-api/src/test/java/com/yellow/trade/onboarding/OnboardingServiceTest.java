@@ -38,7 +38,7 @@ class OnboardingServiceTest {
 
     private static ApplicationRequest request(String dob) {
         return new ApplicationRequest("Priya Menon", dob, "priya@example.com",
-                "+919812345611", "ABCPM1234Q", "12 Anna Nagar, Chennai");
+                "+919812345611", "ABCPM1234Q", "12 Anna Nagar, Chennai", "509876543210", "DEMO0000001");
     }
 
     @BeforeEach
@@ -49,7 +49,7 @@ class OnboardingServiceTest {
     }
 
     @Test
-    @DisplayName("Creates the account, then the profile, then queues KYC, with identifiers derived from the client id")
+    @DisplayName("Creates the account, the profile, then the bank account in the applicant's name, then queues KYC")
     void createsCustomerAndQueuesKyc() {
         long clientId = service.apply(request("1990-05-17"));
 
@@ -58,6 +58,7 @@ class OnboardingServiceTest {
         order.verify(mapper).insertAccount(11L, "ACC-000011", "ABCPM1234Q", "IN30001000000011");
         order.verify(mapper).insertProfile(11L, "Priya Menon", LocalDate.of(1990, 5, 17),
                 "priya@example.com", "+919812345611", "12 Anna Nagar, Chennai");
+        order.verify(mapper).insertBankAccount(11L, "509876543210", "DEMO0000001", "Priya Menon");
         order.verify(kyc).submit(11L);
     }
 
@@ -69,6 +70,7 @@ class OnboardingServiceTest {
         assertThrows(DuplicateApplicationException.class, () -> service.apply(request("1990-05-17")));
 
         verify(mapper, never()).insertProfile(anyLong(), anyString(), any(), anyString(), anyString(), any());
+        verify(mapper, never()).insertBankAccount(anyLong(), anyString(), anyString(), anyString());
         verifyNoInteractions(kyc);
     }
 
@@ -79,6 +81,7 @@ class OnboardingServiceTest {
 
         assertThrows(DuplicateApplicationException.class, () -> service.apply(request("1990-05-17")));
 
+        verify(mapper, never()).insertBankAccount(anyLong(), anyString(), anyString(), anyString());
         verifyNoInteractions(kyc);
     }
 

@@ -44,4 +44,14 @@ public interface OnboardingMapper {
                       @Param("email") String email,
                       @Param("phoneNumber") String phoneNumber,
                       @Param("address") String address);
+
+    /** The customer's one bank account; client_id is its key. */
+    @Insert("""
+            INSERT INTO bank_account (client_id, account_number, ifsc, holder_name)
+            VALUES (#{clientId}, #{accountNumber}, #{ifsc}, #{holderName})
+            """)
+    int insertBankAccount(@Param("clientId") long clientId,
+                          @Param("accountNumber") String accountNumber,
+                          @Param("ifsc") String ifsc,
+                          @Param("holderName") String holderName);
 }

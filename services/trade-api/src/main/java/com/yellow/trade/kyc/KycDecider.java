@@ -99,8 +99,8 @@ class KycDecider {
             return Verdict.fail(UNDER_AGE, checks);
         }
 
-        Verdict vendor = provider.verify(
-                new Applicant(applicant.getPan(), applicant.getName(), applicant.getDob()));
+        Verdict vendor = provider.verify(new Applicant(applicant.getPan(), applicant.getName(),
+                applicant.getDob(), applicant.getBankAccountNumber(), applicant.getIfsc()));
         checks.putAll(vendor.checks());
         return new Verdict(vendor.passed(), vendor.reason(), checks);
     }

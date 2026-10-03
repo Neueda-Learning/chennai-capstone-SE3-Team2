@@ -8,6 +8,9 @@ public class ApplicantRow {
     private String pan;
     private String name;
     private LocalDate dob;
+    /** Null when the customer has no bank account on file. */
+    private String bankAccountNumber;
+    private String ifsc;
 
     public String getPan() { return pan; }
     public void setPan(String pan) { this.pan = pan; }
@@ -15,6 +18,10 @@ public class ApplicantRow {
     public void setName(String name) { this.name = name; }
     public LocalDate getDob() { return dob; }
     public void setDob(LocalDate dob) { this.dob = dob; }
+    public String getBankAccountNumber() { return bankAccountNumber; }
+    public void setBankAccountNumber(String bankAccountNumber) { this.bankAccountNumber = bankAccountNumber; }
+    public String getIfsc() { return ifsc; }
+    public void setIfsc(String ifsc) { this.ifsc = ifsc; }
 
     /** Deliberately not the fields: an accidental log line must not print personal data. */
     @Override

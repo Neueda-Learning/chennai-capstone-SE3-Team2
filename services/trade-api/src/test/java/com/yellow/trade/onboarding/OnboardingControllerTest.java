@@ -37,11 +37,17 @@ class OnboardingControllerTest {
     private static final String EMAIL = "priya.distinctive@example.com";
     private static final String PHONE = "+919812345611";
     private static final String DOB = "1990-05-17";
+    private static final String BANK = "509876543210";
+    private static final String IFSC = "DEMO0000001";
 
     private static String body(String pan, String dob, String phone) {
+        return body(pan, dob, phone, BANK, IFSC);
+    }
+
+    private static String body(String pan, String dob, String phone, String bank, String ifsc) {
         return """
-                {"name":"Priya Menon","dob":"%s","email":"%s","phoneNumber":"%s","pan":"%s","address":"12 Anna Nagar"}
-                """.formatted(dob, EMAIL, phone, pan);
+                {"name":"Priya Menon","dob":"%s","email":"%s","phoneNumber":"%s","pan":"%s","address":"12 Anna Nagar","bankAccountNumber":"%s","ifsc":"%s"}
+                """.formatted(dob, EMAIL, phone, pan, bank, ifsc);
     }
 
     private static final String VALID = body(PAN, DOB, PHONE);
@@ -89,6 +95,10 @@ class OnboardingControllerTest {
                 body("abcpm1234q", DOB, PHONE),      // PAN in lowercase
                 body(PAN, "17-05-1990", PHONE),      // date in the wrong format
                 body(PAN, DOB, "9812345611"),        // phone without +91
+                body(PAN, DOB, PHONE, "12345", IFSC),           // account number too short
+                body(PAN, DOB, PHONE, "5098765432AB", IFSC),    // account number not all digits
+                body(PAN, DOB, PHONE, BANK, "DEMO1000001"),     // IFSC without the 0 in fifth place
+                VALID.replace(",\"bankAccountNumber\":\"" + BANK + "\"", ""),  // no bank account
                 VALID.replace("}", ",\"isAdmin\":true}")}) {
             mvc.perform(post("/onboarding/applications").contentType("application/json").content(bad))
                     .andExpect(status().isUnprocessableEntity())
@@ -127,13 +137,14 @@ class OnboardingControllerTest {
         mvc.perform(post("/onboarding/applications").contentType("application/json").content(VALID));
         mvc.perform(post("/onboarding/applications").contentType("application/json").content(body(PAN, "17-05-1990", PHONE)));
         mvc.perform(post("/onboarding/applications").contentType("application/json").content(body("ABCPM12", DOB, PHONE)));
+        mvc.perform(post("/onboarding/applications").contentType("application/json").content(body(PAN, DOB, PHONE, "5098765", IFSC)));
 
         String logged = output.getAll();
         // The capture really saw each path, so the absences below mean something.
         assertThat(logged, containsString("application accepted: client 11"));
         assertThat(logged, containsString("application not created"));
         assertThat(logged, containsString("VAL-422"));
-        for (String personal : new String[] {PAN, EMAIL, PHONE, DOB, "17-05-1990", "ABCPM12", "Priya Menon"}) {
+        for (String personal : new String[] {PAN, EMAIL, PHONE, DOB, "17-05-1990", "ABCPM12", "Priya Menon", BANK, "5098765"}) {
             assertThat("log contains " + personal, logged, not(containsString(personal)));
         }
     }

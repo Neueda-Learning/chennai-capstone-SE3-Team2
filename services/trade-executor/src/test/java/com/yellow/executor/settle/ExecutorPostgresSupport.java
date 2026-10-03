@@ -53,12 +53,14 @@ public abstract class ExecutorPostgresSupport {
             "migrations/006_activation_email.sql",
             "migrations/007_kyc.sql",
             "migrations/008_kyc_attempts.sql",
+            "migrations/009_bank_account.sql",
             "indexes/001_performance_indexes.sql",
             "seed/001_reference_data.sql",
             "seed/002_clients.sql",
             "seed/003_instruments.sql",
             "seed/004_transactions.sql",
-            "seed/005_fauxnance_instruments.sql");
+            "seed/005_fauxnance_instruments.sql",
+            "seed/006_bank_accounts.sql");
 
     @DynamicPropertySource
     static void datasource(DynamicPropertyRegistry registry) {

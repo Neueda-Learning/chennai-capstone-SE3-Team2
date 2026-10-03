@@ -15,6 +15,10 @@ import java.util.Map;
  *       open this account.</li>
  *   <li>Registry -- a PAN whose four digits are {@code 0000} is treated as not
  *       found, so the vendor can be seen saying no to otherwise valid data.</li>
+ *   <li>Bank account -- a real vendor confirms the account exists by sending
+ *       it a rupee and reading back the holder's name (a "penny drop"). Here,
+ *       an account number ending {@code 0000}, or no account at all, is not
+ *       found.</li>
  * </ul>
  *
  * Checks stop at the first failure, as a vendor's would.
@@ -24,6 +28,7 @@ class StubKycProvider implements KycProvider {
 
     static final String NOT_AN_INDIVIDUAL = "PAN is not an individual's";
     static final String NOT_FOUND = "PAN not found at the registry";
+    static final String BANK_NOT_VERIFIED = "bank account could not be verified";
 
     @Override
     public Verdict verify(Applicant applicant) {
@@ -40,6 +45,13 @@ class StubKycProvider implements KycProvider {
         checks.put("registry", found ? "pass" : "fail");
         if (!found) {
             return Verdict.fail(NOT_FOUND, checks);
+        }
+
+        String account = applicant.bankAccountNumber();
+        boolean bank = account != null && applicant.ifsc() != null && !account.endsWith("0000");
+        checks.put("bankAccount", bank ? "pass" : "fail");
+        if (!bank) {
+            return Verdict.fail(BANK_NOT_VERIFIED, checks);
         }
         return Verdict.pass(checks);
     }

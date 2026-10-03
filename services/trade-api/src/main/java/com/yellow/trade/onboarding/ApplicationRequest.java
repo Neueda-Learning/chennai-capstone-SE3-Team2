@@ -10,6 +10,9 @@ import jakarta.validation.constraints.Size;
  * answer VAL-422 at once; whether the customer is eligible is KYC's decision,
  * made later.
  *
+ * The bank account is the one money will move to and from. KYC checks it; the
+ * number is personal data and is never logged.
+ *
  * dob is a string on purpose. As a LocalDate, a malformed date would fail in
  * Jackson, and Jackson's error message -- which the global handler logs --
  * quotes the value. Parsed in {@link OnboardingService} instead, it never
@@ -21,5 +24,7 @@ public record ApplicationRequest(
         @NotBlank @Email @Size(max = 200) String email,
         @NotBlank @Pattern(regexp = "\\+91[6-9]\\d{9}") String phoneNumber,
         @NotBlank @Pattern(regexp = "[A-Z]{5}[0-9]{4}[A-Z]") String pan,
-        @Size(max = 500) String address) {
+        @Size(max = 500) String address,
+        @NotBlank @Pattern(regexp = "[0-9]{9,18}") String bankAccountNumber,
+        @NotBlank @Pattern(regexp = "[A-Z]{4}0[A-Z0-9]{6}") String ifsc) {
 }
