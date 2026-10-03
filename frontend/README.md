@@ -54,6 +54,7 @@ frontend/
 │       │   └── errors/         every error code mapped to a sentence                (635)
 │       ├── features/           one folder per screen
 │       │   ├── sign-in/                                                              (631)
+│       │   ├── apply/          opening an account; public, like sign-in
 │       │   ├── dashboard/      account summary and the blotter                      (629, 636)
 │       │   ├── order-ticket/                                                         (634)
 │       │   └── blotter/        order history, status badges, the NEW re-read        (636)
@@ -136,6 +137,20 @@ act on, and `<app-error-message>` (in `shared/`) renders it as an alert.
 - **Status 0** — no response at all, usually a service that is down or a CORS
   rule that does not allow this origin — has its own sentence, and an unknown
   code falls back to one. Neither renders a blank panel.
+
+## Opening an account
+
+`/apply` is public, like `/sign-in`: an applicant has no login yet. It is linked
+from the sign-in page ("Open an account"). The form checks what the server
+checks before sending -- name, a date of birth at least 18 years ago, email, a
+10-digit mobile (the form adds `+91`), PAN, the bank account number (9 to 18
+digits) and its IFSC -- and posts to `POST /onboarding/applications` through the
+generated extensions client, with no token.
+
+The confirmation reads the same whatever became of the application: the server
+answers a PAN or email already registered exactly like a new one, so the page
+cannot be used to find out who is a customer. KYC decides shortly after; a
+customer who passes is emailed the activation link.
 
 ## Signing in
 

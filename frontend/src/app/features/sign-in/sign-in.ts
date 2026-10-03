@@ -1,6 +1,6 @@
 import { Component, inject, input, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { AuthApi } from '../../core/api/auth-api';
 import { KnownErrorCode } from '../../core/errors/error-messages';
 import { safeReturnUrl } from '../../core/guards/return-url';
@@ -15,7 +15,7 @@ const SIGN_IN_WORDING: Partial<Record<KnownErrorCode, string>> = {
 
 @Component({
   selector: 'app-sign-in',
-  imports: [ReactiveFormsModule, ErrorMessage],
+  imports: [ReactiveFormsModule, RouterLink, ErrorMessage],
   templateUrl: './sign-in.html',
   styleUrl: './sign-in.css',
 })

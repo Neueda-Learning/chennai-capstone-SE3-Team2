@@ -1,0 +1,76 @@
+<section class="card apply">
+  @if (received()) {
+    <div data-testid="apply-received">
+      <h1>Application received</h1>
+      <p>We're checking your details now. If they're verified, we'll email you a link to activate your account and choose your login. It usually arrives within a couple of minutes, and the link works for 24 hours.</p>
+      <p>No email? Check your spam folder.</p>
+      <a class="button" routerLink="/sign-in">Go to sign in</a>
+    </div>
+  } @else {
+    <h1>Open an account</h1>
+    <p class="lead">Your details are checked (KYC) before the account opens. Money only ever moves to and from the bank account you give here.</p>
+
+    <app-error-message [error]="error()" />
+
+    <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <label for="name">Full name, as on your PAN</label>
+      <input id="name" formControlName="name" autocomplete="name" data-testid="apply-name" [attr.aria-invalid]="invalid('name')" aria-describedby="name-error" />
+      @if (invalid('name')) {
+        <p class="field-error" id="name-error">Enter your full name.</p>
+      }
+
+      <label for="dob">Date of birth</label>
+      <input id="dob" type="date" formControlName="dob" [max]="today" autocomplete="bday" data-testid="apply-dob" [attr.aria-invalid]="invalid('dob')" aria-describedby="dob-error" />
+      @if (invalid('dob')) {
+        <p class="field-error" id="dob-error">
+          {{ has('dob', 'underage') ? 'You must be 18 or over to open an account.' : 'Enter your date of birth.' }}
+        </p>
+      }
+
+      <label for="email">Email</label>
+      <input id="email" type="email" formControlName="email" autocomplete="email" data-testid="apply-email" [attr.aria-invalid]="invalid('email')" aria-describedby="email-error email-hint" />
+      <p class="hint" id="email-hint">Your activation link is sent here.</p>
+      @if (invalid('email')) {
+        <p class="field-error" id="email-error">Enter a valid email address.</p>
+      }
+
+      <label for="mobile">Mobile number</label>
+      <div class="prefixed">
+        <span aria-hidden="true">+91</span>
+        <input id="mobile" formControlName="mobile" inputmode="numeric" autocomplete="tel-national" data-testid="apply-mobile" [attr.aria-invalid]="invalid('mobile')" aria-describedby="mobile-error" />
+      </div>
+      @if (invalid('mobile')) {
+        <p class="field-error" id="mobile-error">Enter the 10-digit mobile number, starting 6 to 9.</p>
+      }
+
+      <label for="pan">PAN</label>
+      <input id="pan" formControlName="pan" autocomplete="off" spellcheck="false" placeholder="ABCPM1234Q" data-testid="apply-pan" [attr.aria-invalid]="invalid('pan')" aria-describedby="pan-error" />
+      @if (invalid('pan')) {
+        <p class="field-error" id="pan-error">Enter your 10-character PAN: five letters, four digits, a letter.</p>
+      }
+
+      <label for="address">Address <span class="optional">(optional)</span></label>
+      <textarea id="address" formControlName="address" rows="2" autocomplete="street-address" data-testid="apply-address"></textarea>
+
+      <fieldset>
+        <legend>Your bank account</legend>
+        <label for="bank">Account number</label>
+        <input id="bank" formControlName="bankAccountNumber" inputmode="numeric" autocomplete="off" data-testid="apply-bank" [attr.aria-invalid]="invalid('bankAccountNumber')" aria-describedby="bank-error" />
+        @if (invalid('bankAccountNumber')) {
+          <p class="field-error" id="bank-error">Enter your account number: 9 to 18 digits.</p>
+        }
+
+        <label for="ifsc">IFSC</label>
+        <input id="ifsc" formControlName="ifsc" autocomplete="off" spellcheck="false" placeholder="HDFC0001234" data-testid="apply-ifsc" [attr.aria-invalid]="invalid('ifsc')" aria-describedby="ifsc-error" />
+        @if (invalid('ifsc')) {
+          <p class="field-error" id="ifsc-error">Enter the branch's 11-character IFSC: four letters, a zero, six letters or digits.</p>
+        }
+      </fieldset>
+
+      <button type="submit" data-testid="apply-submit" [disabled]="submitting()">
+        {{ submitting() ? 'Sending…' : 'Apply' }}
+      </button>
+    </form>
+    <p class="switch">Already have a login? <a routerLink="/sign-in">Sign in</a></p>
+  }
+</section>

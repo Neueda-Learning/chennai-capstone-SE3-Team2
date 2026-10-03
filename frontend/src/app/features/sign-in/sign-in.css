@@ -7,3 +7,8 @@ button[type='submit'] {
   margin-top: 1.5rem;
   width: 100%;
 }
+
+.switch {
+  margin-top: 1rem;
+  text-align: center;
+}

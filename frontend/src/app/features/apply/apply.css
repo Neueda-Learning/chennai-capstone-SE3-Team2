@@ -1,0 +1,55 @@
+.apply {
+  max-width: 30rem;
+  margin: 2rem auto;
+}
+
+.lead,
+.hint,
+.optional {
+  color: var(--muted);
+}
+
+.hint {
+  font-size: 0.9rem;
+  margin: 0.25rem 0 0;
+}
+
+.optional {
+  font-weight: 400;
+}
+
+textarea {
+  font: inherit;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid #8a93a3;
+  border-radius: var(--radius);
+}
+
+.prefixed {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+fieldset {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin: 1.5rem 0 0;
+  padding: 0 1rem 1rem;
+}
+
+legend {
+  font-weight: 600;
+  padding: 0 0.25rem;
+}
+
+button[type='submit'] {
+  margin-top: 1.5rem;
+  width: 100%;
+}
+
+.switch {
+  margin-top: 1rem;
+  text-align: center;
+}

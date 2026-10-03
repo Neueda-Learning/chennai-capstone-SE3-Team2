@@ -54,10 +54,11 @@ describe('authGuard', () => {
 });
 
 describe('the application routes', () => {
-  it('run the guard on every route but sign-in', () => {
+  it('run the guard on every route but sign-in and opening an account', () => {
+    const open = ['sign-in', 'apply'];
     for (const route of appRoutes) {
-      if (route.path === 'sign-in') {
-        expect(route.canActivate ?? route.canActivateChild, 'sign-in is open').toBeUndefined();
+      if (open.includes(route.path ?? '')) {
+        expect(route.canActivate ?? route.canActivateChild, `${route.path} is open`).toBeUndefined();
         continue;
       }
       expect(route.canActivateChild, `route "${route.path}"`).toContain(authGuard);
