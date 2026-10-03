@@ -249,3 +249,45 @@ open. It stops as soon as nothing is at `NEW`, says so when it gives up, and
 **Refresh** starts a new burst. It only ever re-reads: re-posting an order
 would get `ORD-409` with the same idempotency key, or a second order with a new
 one. The numbers are `REREAD_POLICY` in `features/blotter/blotter.ts`.
+
+## End-to-end journeys
+
+Two Playwright journeys in `e2e/`, against the **real running stack** -- the UI,
+the Trade REST API and the Auth service. An end-to-end test that talks to a
+stub proves nothing about integration.
+
+| File | Covers |
+|---|---|
+| `e2e/login.spec.ts` | the guard redirect, a refused sign-in, a successful sign-in arriving where it was going -- and that the token went only to `/api/v1/**` and `/auth/me`, never to `/auth/login` |
+| `e2e/place-order.spec.ts` | the read-only account, an invalid order stopped before it is sent, a placed order and whatever status came back |
+
+A placed order passes on `NEW`, `FILLED` or `REJECTED`. Asserting `FILLED`
+would fail the week the executor is switched off, which is the wrong signal.
+
+Every address and credential comes from the environment, under these names
+and no others:
+
+| Variable | Example |
+|---|---|
+| `E2E_BASE_URL` | `http://localhost:4200` |
+| `E2E_TRADE_API` | `http://localhost:8080` |
+| `E2E_AUTH_API` | `http://localhost:3000` |
+| `E2E_USERNAME`, `E2E_PASSWORD` | a login you created through activation |
+| `E2E_ACCOUNT_ID` | that login's account, e.g. `3` |
+| `E2E_SYMBOL` | a tradable instrument, e.g. `ITC.NS` |
+
+The account needs cash for the order journey; a brand-new account has none.
+
+```bash
+docker compose --profile platform up -d      # the stack, from the repository root
+npm start                                    # the UI, in another terminal
+npx playwright install chromium              # once per machine
+npm run e2e:login                            # each journey in its own process --
+npm run e2e:order                            # one that only passes after its neighbour fails here
+npm run e2e                                  # both
+```
+
+Each test starts in a fresh browser context and shares nothing: no token in a
+module variable, no order one spec places for another to find. The refused
+sign-in counts against the login throttle (five failures per address, then a
+minute's cooldown), so do not loop it.
