@@ -88,6 +88,7 @@ services:
       # become the live no-price demonstration.
       - ./data/db/seed/005_fauxnance_instruments.sql:/docker-entrypoint-initdb.d/12-seed-fauxnance.sql:ro
       - ./data/db/seed/006_bank_accounts.sql:/docker-entrypoint-initdb.d/12b-seed-bank-accounts.sql:ro
+      - ./data/db/seed/007_mf_nav_funds.sql:/docker-entrypoint-initdb.d/12c-seed-mf-nav-funds.sql:ro
       # Auth's schema, applied to the auth database by 13-auth-schema.sh. The
       # files are mounted OUTSIDE the init folder: the image runs every .sql
       # in there against trading, where auth's tables do not belong.
@@ -129,7 +130,7 @@ services:
       # kafka:29092, not localhost: inside a container localhost is that
       # container, and nothing would answer.
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      SERVER_PORT: 8080
+      TRADE_API_PORT: 8085
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       # The activation mailer. It asks auth for a token over the internal
       # network; the secret is the same one auth checks. No defaults for
@@ -153,7 +154,7 @@ services:
       # How long a deposit or withdrawal waits before the gateway decides it.
       PAYMENT_DELAY: ${PAYMENT_DELAY:-3s}
     ports:
-      - "${API_PUBLISHED_PORT:-8080}:8080"
+      - "${API_PUBLISHED_PORT:-8085}:8085"
     networks: [trading-net]
     depends_on:
       postgres:
@@ -184,7 +185,11 @@ services:
       FAUXNANCE_BASE_URL: ${FAUXNANCE_BASE_URL:-https://y4t9nq2bqf.execute-api.eu-west-2.amazonaws.com/v1}
       # 60s = 1440 requests a day of 2000. The floor is enforced in code.
       POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-60}
-      SERVER_PORT: 8081
+      # Prices mutual fund orders. Optional: without a key, fund orders are
+      # rejected with no price and everything else trades.
+      MF_NAV_BASE_URL: ${MF_NAV_BASE_URL:-https://mf-fauxnance-api.onrender.com}
+      MF_NAV_API_KEY: ${MF_NAV_API_KEY:-}
+      EXECUTOR_PORT: 8081
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     ports:
       - "${EXECUTOR_PUBLISHED_PORT:-8081}:8081"

@@ -1,6 +1,7 @@
 package com.yellow.executor;
 
 import com.yellow.executor.config.FauxnanceProperties;
+import com.yellow.executor.config.MfNavProperties;
 import com.yellow.executor.config.PollProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -13,11 +14,13 @@ import java.time.Clock;
 /** The Trade Executor. Two jobs in one process, on purpose. */
 @SpringBootApplication
 @EnableScheduling
-@EnableConfigurationProperties({FauxnanceProperties.class, PollProperties.class})
+@EnableConfigurationProperties({FauxnanceProperties.class, MfNavProperties.class, PollProperties.class})
 public class ExecutorApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(ExecutorApplication.class, args);
+        SpringApplication app = new SpringApplication(ExecutorApplication.class);
+        app.setDefaultProperties(LocalEnvFile.importing(LocalEnvFile.SEARCHED));
+        app.run(args);
     }
 
     /**

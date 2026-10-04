@@ -40,12 +40,10 @@ class PreTradeChecksTest {
         }
 
         @Test
-        @DisplayName("a mutual fund is not priceable, and no quote is worth asking for")
-        void mutualFundIsNotPriceable() {
-            // Fauxnance's registry is closed at equity, etf, fx and crypto,
-            // so this would 404. More to the point, a fund has no bid or ask
+        @DisplayName("a tradable mutual fund gets as far as its NAV: the MF NAV service prices it")
+        void mutualFundGetsAsFarAsItsNav() {
             assertThat(PreTradeChecks.beforePricing(instrument(AssetClass.MUTUAL_FUND, true), active()),
-                    is(Optional.of(RejectReason.INSTRUMENT_NOT_PRICEABLE)));
+                    is(Optional.empty()));
         }
 
         @Test

@@ -161,14 +161,11 @@ class EquityFillRuleTest {
     }
 
     @Test
-    @DisplayName("a mutual fund is not priceable, and says so permanently")
-    void mutualFundIsNotPriceable() {
-        FillDecision decision = new MutualFundFillRule().decide(buyAt("100.00"), quote());
-
-        assertThat(decision, is(new FillDecision.Reject(RejectReason.INSTRUMENT_NOT_PRICEABLE)));
-        // Permanent, not transient. A consumer must be able to tell this from
-        // a Fauxnance outage: one is worth a manual retry and one never is.
-        assertThat(RejectReason.INSTRUMENT_NOT_PRICEABLE.isPermanent(), is(true));
+    @DisplayName("a price refusal is permanent, a missing price is not")
+    void rejectReasonsSayWhetherTheyArePermanent() {
+        // A consumer must be able to tell a refusal from a feed outage: one is
+        // worth a manual retry and one never is.
+        assertThat(RejectReason.PRICE_NOT_MET.isPermanent(), is(true));
         assertThat(RejectReason.NO_PRICE.isPermanent(), is(false));
     }
 

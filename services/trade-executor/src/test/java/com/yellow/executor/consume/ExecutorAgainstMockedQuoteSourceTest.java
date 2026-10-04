@@ -11,7 +11,9 @@ import com.yellow.executor.persistence.AccountRow;
 import com.yellow.executor.persistence.ExecutableOrderRow;
 import com.yellow.executor.persistence.ExecutionMapper;
 import com.yellow.executor.persistence.PositionRow;
+import com.yellow.executor.config.MfNavProperties;
 import com.yellow.executor.quotes.FauxnanceQuoteClient;
+import com.yellow.executor.quotes.MfNavClient;
 import com.yellow.executor.quotes.QuotaCounter;
 import com.yellow.executor.settle.GuardedSettlement;
 import com.yellow.executor.settle.SettlementResult;
@@ -71,6 +73,9 @@ class ExecutorAgainstMockedQuoteSourceTest {
         service = new OrderExecutionService(
                 mapper,
                 new FauxnanceQuoteClient(props, new QuotaCounter(fixed), new ObjectMapper()),
+                // No fund orders here; without a key the NAV client refuses them unasked.
+                new MfNavClient(new MfNavProperties("http://localhost:" + fauxnance.port(), "",
+                        null, 0, null, null), new ObjectMapper()),
                 new GuardedSettlement(mapper, fixed),
                 mockTemplate(),
                 fixed);

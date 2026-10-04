@@ -27,6 +27,18 @@ describe('Env', () => {
     ).toEqual(['http://localhost:4200', 'https://ui.example']);
   });
 
+  it('builds the database URL from the shared .env parts when AUTH_DATABASE_URL is not set', () => {
+    const parts = { ...complete, AUTH_DATABASE_URL: undefined, AUTH_DB_PASSWORD: 'p@ss:w/rd', DB_HOST: 'localhost', DB_PORT: '5432' };
+    expect(envWith(parts).databaseUrl).toBe('postgresql://auth_app:p%40ss%3Aw%2Frd@localhost:5432/auth');
+    expect(envWith({ ...parts, AUTH_DB_USER: 'other', AUTH_DB_NAME: 'auth2' }).databaseUrl).toBe(
+      'postgresql://other:p%40ss%3Aw%2Frd@localhost:5432/auth2',
+    );
+  });
+
+  it('prefers a full AUTH_DATABASE_URL over the parts', () => {
+    expect(envWith({ ...complete, AUTH_DB_PASSWORD: 'ignored' }).databaseUrl).toBe(complete.AUTH_DATABASE_URL);
+  });
+
   it('reads a comma-separated broker list', () => {
     expect(envWith({ ...complete, KAFKA_BROKERS: 'a:9092, b:9092' }).kafkaBrokers).toEqual(['a:9092', 'b:9092']);
   });

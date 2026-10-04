@@ -144,6 +144,13 @@ Subtype for mutual funds.
 | `plan_type` | VARCHAR(20) | DIRECT_GROWTH / DIRECT_IDCW / REGULAR_GROWTH / REGULAR_IDCW |
 | `expense_ratio` | NUMERIC(5,4) | Nullable; ≥ 0 when present |
 
+The executor prices a fund order at the fund's latest NAV from the MF NAV
+service, asking for it by `scheme_code`. `seed/007_mf_nav_funds.sql` adds four
+real Direct Growth funds the service knows (AMFI codes 120586, 122639, 120716,
+118989) and their fund houses. The three fictional funds from
+`seed/003_instruments.sql` stay tradable; the service does not know them, so
+their orders are rejected for want of a price.
+
 ---
 
 ### `orders` — one row per order placed

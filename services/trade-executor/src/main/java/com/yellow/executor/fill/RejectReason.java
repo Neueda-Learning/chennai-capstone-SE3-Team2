@@ -19,15 +19,19 @@ public enum RejectReason {
     /** The instrument was delisted or suspended between acceptance and execution. */
     INSTRUMENT_NOT_TRADABLE(true),
 
-    /** No two-sided market exists for this instrument, and none ever will. */
+    /**
+     * No two-sided market exists for this instrument. No longer raised: funds
+     * are priced at their NAV. Kept so a reason already on trade-events, or in
+     * the history, still reads back.
+     */
     INSTRUMENT_NOT_PRICEABLE(true),
 
     /** Suspended or closed after the order was accepted. It still must not trade. */
     ACCOUNT_NOT_ACTIVE(true),
 
     /**
-     * No price could be obtained: Fauxnance unreachable, out of quota, or
-     * serving a stale quote after the retry budget was spent.
+     * No price could be obtained: Fauxnance or the MF NAV service unreachable,
+     * out of quota, not knowing the instrument, or serving only a stale price.
      */
     NO_PRICE(false);
 

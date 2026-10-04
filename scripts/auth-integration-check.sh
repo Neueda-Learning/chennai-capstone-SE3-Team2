@@ -9,7 +9,7 @@
 set -euo pipefail
 
 AUTH="http://localhost:${AUTH_PUBLISHED_PORT:-3000}"
-API="http://localhost:${API_PUBLISHED_PORT:-8080}"
+API="http://localhost:${API_PUBLISHED_PORT:-8085}"
 ACCOUNT="${ACCOUNT_ID:-3}"
 USERNAME="${USERNAME:-check.$(date +%s)}"
 PASSWORD="${PASSWORD:-correct horse battery staple}"

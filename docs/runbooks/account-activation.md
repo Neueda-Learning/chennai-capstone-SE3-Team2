@@ -218,7 +218,7 @@ bash scripts/create-topics.sh
 #   docker exec -i -e BROKER=localhost:29092 -e KAFKA_TOPICS_BIN=/opt/kafka/bin/kafka-topics.sh \
 #     fauxnance-kafka bash -s < scripts/create-topics.sh
 
-curl -sS -X POST localhost:8080/onboarding/applications -H 'Content-Type: application/json' \
+curl -sS -X POST localhost:8085/onboarding/applications -H 'Content-Type: application/json' \
   -d '{"name":"Demo Customer","dob":"1995-06-15","email":"you+kyc1@gmail.com",
        "phoneNumber":"+919812345611","pan":"DEMPS1234K","address":"12 Anna Nagar, Chennai",
        "bankAccountNumber":"509876543210","ifsc":"DEMO0000001"}'
@@ -231,7 +231,7 @@ link → choose a username and password → "Your login is ready" → log in:
 ```bash
 curl -sS -X POST localhost:3000/auth/login -H 'Content-Type: application/json' \
   -d '{"username":"<chosen>","password":"<chosen>"}' | jq -r .accessToken
-curl -sS localhost:8080/api/v1/accounts/11 -H "Authorization: Bearer <token>"
+curl -sS localhost:8085/api/v1/accounts/11 -H "Authorization: Bearer <token>"
 ```
 
 Open the same link again: "This link is not valid".
@@ -242,7 +242,7 @@ account given on the application, and it is credited a few seconds later
 (`payments.md`):
 
 ```bash
-curl -sS -X POST localhost:8080/api/v1/accounts/11/deposits -H "Authorization: Bearer <token>" \
+curl -sS -X POST localhost:8085/api/v1/accounts/11/deposits -H "Authorization: Bearer <token>" \
   -H 'Content-Type: application/json' -d '{"amount":100000,"idempotencyKey":"first-deposit-11"}'
 ```
 

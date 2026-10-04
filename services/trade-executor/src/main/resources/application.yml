@@ -38,6 +38,18 @@ fauxnance:
   initial-backoff: 500ms
   # Capped: a parked consumer stops every account on its partitions.
   max-backoff: 5s
+
+# The MF NAV service: prices mutual fund orders at the latest NAV. Without a
+# key the executor still trades stocks and ETFs; a fund order is rejected
+# with no price, and the log says why.
+mf-nav:
+  base-url: ${MF_NAV_BASE_URL:https://mf-fauxnance-api.onrender.com}
+  api-key: ${MF_NAV_API_KEY:}
+  # A host that sleeps when idle is slow to answer the day's first request.
+  timeout: 20s
+  max-attempts: 3
+  initial-backoff: 1s
+  max-backoff: 5s
   # Per key per day, resetting 00:00 UTC.
   daily-quota: 2000
   # Held back from the poller: an order outranks a price update.
@@ -72,7 +84,7 @@ management:
         enabled: true
 
 server:
-  port: ${SERVER_PORT:8081}
+  port: ${EXECUTOR_PORT:8081}
 
 logging:
   level:

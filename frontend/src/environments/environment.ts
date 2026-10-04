@@ -6,7 +6,7 @@ import { ApiConfig } from '../app/core/config/api-config';
  */
 export const environment: { readonly api: ApiConfig } = {
   api: {
-    tradeApiUrl: 'http://localhost:8080',
+    tradeApiUrl: 'http://localhost:8085',
     authApiUrl: 'http://localhost:3000',
   },
 };

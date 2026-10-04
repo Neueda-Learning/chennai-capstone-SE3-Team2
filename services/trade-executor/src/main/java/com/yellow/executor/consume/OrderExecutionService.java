@@ -19,6 +19,7 @@ import com.yellow.executor.persistence.ExecutionMapper;
 import com.yellow.executor.persistence.PositionRow;
 import com.yellow.executor.persistence.RowMapping;
 import com.yellow.executor.quotes.Quote;
+import com.yellow.executor.quotes.NavSource;
 import com.yellow.executor.quotes.QuoteSource;
 import com.yellow.executor.quotes.QuoteUnavailableException;
 import com.yellow.executor.settle.SettlementPort;
@@ -50,6 +51,7 @@ public class OrderExecutionService {
 
     private final ExecutionMapper mapper;
     private final QuoteSource quotes;
+    private final NavSource navs;
     private final SettlementPort settlement;
     private final KafkaTemplate<String, EventEnvelope<TradeEventPayload>> tradeEventTemplate;
     private final Clock clock;
@@ -62,11 +64,13 @@ public class OrderExecutionService {
 
     public OrderExecutionService(ExecutionMapper mapper,
                                  QuoteSource quotes,
+                                 NavSource navs,
                                  SettlementPort settlement,
                                  KafkaTemplate<String, EventEnvelope<TradeEventPayload>> tradeEventTemplate,
                                  Clock clock) {
         this.mapper = mapper;
         this.quotes = quotes;
+        this.navs = navs;
         this.settlement = settlement;
         this.tradeEventTemplate = tradeEventTemplate;
         this.clock = clock;
@@ -107,7 +111,11 @@ public class OrderExecutionService {
 
         Quote quote;
         try {
-            quote = quotes.quote(order.symbol());
+            // A fund deals at its NAV, from the MF NAV service; Fauxnance has
+            // no funds, and asking it would spend a request on a 404.
+            quote = instrument.assetClass() == AssetClass.MUTUAL_FUND
+                    ? navs.nav(order.symbol())
+                    : quotes.quote(order.symbol());
         } catch (QuoteUnavailableException e) {
             // A BUSINESS OUTCOME, not a message-processing failure.
             log.warn("no price for order {} ({} after {} attempts): rejecting",

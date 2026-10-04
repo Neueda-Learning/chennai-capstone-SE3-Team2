@@ -1,7 +1,7 @@
 # Trading UI
 
 The Angular front end for the platform: sign-in, a dashboard, an order ticket
-and a blotter, against the Trade REST API (`localhost:8080`) and the Auth
+and a blotter, against the Trade REST API (`localhost:8085`) and the Auth
 service (`localhost:3000`). Sprint 9.
 
 ## Requirements
@@ -387,7 +387,7 @@ and no others:
 | Variable | Example |
 |---|---|
 | `E2E_BASE_URL` | `http://localhost:4200` |
-| `E2E_TRADE_API` | `http://localhost:8080` |
+| `E2E_TRADE_API` | `http://localhost:8085` |
 | `E2E_AUTH_API` | `http://localhost:3000` |
 | `E2E_USERNAME`, `E2E_PASSWORD` | a login you created through activation |
 | `E2E_ACCOUNT_ID` | that login's account, e.g. `3` |

@@ -27,7 +27,26 @@ export class Env {
   get jwtIssuer(): string { return this.config.get('JWT_ISSUER') ?? 'auth-service'; }
   get port(): number { return Number(this.config.get('PORT') ?? 3000); }
 
-  get databaseUrl(): string { return this.required('AUTH_DATABASE_URL'); }
+  /**
+   * AUTH_DATABASE_URL when given (compose builds one). Otherwise built from
+   * the parts the repository-root .env already holds for compose and the
+   * Windows setup, so the auth password is written down once.
+   */
+  get databaseUrl(): string {
+    const url = this.config.get<string>('AUTH_DATABASE_URL');
+    if (url) {
+      return url;
+    }
+    const password = this.config.get<string>('AUTH_DB_PASSWORD');
+    if (!password) {
+      throw new Error('AUTH_DATABASE_URL is not set, nor AUTH_DB_PASSWORD to build it from');
+    }
+    const user = this.config.get<string>('AUTH_DB_USER') || 'auth_app';
+    const host = this.config.get<string>('DB_HOST') || 'localhost';
+    const port = this.config.get<string>('DB_PORT') || '5432';
+    const name = this.config.get<string>('AUTH_DB_NAME') || 'auth';
+    return `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${name}`;
+  }
 
   get kafkaBrokers(): string[] {
     return this.required('KAFKA_BROKERS').split(',').map((b) => b.trim()).filter(Boolean);

@@ -35,7 +35,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 API_HOST="${API_HOST:-localhost}"
-API_PORT="${API_PORT:-8080}"
+API_PORT="${API_PORT:-8085}"
 API="http://${API_HOST}:${API_PORT}"
 
 ACCOUNT_ID="${ACCOUNT_ID:-3}"

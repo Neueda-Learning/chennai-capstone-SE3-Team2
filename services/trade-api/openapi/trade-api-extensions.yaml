@@ -13,7 +13,7 @@ info:
     Same error envelope as the contracts: `{ "errorCode", "message" }`. Branch on `errorCode`.
 
 servers:
-  - url: http://localhost:8080
+  - url: http://localhost:8085
     description: Local stack
 
 security:

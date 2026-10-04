@@ -66,7 +66,7 @@ spring:
     default-property-inclusion: always
 
 server:
-  port: ${SERVER_PORT:8080}
+  port: ${TRADE_API_PORT:8085}
   error:
     # No whitelabel page, ever. Every failure leaves through the
     # @ControllerAdvice as the error envelope; these switches make sure

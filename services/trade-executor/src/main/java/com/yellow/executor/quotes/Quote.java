@@ -23,6 +23,17 @@ public record Quote(
         String source) {
 
     /**
+     * A fund's NAV as a quote. A fund deals at one price, the same both ways,
+     * so the NAV is the price, the bid and the ask.
+     *
+     * @param navDate the NAV's own date, carried as the market state
+     */
+    public static Quote ofNav(String symbol, BigDecimal nav, Instant asOf, String navDate, String source) {
+        return new Quote(symbol, nav, nav, nav, BigDecimal.ZERO, "INR", null, null, null,
+                asOf, "NAV " + navDate, false, source);
+    }
+
+    /**
      * The price a BUY settles at. You buy at the offer.
      */
     public BigDecimal buyPrice() {

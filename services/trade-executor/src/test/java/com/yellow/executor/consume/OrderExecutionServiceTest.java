@@ -7,6 +7,7 @@ import com.yellow.executor.persistence.AccountRow;
 import com.yellow.executor.persistence.ExecutableOrderRow;
 import com.yellow.executor.persistence.ExecutionMapper;
 import com.yellow.executor.persistence.PositionRow;
+import com.yellow.executor.quotes.NavSource;
 import com.yellow.executor.quotes.Quote;
 import com.yellow.executor.quotes.QuoteSource;
 import com.yellow.executor.quotes.QuoteUnavailableException;
@@ -49,6 +50,7 @@ class OrderExecutionServiceTest {
 
     private ExecutionMapper mapper;
     private QuoteSource quotes;
+    private NavSource navs;
     private SettlementPort settlement;
     private OrderExecutionService service;
 
@@ -57,8 +59,9 @@ class OrderExecutionServiceTest {
     void wire() {
         mapper = mock(ExecutionMapper.class);
         quotes = mock(QuoteSource.class);
+        navs = mock(NavSource.class);
         settlement = mock(SettlementPort.class);
-        service = new OrderExecutionService(mapper, quotes, settlement,
+        service = new OrderExecutionService(mapper, quotes, navs, settlement,
                 mock(KafkaTemplate.class),
                 Clock.fixed(Instant.parse("2026-09-17T09:14:24Z"), ZoneOffset.UTC));
 
@@ -139,17 +142,37 @@ class OrderExecutionServiceTest {
     }
 
     @Test
-    @DisplayName("a mutual fund is rejected as not priceable, and no quote is asked for")
-    void mutualFundIsNotPriceable() {
-        givenOrder(order("BUY", "10", "45.00", "NEW", "MF", true));
-        givenAccount("750000", "0", "ACTIVE");
+    @DisplayName("a mutual fund is priced at its NAV by the MF NAV service, and Fauxnance is not asked")
+    void mutualFundFillsAtItsNav() {
+        ExecutableOrderRow fund = order("BUY", "10", "90.00", "NEW", "MF", true);
+        fund.setSymbol("122639");
+        givenOrder(fund);
+        givenAccount("750000", "900", "ACTIVE");
+        when(navs.nav("122639")).thenReturn(
+                Quote.ofNav("122639", new BigDecimal("88.2569"), Instant.parse("2026-10-04T05:00:00Z"), "2026-10-01", "cache"));
 
         service.execute(ORDER_ID);
 
-        assertThat(settledDecision(),
-                is(new FillDecision.Reject(RejectReason.INSTRUMENT_NOT_PRICEABLE)));
-        // Fauxnance has no funds in its registry, so this would be a 404 that
+        assertThat(((FillDecision.Fill) settledDecision()).executedPrice(),
+                comparesEqualTo(new BigDecimal("88.2569")));
+        // Fauxnance has no funds in its registry: asking would be a 404 that
         // still cost one of the day's requests.
+        verifyNoInteractions(quotes);
+    }
+
+    @Test
+    @DisplayName("a fund with no usable NAV is RESOLVED as no price, like a stock with no quote")
+    void fundWithNoNavIsResolved() {
+        ExecutableOrderRow fund = order("BUY", "10", "90.00", "NEW", "MF", true);
+        fund.setSymbol("SCH100001");
+        givenOrder(fund);
+        givenAccount("750000", "900", "ACTIVE");
+        when(navs.nav("SCH100001"))
+                .thenThrow(new QuoteUnavailableException("no NAV for SCH100001: unknown fund", "SCH100001", 1));
+
+        service.execute(ORDER_ID);
+
+        assertThat(settledDecision(), is(new FillDecision.Reject(RejectReason.NO_PRICE)));
         verifyNoInteractions(quotes);
     }
 

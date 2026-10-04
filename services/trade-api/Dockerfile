@@ -48,12 +48,12 @@ COPY --from=build --chown=trade:trade /build/app.jar /app/app.jar
 
 USER trade
 
-EXPOSE 8080
+EXPOSE 8085
 
 # Healthy, not merely running. start-period covers JVM startup and the
 # first database connection.
 HEALTHCHECK --interval=15s --timeout=3s --start-period=40s --retries=3 \
-    CMD curl -fsS http://localhost:8080/actuator/health || exit 1
+    CMD curl -fsS http://localhost:8085/actuator/health || exit 1
 
 # exec form so the JVM is PID 1 and gets SIGTERM directly.
 ENTRYPOINT ["java", \

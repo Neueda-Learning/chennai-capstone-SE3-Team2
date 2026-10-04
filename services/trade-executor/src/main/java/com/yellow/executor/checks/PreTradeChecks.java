@@ -3,7 +3,6 @@ package com.yellow.executor.checks;
 import com.yellow.entities.Account;
 import com.yellow.entities.Instrument;
 import com.yellow.entities.Position;
-import com.yellow.enums.AssetClass;
 import com.yellow.executor.fill.OrderSnapshot;
 import com.yellow.executor.fill.RejectReason;
 
@@ -26,11 +25,6 @@ public final class PreTradeChecks {
         // rule 3, re-asked, because is_tradable can change under a resting order.
         if (!instrument.isTradable()) {
             return Optional.of(RejectReason.INSTRUMENT_NOT_TRADABLE);
-        }
-
-        // No two-sided market, and never will be.
-        if (instrument.assetClass() == AssetClass.MUTUAL_FUND) {
-            return Optional.of(RejectReason.INSTRUMENT_NOT_PRICEABLE);
         }
 
         // Suspended AFTER the order was accepted.

@@ -61,7 +61,8 @@ public abstract class ExecutorPostgresSupport {
             "seed/003_instruments.sql",
             "seed/004_transactions.sql",
             "seed/005_fauxnance_instruments.sql",
-            "seed/006_bank_accounts.sql");
+            "seed/006_bank_accounts.sql",
+            "seed/007_mf_nav_funds.sql");
 
     @DynamicPropertySource
     static void datasource(DynamicPropertyRegistry registry) {
