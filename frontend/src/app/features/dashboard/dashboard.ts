@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { UserResponse } from '../../../generated/auth';
 import { AccountResponse, PositionResponse } from '../../../generated/trade';
 import { AuthApi } from '../../core/api/auth-api';
+import { InstrumentCatalog } from '../../core/api/instrument-catalog';
 import { TradeApi } from '../../core/api/trade-api';
 import { Session } from '../../core/session/session';
 import { ErrorMessage } from '../../shared/error-message/error-message';
@@ -25,6 +26,7 @@ import { Holdings } from '../holdings/holdings';
 export class Dashboard {
   private readonly tradeApi = inject(TradeApi);
   private readonly authApi = inject(AuthApi);
+  private readonly catalog = inject(InstrumentCatalog);
   protected readonly accountId = inject(Session).accountId;
   readonly segment = input<'stocks' | 'mutual-funds' | 'all'>('all');
 
@@ -35,35 +37,27 @@ export class Dashboard {
 
   protected readonly title = computed(() => {
     if (this.segment() === 'stocks') {
-      return 'Stocks dashboard';
+      return 'Stocks';
     }
     if (this.segment() === 'mutual-funds') {
-      return 'Mutual funds dashboard';
+      return 'Mutual funds';
     }
     return 'Dashboard';
   });
 
-  protected readonly symbolMatcher = computed(() => {
-    if (this.segment() === 'all') {
-      return (_symbol: string) => true;
-    }
-    const mutualFunds = this.segment() === 'mutual-funds';
-    return (symbol: string) => {
-      const looksLikeFund = /^\d+$/.test(symbol);
-      return mutualFunds ? looksLikeFund : !looksLikeFund;
-    };
-  });
-
+  /** The holdings this dashboard shows: by instrument type, from the catalog. */
   protected readonly filteredPositions = computed(() => {
     const positions = this.positions();
-    if (positions === null) {
+    const segment = this.segment();
+    if (positions === null || segment === 'all') {
       return positions;
     }
-    const accept = this.symbolMatcher();
-    return positions.filter((position) => accept(position.symbol));
+    return positions.filter((position) => this.catalog.segmentOf(position.symbol) === segment);
   });
 
   constructor() {
+    // Names, and which dashboard each holding belongs on. Read once a session.
+    void this.catalog.load();
     effect(() => {
       const accountId = this.accountId();
       if (accountId !== null) {

@@ -95,14 +95,44 @@ describe('authGuard', () => {
 });
 
 describe('the application routes', () => {
-  it('run the guard on every route but sign-in and opening an account', () => {
-    const open = ['sign-in', 'apply'];
+  it('run the guard on every route but the three public ones; a redirect renders nothing itself', () => {
+    const open = ['landing', 'sign-in', 'apply'];
     for (const route of appRoutes) {
+      if (route.redirectTo !== undefined) {
+        continue;
+      }
       if (open.includes(route.path ?? '')) {
         expect(route.canActivate ?? route.canActivateChild, `${route.path} is open`).toBeUndefined();
         continue;
       }
-      expect(route.canActivateChild, `route "${route.path}"`).toContain(authGuard);
+      // `?? []`: toContain on undefined passes silently, which is how an
+      // unguarded route once slipped through this test.
+      expect(route.canActivateChild ?? [], `route "${route.path}"`).toContain(authGuard);
     }
+  });
+
+  it('guard every screen behind sign-in', () => {
+    const guarded = appRoutes.find((route) => route.canActivateChild?.includes(authGuard));
+    const screens = (guarded?.children ?? []).filter((child) => child.loadComponent).map((child) => child.path);
+    expect(screens).toEqual(['stocks', 'mutual-funds', 'trade', 'cash']);
+  });
+
+  describe('the home address', () => {
+    const home = () => appRoutes.find((route) => route.path === '' && route.pathMatch === 'full')!;
+    const target = () =>
+      TestBed.runInInjectionContext(() => (home().redirectTo as () => string)());
+
+    it('sends a signed-in customer to their stocks dashboard, not the public page', () => {
+      TestBed.configureTestingModule({});
+      sessionStorage.clear();
+      TestBed.inject(Session).start(testToken());
+      expect(target()).toBe('/stocks');
+    });
+
+    it('sends a visitor to the landing page', () => {
+      TestBed.configureTestingModule({});
+      sessionStorage.clear();
+      expect(target()).toBe('/landing');
+    });
   });
 });

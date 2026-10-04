@@ -2,6 +2,7 @@ import { DatePipe, DecimalPipe } from '@angular/common';
 import { Component, DestroyRef, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { OrderHistoryEntry, OrderStatus } from '../../../generated/trade';
+import { InstrumentCatalog } from '../../core/api/instrument-catalog';
 import { TradeApi } from '../../core/api/trade-api';
 import { ErrorMessage } from '../../shared/error-message/error-message';
 import { REREAD_POLICY } from '../../shared/reread/reread-policy';
@@ -27,6 +28,8 @@ import { StatusBadge } from '../../shared/status-badge/status-badge';
 export class Blotter {
   private readonly tradeApi = inject(TradeApi);
   private readonly policy = inject(REREAD_POLICY);
+  /** Names each instrument as the customer knows it, and says which dashboard it belongs on. */
+  protected readonly catalog = inject(InstrumentCatalog);
 
   /** The account whose orders to show: the session's own. */
   readonly accountId = input.required<number>();
@@ -59,11 +62,8 @@ export class Blotter {
   protected readonly rows = computed(() =>
     [...(this.orders() ?? [])]
       .filter((order) => {
-        const looksLikeFund = /^\d+$/.test(order.symbol);
-        if (this.segment() === 'stocks' && looksLikeFund) {
-          return false;
-        }
-        if (this.segment() === 'mutual-funds' && !looksLikeFund) {
+        const segment = this.segment();
+        if (segment !== 'all' && this.catalog.segmentOf(order.symbol) !== segment) {
           return false;
         }
         const status = this.statusFilter();
@@ -147,6 +147,11 @@ export class Blotter {
   private stopRereading(): void {
     this.cancelReread?.();
     this.cancelReread = null;
+  }
+
+  /** Which order a Cancel button is for, said without the order id. */
+  protected cancelLabel(order: OrderHistoryEntry): string {
+    return `Cancel the ${order.side === 'BUY' ? 'buy' : 'sell'} of ${order.quantity} ${this.catalog.label(order.symbol)}`;
   }
 
   protected setStatusFilter(filter: 'ALL' | OrderStatus): void {

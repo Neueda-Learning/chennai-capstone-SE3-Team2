@@ -8,8 +8,13 @@
       <a routerLink="/trade" routerLinkActive="active" data-testid="nav-trade">Place an order</a>
       <a routerLink="/cash" routerLinkActive="active" data-testid="nav-cash">Cash</a>
     </nav>
-    <span class="account">Account {{ session.accountId() }}</span>
-    <button type="button" class="secondary" data-testid="sign-out" (click)="signOut()">Sign out</button>
+    <span class="account" data-testid="header-account">
+      @if (current.account(); as account) {
+        <span class="holder">{{ account.holderName }}</span>
+        <span class="ref">{{ account.accountId }}</span>
+      }
+    </span>
+    <button type="button" class="secondary sign-out" data-testid="sign-out" (click)="signOut()">Sign out</button>
   } @else {
     <nav aria-label="Public">
       <a routerLink="/landing" routerLinkActive="active">Home</a>

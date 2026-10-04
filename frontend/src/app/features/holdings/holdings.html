@@ -20,18 +20,21 @@
         <tbody>
           @for (position of positions; track position.symbol) {
             <tr data-testid="holdings-row">
-              <td>{{ position.symbol }}</td>
+              <td class="instrument">{{ catalog.label(position.symbol) }}</td>
               <td class="number">{{ position.quantity | number: '1.0-6' }}</td>
               <td class="number">{{ position.averageCost | number: '1.2-4' }}</td>
               <td class="number">{{ position.quantity * position.averageCost | number: '1.2-2' }}</td>
-              <td>
-                <a
-                  routerLink="/trade"
-                  [queryParams]="{ symbol: position.symbol, side: 'SELL' }"
-                  data-testid="holdings-sell"
-                  [attr.aria-label]="'Sell ' + position.symbol"
-                  >Sell</a
-                >
+              <td class="action">
+                @if (catalog.isTradable(position.symbol)) {
+                  <a
+                    class="button secondary small"
+                    routerLink="/trade"
+                    [queryParams]="{ symbol: position.symbol, side: 'SELL' }"
+                    data-testid="holdings-sell"
+                    [attr.aria-label]="'Sell ' + catalog.label(position.symbol)"
+                    >Sell</a
+                  >
+                }
               </td>
             </tr>
           }

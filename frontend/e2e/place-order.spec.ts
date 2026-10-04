@@ -16,7 +16,8 @@ test.describe('place an order', () => {
   test('the account is the one this sign-in may trade, and cannot be edited', async ({ page }) => {
     const account = page.getByTestId('ticket-account');
 
-    await expect(account).toHaveValue(env.accountId);
+    // Shown as the reference the customer knows, ACC- and the key in six digits.
+    await expect(account).toHaveValue(`ACC-${env.accountId.padStart(6, '0')}`);
     await expect(account).toHaveAttribute('readonly', '');
     await expect(account).not.toBeEditable();
   });

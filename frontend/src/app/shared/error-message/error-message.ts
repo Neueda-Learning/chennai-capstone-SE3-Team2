@@ -9,19 +9,7 @@ import { KnownErrorCode, describeError } from '../../core/errors/error-messages'
   selector: 'app-error-message',
   template: `
     @if (shown(); as shown) {
-      <p class="alert error" role="alert" data-testid="error-message">
-        {{ shown.message }}
-        @if (shown.code) {
-          <span class="code">(reference {{ shown.code }})</span>
-        }
-      </p>
-    }
-  `,
-  styles: `
-    .code {
-      color: var(--muted);
-      font-size: 0.85em;
-      white-space: nowrap;
+      <p class="alert error" role="alert" data-testid="error-message">{{ shown.message }}</p>
     }
   `,
 })

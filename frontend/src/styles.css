@@ -21,7 +21,8 @@
   --warning: #8eb1ff;
   --warning-bg: #101a2f;
   --radius: 8px;
-  --mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --mono: 'JetBrains Mono', 'Cascadia Code', 'Cascadia Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    'DejaVu Sans Mono', 'Liberation Mono', monospace;
   font-family: var(--mono);
   color: var(--text);
   background: var(--bg);
@@ -224,4 +225,86 @@ th.number {
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------
+ * Smoothness. Small, consistent motion; none at all for anyone who has
+ * asked their system to reduce it.
+ * ------------------------------------------------------------------ */
+
+/* The scrollbar's space is always kept, so a page never shifts sideways
+   when the next screen is taller or shorter. */
+html {
+  scrollbar-gutter: stable;
+}
+
+a {
+  transition: color 160ms ease;
+}
+
+input,
+select {
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+input:focus-visible,
+select:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(246, 199, 68, 0.22);
+}
+
+button.small,
+.button.small {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+/* Figures line up digit under digit, so a column of money reads at a glance. */
+table {
+  font-variant-numeric: tabular-nums;
+}
+
+tbody tr {
+  transition: background-color 120ms ease;
+}
+
+tbody tr:hover {
+  background: rgba(142, 177, 255, 0.05);
+}
+
+tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Each screen eases in rather than snapping. The routed component is the
+   outlet's sibling, so this lives here and not in the shell's styles. */
+.app-main > :not(router-outlet) {
+  display: block;
+  animation: screen-in 180ms ease-out both;
+}
+
+.alert {
+  animation: screen-in 160ms ease-out both;
+}
+
+@keyframes screen-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -16,7 +16,8 @@ describe('ErrorMessage', () => {
     const alert = page.querySelector('[role="alert"]');
 
     expect(alert?.textContent).toContain(ERROR_MESSAGES['ORD-400']);
-    expect(alert?.textContent).toContain('(reference ORD-400)');
+    // The code is the platform's, not the customer's: never on screen.
+    expect(alert?.textContent).not.toContain('ORD-400');
   });
 
   it('renders nothing when there is no error', async () => {

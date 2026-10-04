@@ -282,7 +282,7 @@ call.
 | Instrument | **Picked from a list**, not typed: every tradable instrument from `GET /api/v1/instruments`, grouped as Stocks, ETFs and Mutual funds. Delisted ones are not offered, so the API cannot be sent a symbol it does not know |
 | Quantity | A whole number, 1 or more |
 | Limit price | Above zero, at most two decimal places |
-| Account | **Read-only**, from the token's `accountId`. An account field the user could edit is an authorisation decision moved into the browser |
+| Account | **Read-only**, from the token's `accountId`, and shown as the reference the customer knows (`ACC-000003`) rather than the numeric key. An account field the user could edit is an authorisation decision moved into the browser |
 
 The checks live in `features/order-ticket/order-validators.ts`. They are not
 enforcement: business rules 1 to 8 live in the Trade REST API, and whatever
@@ -303,12 +303,28 @@ same order reuses the same key: if the first attempt did land, the API answers
 
 ## The dashboard and the blotter
 
-The dashboard (`/`) shows the token's account from `GET /api/v1/accounts/{id}`,
-who is signed in from `GET /auth/me`, the holdings, and the blotter.
+There are two dashboards, `/stocks` (stocks and ETFs) and `/mutual-funds`.
+Home (`/`) is the stocks dashboard for a signed-in customer and the public
+landing page for a visitor; sign-in lands there. Each dashboard shows the
+token's account from `GET /api/v1/accounts/{id}`, who is signed in from
+`GET /auth/me`, its holdings, and its orders. Which dashboard an instrument
+belongs on comes from its type in `GET /api/v1/instruments`
+(`core/api/instrument-catalog.ts`, read once a session), never from what its
+symbol looks like.
+
+**What a customer sees, and what they do not.** A stock is named by its
+ticker (`MRF.NS`) and a fund by its name, in the ticket's list, the holdings
+and the order history alike; an AMFI scheme code means nothing to them. The
+header shows the customer's name and account reference (`ACC-000003`), never
+the numeric account key. The order id appears nowhere -- not in the history,
+not in the ticket's confirmation, not in a button's label -- and an error is a
+sentence without its code. Money is written in lakhs and crores
+(`₹4,29,877.57`): `LOCALE_ID` is `en-IN` in `app.config.ts`.
 
 **Holdings** come from `GET /api/v1/accounts/{id}/positions`: each instrument
 held, its quantity, its average cost and what it cost in total, with a **Sell**
-link that opens the ticket filled in. There is no market value: the platform
+button that opens the ticket filled in -- for an instrument still tradable; a
+delisted holding has nowhere to be sold, so it has none. There is no market value: the platform
 prices an order when it executes and keeps no live prices to show. A position
 sold to zero is gone from the list.
 
@@ -336,7 +352,7 @@ the Cash page uses too.
 
 **Cancel.** An order still `NEW` has a **Cancel** button, which sends
 `DELETE /api/v1/orders/{id}` -- with the bare UUID: the route refuses the
-`ORD-` prefix the order is displayed with (`VAL-422`). The executor may fill the
+`ORD-` prefix the API reports the order with (`VAL-422`). The executor may fill the
 order first; then the API answers `ORD-409` and the blotter says the order had
 already finished. Either way it re-reads, and shows what actually happened. A
 cancelled buy gives its reserved cash back.

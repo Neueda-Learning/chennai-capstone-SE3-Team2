@@ -3,6 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { OrderHistoryEntry } from '../../../generated/trade';
+import { InstrumentCatalog } from '../../core/api/instrument-catalog';
 import { provideClients } from '../../core/api/provide-clients';
 import { REREAD_POLICY } from '../../shared/reread/reread-policy';
 import { Blotter } from './blotter';
@@ -81,14 +82,44 @@ describe('Blotter', () => {
     ]);
 
     expect(rows().map((row) => row.getAttribute('data-status'))).toEqual(['REJECTED', 'CANCELLED', 'FILLED']);
-    expect(rows()[0].textContent).toContain('ORD-c');
+    expect(rows()[0].textContent).toContain('INFY.NS');
     expect(rows()[0].querySelector('[data-testid="status-badge"]')?.textContent).toContain('REJECTED');
+  });
+
+  it('never shows the order id: it is the platform\'s, not the customer\'s', async () => {
+    await respond([order('a', 'FILLED', '2026-10-02T09:00:00Z')]);
+
+    expect(page.querySelector('[data-testid="blotter-table"]')?.textContent).not.toContain('ORD-');
+    const headers = [...page.querySelectorAll('[data-testid="blotter-table"] th')].map((th) => th.textContent?.trim());
+    expect(headers).not.toContain('Order');
+    expect(headers).toContain('Fill price');
+  });
+
+  describe('on the mutual funds dashboard', () => {
+    const fund = (id: string, symbol: string): OrderHistoryEntry => ({ ...order(id, 'FILLED', '2026-10-02T09:00:00Z'), symbol });
+
+    it('lists funds by their type -- a scheme code that is not digits included -- and names each one', async () => {
+      const catalog = TestBed.inject(InstrumentCatalog);
+      const loaded = catalog.load();
+      http.expectOne(`${TRADE}/api/v1/instruments`).flush([
+        { symbol: 'INFY.NS', name: 'Infosys Ltd', type: 'STOCK', exchange: 'NSE' },
+        { symbol: '120716', name: 'UTI Nifty 50 Index Fund', type: 'MF', exchange: null },
+        { symbol: 'SCH100001', name: 'Bluechip Growth Fund', type: 'MF', exchange: null },
+      ]);
+      await loaded;
+      fixture.componentRef.setInput('segment', 'mutual-funds');
+
+      await respond([order('a', 'FILLED', '2026-10-02T09:00:00Z'), fund('b', '120716'), fund('c', 'SCH100001')]);
+
+      const names = rows().map((row) => row.querySelector('td:nth-child(2)')?.textContent?.trim());
+      expect(names).toEqual(['UTI Nifty 50 Index Fund', 'Bluechip Growth Fund']);
+    });
   });
 
   it('shows an order at NEW as still working, and schedules a re-read', async () => {
     await respond([order('a', 'NEW', '2026-10-02T09:00:00Z')]);
 
-    expect(rows()[0].textContent).toContain('still working');
+    expect(rows()[0].querySelector('[data-testid="status-badge"]')?.textContent).toContain('NEW');
     expect(page.querySelector('[data-testid="blotter-working"]')?.textContent).toContain('1 order is still working');
     expect(scheduled.length).toBe(1);
   });
@@ -168,7 +199,8 @@ describe('Blotter', () => {
 
       expect(cancelButtons()).toHaveLength(1);
       expect(rows()[0].contains(cancelButtons()[0])).toBe(true);
-      expect(cancelButtons()[0].getAttribute('aria-label')).toBe('Cancel order ORD-a');
+      // Says which order without the order id.
+      expect(cancelButtons()[0].getAttribute('aria-label')).toBe('Cancel the buy of 10 INFY.NS');
     });
 
     it('cancels the order, re-reads, and says the order settled', async () => {

@@ -6,11 +6,6 @@
   </div>
 </div>
 
-<nav class="segment-nav" aria-label="Portfolio views">
-  <a class="button secondary" routerLink="/stocks">Stocks</a>
-  <a class="button secondary" routerLink="/mutual-funds">Mutual funds</a>
-</nav>
-
 <app-error-message [error]="error()" />
 
 <section class="card summary" aria-label="Account summary" data-testid="account-summary">
@@ -29,7 +24,7 @@
         <dd>{{ account.status }}</dd>
       </div>
       <div>
-        <dt>Cash balance</dt>
+        <dt>Available cash</dt>
         <dd data-testid="cash-balance">{{ account.cashBalance | currency: 'INR' : 'symbol' : '1.2-2' }}</dd>
       </div>
     </dl>

@@ -1,20 +1,25 @@
+import { inject } from '@angular/core';
 import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth.guard';
+import { Session } from './core/session/session';
 
 /**
  * Every screen, lazily loaded so each feature is its own chunk.
  *
- * Sign-in and opening an account are the only routes outside the guard -- a
- * visitor has no login yet for either. Everything else is a child of the
- * guarded parent, so a route added later is guarded without anyone
- * remembering to: the default is closed. Anything unknown goes home, which
- * the guard covers too.
+ * The landing page, sign-in and opening an account are the only routes
+ * outside the guard -- a visitor has no login yet for any of them. Everything
+ * else is a child of the guarded parent, so a route added later is guarded
+ * without anyone remembering to: the default is closed. Anything unknown goes
+ * to the stocks dashboard, which the guard covers too.
+ *
+ * Home (/) depends on who asks: a signed-in customer's home is their
+ * dashboard, a visitor's the landing page. Sign-in lands on / by default.
  */
 export const routes: Routes = [
   {
     path: '',
     pathMatch: 'full',
-    redirectTo: 'landing',
+    redirectTo: () => (inject(Session).accessToken() ? '/stocks' : '/landing'),
   },
   {
     path: 'landing',

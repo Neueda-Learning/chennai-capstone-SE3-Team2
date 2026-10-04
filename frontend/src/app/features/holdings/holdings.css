@@ -15,3 +15,13 @@
   border-radius: var(--radius);
   padding: 1rem;
 }
+
+.instrument {
+  max-width: 22rem;
+}
+
+td.action {
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
+}

@@ -16,10 +16,6 @@
   margin: 0;
 }
 
-.quote {
-  margin: 0.6rem 0 0;
-  color: var(--warning);
-}
 
 .intro {
   color: var(--muted);
@@ -32,16 +28,6 @@
   margin-top: 1.25rem;
 }
 
-.ticker-strip {
-  margin-top: 1.2rem;
-  border-top: 1px dashed var(--border);
-  padding-top: 0.9rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  color: var(--muted);
-  font-size: 0.85rem;
-}
 
 .candles {
   margin-top: 1rem;

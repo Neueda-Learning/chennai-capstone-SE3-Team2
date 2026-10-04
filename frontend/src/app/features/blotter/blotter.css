@@ -19,24 +19,14 @@
 }
 
 .table-wrap table {
-  min-width: 54rem;
+  min-width: 50rem;
 }
 
-.working {
-  margin-left: 0.4rem;
-  color: var(--warning);
-  font-size: 0.85rem;
-}
 
 .muted {
   color: var(--muted);
 }
 
-.order-id {
-  font-family: ui-monospace, monospace;
-  font-size: 0.8rem;
-  color: var(--muted);
-}
 
 .empty {
   background: var(--surface);
@@ -46,9 +36,23 @@
 }
 
 .cancel {
-  margin-left: 0.5rem;
-  padding: 0.15rem 0.6rem;
+  padding: 0.2rem 0.7rem;
   font-size: 0.85rem;
+}
+
+/* The date on one line; long fund names wrap instead of stretching the table. */
+td:first-child {
+  white-space: nowrap;
+}
+
+.instrument {
+  max-width: 18rem;
+}
+
+td.action {
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
 }
 
 @media (max-width: 900px) {

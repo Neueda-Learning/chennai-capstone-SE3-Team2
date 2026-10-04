@@ -44,7 +44,7 @@
     <p class="field-error" data-testid="cash-over-available">That is more than your available cash.</p>
   }
   <div class="actions">
-    <button type="button" data-testid="cash-deposit" [disabled]="submitting() !== null" (click)="submit('DEPOSIT')">
+    <button type="button" class="primary" data-testid="cash-deposit" [disabled]="submitting() !== null" (click)="submit('DEPOSIT')">
       {{ submitting() === 'DEPOSIT' ? 'Adding…' : 'Add cash' }}
     </button>
     <button type="button" class="secondary" data-testid="cash-withdraw" [disabled]="submitting() !== null" (click)="submit('WITHDRAWAL')">

@@ -11,7 +11,7 @@
 
   <p class="status-line" role="status" data-testid="blotter-working">
     @if (gaveUp()) {
-      Still working after {{ limitSeconds }} seconds — the executor may be slow. Press Refresh to check again.
+      Still working after {{ limitSeconds }} seconds. Press Refresh to check again.
     } @else if (working() > 0) {
       {{ working() }} {{ working() === 1 ? 'order is' : 'orders are' }} still working. Checking again every
       {{ intervalSeconds }} seconds.
@@ -51,16 +51,16 @@
             <th scope="col">Side</th>
             <th scope="col" class="number">Quantity</th>
             <th scope="col" class="number">Limit price</th>
-            <th scope="col" class="number">Executed at</th>
+            <th scope="col" class="number">Fill price</th>
             <th scope="col">Status</th>
-            <th scope="col">Order</th>
+            <th scope="col"><span class="visually-hidden">Action</span></th>
           </tr>
         </thead>
         <tbody>
           @for (order of rows(); track order.orderId) {
             <tr data-testid="blotter-row" [attr.data-status]="order.status">
               <td>{{ order.createdOn | date: 'd MMM y, HH:mm:ss' }}</td>
-              <td>{{ order.symbol }}</td>
+              <td class="instrument">{{ catalog.label(order.symbol) }}</td>
               <td>{{ order.side }}</td>
               <td class="number">{{ order.quantity | number: '1.0-6' }}</td>
               <td class="number">
@@ -77,23 +77,21 @@
                   <span class="muted">—</span>
                 }
               </td>
-              <td>
-                <app-status-badge [status]="order.status" />
+              <td><app-status-badge [status]="order.status" /></td>
+              <td class="action">
                 @if (order.status === 'NEW') {
-                  <span class="working">still working</span>
                   <button
                     type="button"
                     class="secondary cancel"
                     data-testid="blotter-cancel"
                     [disabled]="cancelling() !== null"
-                    [attr.aria-label]="'Cancel order ' + order.orderId"
+                    [attr.aria-label]="cancelLabel(order)"
                     (click)="cancel(order.orderId)"
                   >
                     {{ cancelling() === order.orderId ? 'Cancelling…' : 'Cancel' }}
                   </button>
                 }
               </td>
-              <td class="order-id">{{ order.orderId }}</td>
             </tr>
           }
         </tbody>

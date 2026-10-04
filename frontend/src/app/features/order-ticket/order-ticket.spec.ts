@@ -15,6 +15,7 @@ const INSTRUMENTS = [
   { symbol: 'TCS.NS', name: 'Tata Consultancy Services Ltd', type: 'STOCK', exchange: 'NSE' },
   { symbol: 'NIFTYBEES', name: 'Nifty 50 ETF', type: 'ETF', exchange: 'NSE' },
   { symbol: '120503', name: 'Bluechip Equity Fund', type: 'MF', exchange: null },
+  { symbol: '130000', name: 'Axis Liquid Fund', type: 'MF', exchange: null },
 ];
 
 describe('OrderTicket', () => {
@@ -37,6 +38,11 @@ describe('OrderTicket', () => {
     fixture = TestBed.createComponent(OrderTicket);
     page = fixture.nativeElement as HTMLElement;
     await fixture.whenStable();
+    // Who is signed in, as the customer knows the account.
+    http.expectOne(`${TRADE}/api/v1/accounts/3`).flush({
+      id: 3, accountId: 'ACC-000003', holderName: 'Rohan Nair', cashBalance: 1, status: 'ACTIVE', version: 1, lastUpdated: '2026-10-05T00:00:00Z',
+    });
+    await settle();
   });
 
   /** Answers the ticket's read of the tradable instruments. */
@@ -101,7 +107,25 @@ describe('OrderTicket', () => {
     await settle();
 
     expect(field('ticket-status').textContent).toBe('NEW');
-    expect(page.querySelector('[data-testid="ticket-result"]')?.textContent).toContain('still working');
+    const result = page.querySelector('[data-testid="ticket-result"]')!;
+    expect(result.textContent).toContain('still working');
+    expect(result.textContent).toContain('Your order to sell 10 INFY.NS');
+    // The order id is the platform's, not the customer's.
+    expect(result.textContent).not.toContain('ORD-');
+    expect(result.querySelector('a')?.getAttribute('href')).toBe('/stocks');
+  });
+
+  it("after a fund order, sends the customer to the mutual funds dashboard, and names the fund", async () => {
+    await listInstruments();
+    fill({ symbol: '120503', quantity: '10', price: '50' });
+    await submit();
+    respond(http.expectOne(ORDERS));
+    await settle();
+
+    const result = page.querySelector('[data-testid="ticket-result"]')!;
+    expect(result.textContent).toContain('Bluechip Equity Fund');
+    expect(result.textContent).not.toContain('120503');
+    expect(result.querySelector('a')?.getAttribute('href')).toBe('/mutual-funds');
   });
 
   it('blocks an invalid quantity before submission', async () => {
@@ -131,8 +155,17 @@ describe('OrderTicket', () => {
 
     const groups = [...field('ticket-symbol').querySelectorAll('optgroup')].map((group) => group.label);
     expect(groups).toEqual(['Stocks', 'ETFs', 'Mutual funds']);
-    const choices = [...field('ticket-symbol').querySelectorAll('optgroup option')].map((option) => (option as HTMLOptionElement).value);
-    expect(choices).toEqual(['INFY.NS', 'TCS.NS', 'NIFTYBEES', '120503']);
+    const options = [...field('ticket-symbol').querySelectorAll<HTMLOptionElement>('optgroup option')];
+    expect(options.map((option) => option.value)).toEqual(['INFY.NS', 'TCS.NS', 'NIFTYBEES', '130000', '120503']);
+    // A stock or ETF by its ticker, a fund by its name: nothing else. Funds
+    // in name order, since a customer looks a fund up by its name.
+    expect(options.map((option) => option.textContent?.trim())).toEqual([
+      'INFY.NS',
+      'TCS.NS',
+      'NIFTYBEES',
+      'Axis Liquid Fund',
+      'Bluechip Equity Fund',
+    ]);
 
     field('ticket-quantity').value = '10';
     field('ticket-quantity').dispatchEvent(new Event('input'));
@@ -182,9 +215,9 @@ describe('OrderTicket', () => {
     expect(alert).not.toContain('Insufficient funds');
   });
 
-  it('renders the account from the token, read-only, and sends that account', async () => {
+  it("shows the account by the reference the customer knows, read-only, and sends the token's account", async () => {
     await listInstruments();
-    expect(field('ticket-account').value).toBe('3');
+    expect(field('ticket-account').value).toBe('ACC-000003');
     expect(field('ticket-account').readOnly).toBe(true);
 
     fill({});

@@ -10,6 +10,11 @@ import { Dashboard } from './dashboard';
 
 const TRADE = 'http://trade.test';
 const AUTH = 'http://auth.test';
+const INSTRUMENTS = [
+  { symbol: 'TCS.NS', name: 'Tata Consultancy Services Ltd', type: 'STOCK', exchange: 'NSE' },
+  { symbol: '120503', name: 'Bluechip Equity Fund', type: 'MF', exchange: null },
+  { symbol: 'SCH100001', name: 'Bluechip Growth Fund', type: 'MF', exchange: null },
+];
 
 describe('Dashboard', () => {
   let http: HttpTestingController;
@@ -31,9 +36,14 @@ describe('Dashboard', () => {
 
   afterEach(() => http.verify());
 
-  async function render() {
+  async function render(segment?: 'stocks' | 'mutual-funds') {
     const fixture = TestBed.createComponent(Dashboard);
+    if (segment) {
+      fixture.componentRef.setInput('segment', segment);
+    }
     await fixture.whenStable();
+    // What each instrument is called, and which dashboard it belongs on.
+    http.expectOne(`${TRADE}/api/v1/instruments`).flush(INSTRUMENTS);
     return fixture;
   }
 
@@ -95,8 +105,52 @@ describe('Dashboard', () => {
     expect(rows[0].textContent).toContain('TCS.NS');
     expect(rows[0].textContent).toContain('3,500.25');
     expect(rows[0].textContent).toContain('14,001.00');
+    // A fund by its name, never its scheme code.
+    expect(rows[1].textContent).toContain('Bluechip Equity Fund');
+    expect(rows[1].textContent).not.toContain('120503');
     expect(rows[1].textContent).toContain('12.5');
     expect(rows[0].querySelector('[data-testid="holdings-sell"]')?.getAttribute('href')).toBe('/trade?symbol=TCS.NS&side=SELL');
+  });
+
+  it('offers no Sell on a holding that can no longer be traded', async () => {
+    const fixture = await render();
+    http.expectOne(`${TRADE}/api/v1/accounts/3`).flush(account(750000));
+    http.expectOne(`${AUTH}/auth/me`).flush({ id: 'u-1', username: 'rohan.nair', accountId: 3, roles: ['CUSTOMER'] });
+    http.expectOne(`${TRADE}/api/v1/accounts/3/positions`).flush([position('MERSTL', 500, 84.3)]);
+    http.expectOne(`${TRADE}/api/v1/accounts/3/orders`).flush([]);
+    await settle(fixture);
+
+    const row = (fixture.nativeElement as HTMLElement).querySelector('[data-testid="holdings-row"]')!;
+    expect(row.textContent).toContain('MERSTL');
+    expect(row.querySelector('[data-testid="holdings-sell"]')).toBeNull();
+  });
+
+  it('on the mutual funds dashboard, shows funds by their type, and no second set of dashboard links', async () => {
+    const fixture = await render('mutual-funds');
+    http.expectOne(`${TRADE}/api/v1/accounts/3`).flush(account(750000));
+    http.expectOne(`${AUTH}/auth/me`).flush({ id: 'u-1', username: 'rohan.nair', accountId: 3, roles: ['CUSTOMER'] });
+    http.expectOne(`${TRADE}/api/v1/accounts/3/positions`).flush([position('TCS.NS', 4, 3500.25), position('SCH100001', 3, 10)]);
+    http.expectOne(`${TRADE}/api/v1/accounts/3/orders`).flush([]);
+    await settle(fixture);
+
+    const page = fixture.nativeElement as HTMLElement;
+    const rows = [...page.querySelectorAll('[data-testid="holdings-row"]')];
+    expect(rows.map((row) => row.querySelector('td')?.textContent?.trim())).toEqual(['Bluechip Growth Fund']);
+    expect(page.querySelector('h1')?.textContent).toContain('Mutual funds');
+    // The header already links the two dashboards.
+    expect(page.querySelector('.segment-nav')).toBeNull();
+  });
+
+  it('calls the cash what it is: available, not the raw balance', async () => {
+    const fixture = await render();
+    http.expectOne(`${TRADE}/api/v1/accounts/3`).flush(account(750000));
+    http.expectOne(`${AUTH}/auth/me`).flush({ id: 'u-1', username: 'rohan.nair', accountId: 3, roles: ['CUSTOMER'] });
+    http.expectOne(`${TRADE}/api/v1/accounts/3/positions`).flush([]);
+    http.expectOne(`${TRADE}/api/v1/accounts/3/orders`).flush([]);
+    await settle(fixture);
+
+    const labels = [...(fixture.nativeElement as HTMLElement).querySelectorAll('.summary dt')].map((dt) => dt.textContent?.trim());
+    expect(labels).toContain('Available cash');
   });
 
   it('says so when the account holds nothing', async () => {

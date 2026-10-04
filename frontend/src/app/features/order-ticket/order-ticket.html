@@ -4,14 +4,15 @@
   @if (result(); as placed) {
     <div class="alert success" role="status" data-testid="ticket-result">
       <p>
-        Order <strong>{{ placed.orderId }}</strong>: {{ placed.side }} {{ placed.quantity }}
-        {{ placed.symbol }} at {{ placed.price }}.
+        Your order to {{ placed.side === 'BUY' ? 'buy' : 'sell' }} {{ placed.quantity | number: '1.0-6' }}
+        <strong>{{ catalog.label(placed.symbol) }}</strong> at
+        {{ placed.price | currency: 'INR' : 'symbol' : '1.2-2' }} was received.
       </p>
       <p>
         Status <strong data-testid="ticket-status">{{ placed.status }}</strong> —
         {{ outcome[placed.status] }}
       </p>
-      <a routerLink="/stocks">See your orders</a>
+      <a [routerLink]="catalog.segmentOf(placed.symbol) === 'mutual-funds' ? '/mutual-funds' : '/stocks'">See your orders</a>
     </div>
   }
   <app-error-message [error]="error()" />
@@ -21,7 +22,7 @@
     <input
       id="account"
       readonly
-      [value]="accountId()"
+      [value]="account()?.accountId ?? ''"
       data-testid="ticket-account"
       aria-describedby="account-hint"
     />
@@ -39,7 +40,7 @@
       @for (group of groups(); track group.label) {
         <optgroup [label]="group.label">
           @for (instrument of group.instruments; track instrument.symbol) {
-            <option [value]="instrument.symbol">{{ instrument.symbol }} — {{ instrument.name }}</option>
+            <option [value]="instrument.symbol">{{ optionLabel(instrument) }}</option>
           }
         </optgroup>
       }

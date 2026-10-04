@@ -1,11 +1,13 @@
+import { CurrencyPipe, DecimalPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { InstrumentResponse } from '../../../generated/extensions';
 import { OrderResponse, OrderSide, OrderStatus } from '../../../generated/trade';
-import { InstrumentsApi } from '../../core/api/instruments-api';
+import { InstrumentCatalog } from '../../core/api/instrument-catalog';
 import { TradeApi } from '../../core/api/trade-api';
+import { CurrentAccount } from '../../core/session/current-account';
 import { Session } from '../../core/session/session';
 import { ErrorMessage } from '../../shared/error-message/error-message';
 import { priceAboveZeroTwoDecimals, wholeNumberAboveZero } from './order-validators';
@@ -27,13 +29,14 @@ const GROUPS: ReadonlyArray<{ readonly type: InstrumentResponse['type']; readonl
 
 @Component({
   selector: 'app-order-ticket',
-  imports: [ReactiveFormsModule, ErrorMessage, RouterLink],
+  imports: [ReactiveFormsModule, ErrorMessage, RouterLink, CurrencyPipe, DecimalPipe],
   templateUrl: './order-ticket.html',
   styleUrl: './order-ticket.css',
 })
 export class OrderTicket {
   private readonly tradeApi = inject(TradeApi);
-  private readonly instrumentsApi = inject(InstrumentsApi);
+  /** Shared with the dashboards: read once a session, not on every visit to the ticket. */
+  protected readonly catalog = inject(InstrumentCatalog);
 
   /** ?symbol= and ?side=, so a holding's Sell link opens the ticket filled in. */
   readonly symbol = input<string>();
@@ -43,8 +46,12 @@ export class OrderTicket {
    * The account comes from the token and is shown read-only. An account field
    * the user could edit would be an authorisation decision moved into the
    * browser -- and the API refuses any other account anyway (ACC-403).
+   *
+   * Sent as the token's numeric key; shown as the reference the customer
+   * knows (ACC-000003), since the key is the database's.
    */
   protected readonly accountId = inject(Session).accountId;
+  protected readonly account = inject(CurrentAccount).account;
 
   protected readonly sides = [OrderSide.Buy, OrderSide.Sell];
   protected readonly outcome = OUTCOME;
@@ -61,13 +68,17 @@ export class OrderTicket {
   protected readonly result = signal<OrderResponse | null>(null);
   protected readonly error = signal<unknown>(null);
 
-  protected readonly instruments = signal<readonly InstrumentResponse[] | null>(null);
-  protected readonly instrumentsError = signal<unknown>(null);
+  protected readonly instruments = this.catalog.instruments;
+  protected readonly instrumentsError = this.catalog.error;
+  /** Stocks and ETFs by ticker, as the API lists them; funds by name, since that is how one is looked up. */
   protected readonly groups = computed(() =>
-    GROUPS.map((group) => ({
-      label: group.label,
-      instruments: (this.instruments() ?? []).filter((instrument) => instrument.type === group.type),
-    })).filter((group) => group.instruments.length > 0),
+    GROUPS.map((group) => {
+      const instruments = (this.instruments() ?? []).filter((instrument) => instrument.type === group.type);
+      return {
+        label: group.label,
+        instruments: group.type === 'MF' ? [...instruments].sort((a, b) => a.name.localeCompare(b.name)) : instruments,
+      };
+    }).filter((group) => group.instruments.length > 0),
   );
 
   /**
@@ -79,7 +90,7 @@ export class OrderTicket {
   private unconfirmed: { readonly key: string; readonly order: string } | null = null;
 
   constructor() {
-    void this.loadInstruments();
+    void this.catalog.load();
     // A symbol from the link is taken only once the list shows it is tradable.
     effect(() => {
       const wanted = this.symbol()?.trim().toUpperCase();
@@ -95,12 +106,9 @@ export class OrderTicket {
     });
   }
 
-  private async loadInstruments(): Promise<void> {
-    try {
-      this.instruments.set(await this.instrumentsApi.tradable());
-    } catch (failure) {
-      this.instrumentsError.set(failure);
-    }
+  /** How the picker names an instrument: a stock or ETF by its ticker, a fund by its name. */
+  protected optionLabel(instrument: InstrumentResponse): string {
+    return instrument.type === 'MF' ? instrument.name : instrument.symbol;
   }
 
   async submit(): Promise<void> {
