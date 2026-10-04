@@ -12,6 +12,16 @@ import { authGuard } from './core/guards/auth.guard';
  */
 export const routes: Routes = [
   {
+    path: '',
+    pathMatch: 'full',
+    redirectTo: 'landing',
+  },
+  {
+    path: 'landing',
+    title: 'YELLOW Trading Platform',
+    loadComponent: () => import('./features/landing/landing').then((m) => m.Landing),
+  },
+  {
     path: 'sign-in',
     title: 'Sign in',
     loadComponent: () => import('./features/sign-in/sign-in').then((m) => m.SignIn),
@@ -27,8 +37,19 @@ export const routes: Routes = [
     children: [
       {
         path: '',
-        title: 'Dashboard',
-        loadComponent: () => import('./features/dashboard/dashboard').then((m) => m.Dashboard),
+        pathMatch: 'full',
+        redirectTo: 'stocks',
+      },
+      {
+        path: 'stocks',
+        title: 'Stocks dashboard',
+        loadComponent: () => import('./features/stocks-dashboard/stocks-dashboard').then((m) => m.StocksDashboard),
+      },
+      {
+        path: 'mutual-funds',
+        title: 'Mutual funds dashboard',
+        loadComponent: () =>
+          import('./features/mutual-funds-dashboard/mutual-funds-dashboard').then((m) => m.MutualFundsDashboard),
       },
       {
         path: 'trade',
@@ -40,7 +61,7 @@ export const routes: Routes = [
         title: 'Cash',
         loadComponent: () => import('./features/cash/cash').then((m) => m.Cash),
       },
-      { path: '**', redirectTo: '' },
+      { path: '**', redirectTo: 'stocks' },
     ],
   },
 ];

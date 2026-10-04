@@ -11,7 +11,7 @@
         Status <strong data-testid="ticket-status">{{ placed.status }}</strong> —
         {{ outcome[placed.status] }}
       </p>
-      <a routerLink="/">See your orders</a>
+      <a routerLink="/stocks">See your orders</a>
     </div>
   }
   <app-error-message [error]="error()" />
@@ -87,7 +87,7 @@
       </div>
     </div>
 
-    <button type="submit" data-testid="ticket-submit" [disabled]="submitting()">
+    <button type="submit" class="primary" data-testid="ticket-submit" [disabled]="submitting()">
       {{ submitting() ? 'Placing…' : 'Place order' }}
     </button>
   </form>

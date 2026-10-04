@@ -18,6 +18,20 @@
     }
   </p>
 
+  <div class="filter-chips" role="group" aria-label="Filter orders by status">
+    @for (option of filterOptions; track option) {
+      <button
+        type="button"
+        class="filter-chip"
+        [class.active]="statusFilter() === option"
+        [attr.aria-pressed]="statusFilter() === option"
+        (click)="setStatusFilter(option)"
+      >
+        {{ option }}
+      </button>
+    }
+  </div>
+
   @if (orders() === null) {
     @if (!error()) {
       <p>Loading your orders…</p>

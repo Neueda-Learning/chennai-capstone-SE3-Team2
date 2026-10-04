@@ -1,10 +1,15 @@
 <div class="title">
-  <h1>Dashboard</h1>
+  <h1>{{ title() }}</h1>
   <div class="actions">
     <a class="button secondary" routerLink="/cash" data-testid="dashboard-cash">Add or withdraw cash</a>
-    <a class="button" routerLink="/trade" data-testid="dashboard-trade">Place an order</a>
+    <a class="button primary" routerLink="/trade" data-testid="dashboard-trade">Place an order</a>
   </div>
 </div>
+
+<nav class="segment-nav" aria-label="Portfolio views">
+  <a class="button secondary" routerLink="/stocks">Stocks</a>
+  <a class="button secondary" routerLink="/mutual-funds">Mutual funds</a>
+</nav>
 
 <app-error-message [error]="error()" />
 
@@ -36,10 +41,10 @@
   }
 </section>
 
-@if (positions() !== null || !error()) {
-  <app-holdings [positions]="positions()" />
+@if (filteredPositions() !== null || !error()) {
+  <app-holdings [positions]="filteredPositions()" />
 }
 
 @if (accountId(); as accountId) {
-  <app-blotter [accountId]="accountId" (settled)="orderSettled()" />
+  <app-blotter [accountId]="accountId" [segment]="segment()" (settled)="orderSettled()" />
 }

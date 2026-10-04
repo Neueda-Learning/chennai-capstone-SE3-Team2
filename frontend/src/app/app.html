@@ -1,14 +1,21 @@
 <a class="skip-link" href="#main">Skip to content</a>
 <header class="app-header">
-  <a class="brand" routerLink="/">Trading Desk</a>
+  <a class="brand" [routerLink]="session.accessToken() ? '/stocks' : '/landing'">YELLOW // TRADE</a>
   @if (session.accessToken()) {
     <nav aria-label="Main">
-      <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Dashboard</a>
+      <a routerLink="/stocks" routerLinkActive="active">Stocks</a>
+      <a routerLink="/mutual-funds" routerLinkActive="active">Mutual funds</a>
       <a routerLink="/trade" routerLinkActive="active" data-testid="nav-trade">Place an order</a>
       <a routerLink="/cash" routerLinkActive="active" data-testid="nav-cash">Cash</a>
     </nav>
     <span class="account">Account {{ session.accountId() }}</span>
     <button type="button" class="secondary" data-testid="sign-out" (click)="signOut()">Sign out</button>
+  } @else {
+    <nav aria-label="Public">
+      <a routerLink="/landing" routerLinkActive="active">Home</a>
+      <a routerLink="/sign-in" routerLinkActive="active">Sign in</a>
+      <a routerLink="/apply" routerLinkActive="active" class="button primary">Get started</a>
+    </nav>
   }
 </header>
 <main id="main" class="app-main">

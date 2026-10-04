@@ -22,7 +22,7 @@ describe('App', () => {
     await fixture.whenStable();
     const page = fixture.nativeElement as HTMLElement;
 
-    expect(page.querySelector('header .brand')?.textContent).toContain('Trading Desk');
+    expect(page.querySelector('header .brand')?.textContent).toContain('YELLOW // TRADE');
     expect(page.querySelector('main#main router-outlet')).not.toBeNull();
     expect(page.querySelector('[data-testid="sign-out"]')).toBeNull();
   });

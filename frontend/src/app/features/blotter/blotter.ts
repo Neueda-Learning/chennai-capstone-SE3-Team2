@@ -30,6 +30,8 @@ export class Blotter {
 
   /** The account whose orders to show: the session's own. */
   readonly accountId = input.required<number>();
+  /** Dashboard context for symbol filtering. */
+  readonly segment = input<'stocks' | 'mutual-funds' | 'all'>('all');
 
   /**
    * An order left NEW -- filled, rejected or cancelled -- so the cash and the
@@ -42,6 +44,7 @@ export class Blotter {
   protected readonly loading = signal(false);
   protected readonly rereads = signal(0);
   protected readonly gaveUp = signal(false);
+  protected readonly statusFilter = signal<'ALL' | OrderStatus>('ALL');
   /** The order a cancel is in flight for. */
   protected readonly cancelling = signal<string | null>(null);
   protected readonly cancelError = signal<unknown>(null);
@@ -51,8 +54,22 @@ export class Blotter {
   };
 
   /** Newest first, rejections included: the rejection is the record that the desk tried. */
+  protected readonly filterOptions = ['ALL', OrderStatus.New, OrderStatus.Filled, OrderStatus.Rejected, OrderStatus.Cancelled] as const;
+
   protected readonly rows = computed(() =>
-    [...(this.orders() ?? [])].sort((a, b) => Date.parse(b.createdOn) - Date.parse(a.createdOn)),
+    [...(this.orders() ?? [])]
+      .filter((order) => {
+        const looksLikeFund = /^\d+$/.test(order.symbol);
+        if (this.segment() === 'stocks' && looksLikeFund) {
+          return false;
+        }
+        if (this.segment() === 'mutual-funds' && !looksLikeFund) {
+          return false;
+        }
+        const status = this.statusFilter();
+        return status === 'ALL' ? true : order.status === status;
+      })
+      .sort((a, b) => Date.parse(b.createdOn) - Date.parse(a.createdOn)),
   );
 
   protected readonly working = computed(() => this.rows().filter((order) => order.status === OrderStatus.New).length);
@@ -130,5 +147,9 @@ export class Blotter {
   private stopRereading(): void {
     this.cancelReread?.();
     this.cancelReread = null;
+  }
+
+  protected setStatusFilter(filter: 'ALL' | OrderStatus): void {
+    this.statusFilter.set(filter);
   }
 }

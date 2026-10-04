@@ -4,21 +4,25 @@
  * component. Colours meet WCAG AA contrast on the background they sit on.
  */
 :root {
-  --bg: #f5f6f8;
-  --surface: #ffffff;
-  --text: #1d2330;
-  --muted: #5b6475;
-  --border: #d5dae3;
-  --accent: #1f5fbf;
-  --accent-text: #ffffff;
-  --danger: #a3261a;
-  --danger-bg: #fdecea;
-  --success: #1e6b3a;
-  --success-bg: #e6f4ea;
-  --warning: #7a4d00;
-  --warning-bg: #fff4dc;
-  --radius: 6px;
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --bg: #090c11;
+  --bg-soft: #111723;
+  --surface: #121927;
+  --surface-elevated: #1a2335;
+  --text: #d9e3f8;
+  --muted: #8fa2c6;
+  --border: #26324b;
+  --accent: #f6c744;
+  --accent-strong: #f2b91b;
+  --accent-text: #0b0f17;
+  --danger: #ff6b6b;
+  --danger-bg: #2b1313;
+  --success: #5ee2a0;
+  --success-bg: #12251d;
+  --warning: #8eb1ff;
+  --warning-bg: #101a2f;
+  --radius: 8px;
+  --mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--mono);
   color: var(--text);
   background: var(--bg);
 }
@@ -32,6 +36,10 @@
 body {
   margin: 0;
   line-height: 1.5;
+  background:
+    radial-gradient(circle at 90% -10%, rgba(94, 226, 160, 0.13), transparent 33%),
+    radial-gradient(circle at 15% -12%, rgba(142, 177, 255, 0.15), transparent 36%),
+    var(--bg);
 }
 
 h1 {
@@ -45,7 +53,7 @@ h2 {
 }
 
 a {
-  color: var(--accent);
+  color: var(--warning);
 }
 
 /* Keyboard users always see where they are. */
@@ -59,6 +67,7 @@ a {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1.25rem 1.5rem;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.35);
 }
 
 button,
@@ -66,18 +75,44 @@ button,
   font: inherit;
   padding: 0.55rem 1.1rem;
   border-radius: var(--radius);
-  border: 1px solid var(--accent);
-  background: var(--accent);
-  color: var(--accent-text);
+  border: 1px solid var(--border);
+  background: var(--surface-elevated);
+  color: var(--text);
   cursor: pointer;
   text-decoration: none;
   display: inline-block;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+button:hover,
+.button:hover {
+  border-color: var(--warning);
+  background: #1e2a41;
+}
+
+button:active,
+.button:active {
+  transform: translateY(1px);
 }
 
 button.secondary,
 .button.secondary {
   background: transparent;
-  color: var(--accent);
+  color: var(--warning);
+  border-color: #335186;
+}
+
+button.primary,
+.button.primary {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+
+button.primary:hover,
+.button.primary:hover {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
 }
 
 button:disabled {
@@ -96,14 +131,14 @@ select {
   font: inherit;
   width: 100%;
   padding: 0.5rem 0.6rem;
-  border: 1px solid #8a93a3;
+  border: 1px solid #334a72;
   border-radius: var(--radius);
-  background: var(--surface);
+  background: #0f1623;
   color: var(--text);
 }
 
 input[readonly] {
-  background: var(--bg);
+  background: #0a111c;
   color: var(--muted);
 }
 
@@ -137,6 +172,7 @@ input[readonly] {
 table {
   width: 100%;
   border-collapse: collapse;
+  color: var(--text);
 }
 
 th,
@@ -144,6 +180,35 @@ td {
   text-align: left;
   padding: 0.5rem 0.6rem;
   border-bottom: 1px solid var(--border);
+}
+
+th {
+  color: var(--muted);
+  font-size: 0.84rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.filter-chip {
+  border: 1px solid #335186;
+  color: var(--muted);
+  background: #0f1623;
+  border-radius: 999px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.82rem;
+}
+
+.filter-chip.active {
+  color: var(--accent-text);
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 td.number,

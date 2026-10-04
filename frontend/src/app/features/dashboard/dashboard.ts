@@ -1,5 +1,5 @@
 import { CurrencyPipe } from '@angular/common';
-import { Component, effect, inject, signal, untracked } from '@angular/core';
+import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { UserResponse } from '../../../generated/auth';
 import { AccountResponse, PositionResponse } from '../../../generated/trade';
@@ -26,11 +26,42 @@ export class Dashboard {
   private readonly tradeApi = inject(TradeApi);
   private readonly authApi = inject(AuthApi);
   protected readonly accountId = inject(Session).accountId;
+  readonly segment = input<'stocks' | 'mutual-funds' | 'all'>('all');
 
   protected readonly account = signal<AccountResponse | null>(null);
   protected readonly user = signal<UserResponse | null>(null);
   protected readonly positions = signal<readonly PositionResponse[] | null>(null);
   protected readonly error = signal<unknown>(null);
+
+  protected readonly title = computed(() => {
+    if (this.segment() === 'stocks') {
+      return 'Stocks dashboard';
+    }
+    if (this.segment() === 'mutual-funds') {
+      return 'Mutual funds dashboard';
+    }
+    return 'Dashboard';
+  });
+
+  protected readonly symbolMatcher = computed(() => {
+    if (this.segment() === 'all') {
+      return (_symbol: string) => true;
+    }
+    const mutualFunds = this.segment() === 'mutual-funds';
+    return (symbol: string) => {
+      const looksLikeFund = /^\d+$/.test(symbol);
+      return mutualFunds ? looksLikeFund : !looksLikeFund;
+    };
+  });
+
+  protected readonly filteredPositions = computed(() => {
+    const positions = this.positions();
+    if (positions === null) {
+      return positions;
+    }
+    const accept = this.symbolMatcher();
+    return positions.filter((position) => accept(position.symbol));
+  });
 
   constructor() {
     effect(() => {

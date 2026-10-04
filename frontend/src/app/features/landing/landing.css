@@ -1,0 +1,147 @@
+.hero {
+  position: relative;
+  overflow: hidden;
+}
+
+.kicker {
+  margin: 0 0 0.75rem;
+  color: var(--muted);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+}
+
+.hero h1 {
+  font-size: clamp(1.8rem, 3vw, 2.8rem);
+  margin: 0;
+}
+
+.quote {
+  margin: 0.6rem 0 0;
+  color: var(--warning);
+}
+
+.intro {
+  color: var(--muted);
+  max-width: 42rem;
+}
+
+.cta-row {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.ticker-strip {
+  margin-top: 1.2rem;
+  border-top: 1px dashed var(--border);
+  padding-top: 0.9rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.candles {
+  margin-top: 1rem;
+  position: relative;
+  min-height: 16rem;
+  overflow: hidden;
+}
+
+.grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, rgba(143, 162, 198, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(143, 162, 198, 0.08) 1px, transparent 1px);
+  background-size: 42px 42px;
+}
+
+.candle {
+  position: absolute;
+  left: var(--x);
+  bottom: 2rem;
+  width: var(--w);
+  min-width: 5px;
+  height: var(--h);
+  border-radius: 2px;
+  transform-origin: bottom;
+  animation: pulse 1.9s ease-in-out infinite alternate;
+  animation-delay: var(--d);
+}
+
+.candle::before,
+.candle::after {
+  content: '';
+  position: absolute;
+  left: calc(50% - 1px);
+  width: 2px;
+  background: currentColor;
+}
+
+.candle::before {
+  bottom: 100%;
+  height: clamp(8px, 2vw, 18px);
+}
+
+.candle::after {
+  top: 100%;
+  height: clamp(8px, 2vw, 18px);
+}
+
+.candle.green {
+  background: var(--success);
+  color: var(--success);
+}
+
+.candle.red {
+  background: var(--danger);
+  color: var(--danger);
+}
+
+.highlights {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+}
+
+.tile h2 {
+  margin-top: 0;
+}
+
+.tile p {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+@keyframes pulse {
+  from {
+    transform: scaleY(0.78);
+    opacity: 0.72;
+  }
+  to {
+    transform: scaleY(1.08);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 700px) {
+  .cta-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .cta-row .button {
+    width: 100%;
+    text-align: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .candle {
+    animation: none;
+  }
+}
