@@ -40,15 +40,30 @@ test.describe('place an order', () => {
   });
 
   test('a placed order shows whatever status the API returned', async ({ page }) => {
+    test.setTimeout(90_000);
+
+    const orderRequest = page.waitForRequest(
+      (request) => request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/orders',
+      { timeout: 45_000 },
+    );
+
     await page.getByTestId('ticket-symbol').fill(env.symbol);
     await page.getByTestId('ticket-side').selectOption('BUY');
     await page.getByTestId('ticket-quantity').fill('1');
     await page.getByTestId('ticket-price').fill('100.00');
     await page.getByTestId('ticket-submit').click();
 
-    await expect(page.getByTestId('ticket-result')).toBeVisible();
+    const request = await orderRequest;
+    const response = await request.response();
+    expect(response, `place-order request failed before response: ${request.failure()?.errorText ?? 'no response'}`).not.toBeNull();
+
+    const status = response!.status();
+    const body = await response!.text();
+    expect(status, `place-order response was ${status}: ${body}`).toBe(200);
+
+    await expect(page.getByTestId('ticket-result')).toBeVisible({ timeout: 15_000 });
     // NEW, FILLED or REJECTED are all a placed order. Asserting FILLED would
     // fail the week the executor is switched off -- the wrong signal.
-    await expect(page.getByTestId('ticket-status')).toHaveText(/^(NEW|FILLED|REJECTED)$/);
+    await expect(page.getByTestId('ticket-status')).toHaveText(/^(NEW|FILLED|REJECTED)$/, { timeout: 15_000 });
   });
 });
