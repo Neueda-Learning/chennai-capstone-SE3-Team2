@@ -87,6 +87,8 @@ button[type='submit'] {
 }
 
 .side {
+  /* Holds its hidden radio: positioned against the page it would widen it. */
+  position: relative;
   padding: 0.35rem 0.9rem;
   cursor: pointer;
   color: var(--muted);

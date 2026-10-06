@@ -260,6 +260,13 @@ button.small,
   font-size: 0.85rem;
 }
 
+/* A sideways-scrolling table keeps everything inside it, the screen-reader
+   text included: an absolutely positioned child with nothing positioned
+   between it and the page escapes the scroll box and widens the page. */
+.table-wrap {
+  position: relative;
+}
+
 /* Figures line up digit under digit, so a column of money reads at a glance. */
 table {
   font-variant-numeric: tabular-nums;
