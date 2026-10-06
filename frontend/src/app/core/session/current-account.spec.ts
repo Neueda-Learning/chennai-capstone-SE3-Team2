@@ -41,6 +41,24 @@ describe('CurrentAccount', () => {
     expect(current.account()?.holderName).toBe('Rohan Nair');
   });
 
+  it('reads the account again when asked, after an order or a transfer moved its cash', async () => {
+    const current = TestBed.inject(CurrentAccount);
+    TestBed.inject(Session).start(testToken({ accountId: 3 }));
+    TestBed.tick();
+    http.expectOne(`${TRADE}/api/v1/accounts/3`).flush({
+      id: 3, accountId: 'ACC-000003', holderName: 'Rohan Nair', cashBalance: 1000, status: 'ACTIVE', version: 1, lastUpdated: '2026-10-05T00:00:00Z',
+    });
+    await settle();
+
+    const refreshed = current.refresh();
+    http.expectOne(`${TRADE}/api/v1/accounts/3`).flush({
+      id: 3, accountId: 'ACC-000003', holderName: 'Rohan Nair', cashBalance: 400, status: 'ACTIVE', version: 2, lastUpdated: '2026-10-05T00:01:00Z',
+    });
+    await refreshed;
+
+    expect(current.account()?.cashBalance).toBe(400);
+  });
+
   it('forgets the account on sign-out', async () => {
     const current = TestBed.inject(CurrentAccount);
     const session = TestBed.inject(Session);

@@ -56,6 +56,6 @@ test.describe('market watch', () => {
     await page.getByTestId('instrument-buy').click();
     await expect(page).toHaveURL(/\/trade\?symbol=/);
     await expect(page.getByTestId('ticket-instrument')).toContainText(symbol);
-    await expect(page.getByTestId('ticket-side')).toHaveValue('BUY');
+    await expect(page.getByTestId('ticket-side-buy')).toBeChecked();
   });
 });

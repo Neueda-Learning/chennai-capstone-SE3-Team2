@@ -1,5 +1,47 @@
-<section class="card ticket">
-  <h1>Place an order</h1>
+<section class="card ticket" [class.sell]="selling()" aria-labelledby="ticket-title">
+  <header class="ticket-head">
+    <h1 id="ticket-title">
+      {{ selling() ? 'Sell' : 'Buy' }}
+      @if (chosen(); as instrument) {
+        <span class="what">{{ instrument.type === 'MF' ? instrument.name : instrument.symbol }}</span>
+      }
+    </h1>
+    <div class="side-toggle" role="radiogroup" aria-label="Buy or sell">
+      @for (side of sides; track side) {
+        <label class="side" [class.on]="form.controls.side.value === side" [class.sell]="side === 'SELL'">
+          <input
+            type="radio"
+            name="side"
+            [value]="side"
+            [formControl]="form.controls.side"
+            [attr.data-testid]="side === 'BUY' ? 'ticket-side-buy' : 'ticket-side-sell'"
+          />
+          {{ side === 'BUY' ? 'Buy' : 'Sell' }}
+        </label>
+      }
+    </div>
+    @if (chosen()) {
+      <p class="live" data-testid="ticket-live-price">
+        @if (quote()?.price !== null && quote()?.price !== undefined) {
+          <span class="ltp">{{ quote()?.price | currency: 'INR' : 'symbol' : (fund() ? '1.4-4' : '1.2-2') }}</span>
+          @if (quote()?.changePercent !== null && quote()?.changePercent !== undefined) {
+            <span class="change" [class.up]="(quote()?.change ?? 0) > 0" [class.down]="(quote()?.change ?? 0) < 0"
+              >{{ (quote()?.change ?? 0) > 0 ? '+' : '' }}{{ quote()?.changePercent | number: '1.2-2' }}%</span
+            >
+          } @else if (fund()) {
+            <span class="muted">NAV</span>
+          }
+          @if (quote()?.stale) {
+            <span class="stale">Delayed</span>
+          }
+        } @else if (quote()) {
+          <span class="muted">No live price right now: set a limit.</span>
+        } @else {
+          <span class="muted">Getting the price…</span>
+        }
+      </p>
+    }
+  </header>
 
   @if (result(); as placed) {
     <div class="alert success" role="status" data-testid="ticket-result">
@@ -53,46 +95,137 @@
     }
     <app-error-message [error]="lookupError()" />
 
-    <label for="side">Side</label>
-    <select id="side" formControlName="side" data-testid="ticket-side">
-      @for (side of sides; track side) {
-        <option [value]="side">{{ side === 'BUY' ? 'Buy' : 'Sell' }}</option>
-      }
-    </select>
+    <fieldset class="type">
+      <legend>Order type</legend>
+      <label class="choice" [class.disabled]="!marketAvailable()">
+        <input
+          type="radio"
+          name="type"
+          value="MARKET"
+          [formControl]="form.controls.type"
+          [attr.disabled]="marketAvailable() ? null : true"
+          data-testid="ticket-type-market"
+        />
+        Market
+      </label>
+      <label class="choice">
+        <input type="radio" name="type" value="LIMIT" [formControl]="form.controls.type" data-testid="ticket-type-limit" />
+        Limit
+      </label>
+    </fieldset>
 
     <div class="row">
+      @if (byAmount()) {
+        <div>
+          <label for="amount">Amount (₹)</label>
+          <input
+            id="amount"
+            formControlName="amount"
+            inputmode="decimal"
+            data-testid="ticket-amount"
+            [attr.aria-invalid]="invalid('amount')"
+            aria-describedby="amount-hint"
+          />
+          <p class="hint" id="amount-hint" data-testid="ticket-units">
+            @if (units() !== null) {
+              {{ units() | number: '1.0-0' }} {{ units() === 1 ? 'unit' : 'units' }} at the NAV
+            } @else {
+              Whole units at the fund's NAV.
+            }
+          </p>
+          @if (invalid('amount')) {
+            <p class="field-error">Enter an amount that buys at least one unit at the NAV.</p>
+          }
+        </div>
+      } @else {
+        <div>
+          <label for="quantity">Quantity</label>
+          <input
+            id="quantity"
+            formControlName="quantity"
+            inputmode="numeric"
+            data-testid="ticket-quantity"
+            [attr.aria-invalid]="invalid('quantity')"
+            aria-describedby="quantity-error"
+          />
+          @if (invalid('quantity')) {
+            <p class="field-error" id="quantity-error">Enter a whole number of units, 1 or more.</p>
+          }
+        </div>
+      }
       <div>
-        <label for="quantity">Quantity</label>
-        <input
-          id="quantity"
-          formControlName="quantity"
-          inputmode="numeric"
-          data-testid="ticket-quantity"
-          [attr.aria-invalid]="invalid('quantity')"
-          aria-describedby="quantity-error"
-        />
-        @if (invalid('quantity')) {
-          <p class="field-error" id="quantity-error">Enter a whole number of units, 1 or more.</p>
-        }
-      </div>
-      <div>
-        <label for="price">Limit price</label>
-        <input
-          id="price"
-          formControlName="price"
-          inputmode="decimal"
-          data-testid="ticket-price"
-          [attr.aria-invalid]="invalid('price')"
-          aria-describedby="price-error"
-        />
-        @if (invalid('price')) {
-          <p class="field-error" id="price-error">Enter a price above zero, with at most two decimal places.</p>
+        <label for="price">{{ atMarket() ? 'Price' : 'Limit price' }}</label>
+        @if (atMarket()) {
+          <input id="price" readonly value="At market" data-testid="ticket-price-market" />
+        } @else {
+          <input
+            id="price"
+            formControlName="price"
+            inputmode="decimal"
+            data-testid="ticket-price"
+            [attr.aria-invalid]="invalid('price')"
+            aria-describedby="price-error"
+          />
+          @if (invalid('price')) {
+            <p class="field-error" id="price-error">Enter a price above zero, with at most two decimal places.</p>
+          }
         }
       </div>
     </div>
 
-    <button type="submit" class="primary" data-testid="ticket-submit" [disabled]="submitting()">
-      {{ submitting() ? 'Placing…' : 'Place order' }}
+    <dl class="summary" data-testid="ticket-summary">
+      <div>
+        <dt>{{ selling() ? 'Approx. value' : 'Approx. cost' }}</dt>
+        <dd data-testid="ticket-cost">{{ (estimate() | currency: 'INR' : 'symbol' : '1.2-2') ?? '—' }}</dd>
+      </div>
+      @if (selling()) {
+        <div>
+          <dt>You hold</dt>
+          <dd data-testid="ticket-holding">{{ (holding() | number: '1.0-6') ?? '—' }}</dd>
+        </div>
+      } @else {
+        <div>
+          <dt>Available cash</dt>
+          <dd data-testid="ticket-cash">{{ (cash() | currency: 'INR' : 'symbol' : '1.2-2') ?? '—' }}</dd>
+        </div>
+        <div>
+          <dt>Cash after</dt>
+          <dd data-testid="ticket-cash-after" [class.down]="(cashAfter() ?? 0) < 0">
+            {{ (cashAfter() | currency: 'INR' : 'symbol' : '1.2-2') ?? '—' }}
+          </dd>
+        </div>
+      }
+    </dl>
+    @if (atMarket() && !fund()) {
+      <p class="hint">
+        At market: it fills at the price the market offers. Up to
+        {{ (held() | currency: 'INR' : 'symbol' : '1.2-2') ?? 'a little more' }} is set aside until it does, so a small move
+        cannot leave it short.
+      </p>
+    }
+    @if (shortfall() === 'cash') {
+      <p class="alert error" role="alert" data-testid="ticket-shortfall">
+        Not enough cash: this needs {{ held() | currency: 'INR' : 'symbol' : '1.2-2' }}, and
+        {{ cash() | currency: 'INR' : 'symbol' : '1.2-2' }} is available.
+      </p>
+    } @else if (shortfall() === 'holding') {
+      <p class="alert error" role="alert" data-testid="ticket-shortfall">
+        You hold {{ holding() | number: '1.0-6' }}, so you can't sell {{ units() | number: '1.0-6' }}.
+      </p>
+    }
+
+    <button
+      type="submit"
+      class="primary place"
+      [class.sell]="selling()"
+      data-testid="ticket-submit"
+      [disabled]="submitting() || shortfall() !== null"
+    >
+      @if (submitting()) {
+        Placing…
+      } @else {
+        {{ selling() ? 'Sell' : 'Buy' }} {{ chosen() ? (fund() ? 'fund' : chosen()?.symbol) : '' }}
+      }
     </button>
   </form>
 </section>

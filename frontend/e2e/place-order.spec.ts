@@ -14,6 +14,12 @@ async function pickInstrument(page: Page, symbol: string): Promise<void> {
   await expect(page.getByTestId('ticket-instrument')).toBeVisible();
 }
 
+/** Clicks a radio's label, as a person does: the buttons are styled labels over hidden inputs. */
+async function choose(page: Page, testId: string): Promise<void> {
+  await page.locator('label', { has: page.getByTestId(testId) }).click();
+  await expect(page.getByTestId(testId)).toBeChecked();
+}
+
 test.describe('place an order', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/trade');
@@ -39,6 +45,7 @@ test.describe('place an order', () => {
     });
 
     await pickInstrument(page, env.symbol);
+    await choose(page, 'ticket-type-limit');
     await page.getByTestId('ticket-quantity').fill('0');
     await page.getByTestId('ticket-price').fill('10.555');
     await page.getByTestId('ticket-submit').click();
@@ -50,7 +57,8 @@ test.describe('place an order', () => {
 
   test('a placed order shows whatever status the API returned', async ({ page }) => {
     await pickInstrument(page, env.symbol);
-    await page.getByTestId('ticket-side').selectOption('BUY');
+    await choose(page, 'ticket-side-buy');
+    await choose(page, 'ticket-type-limit');
     await page.getByTestId('ticket-quantity').fill('1');
     await page.getByTestId('ticket-price').fill('100.00');
     await page.getByTestId('ticket-submit').click();

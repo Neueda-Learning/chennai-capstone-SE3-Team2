@@ -9,8 +9,8 @@ import { Session } from './session';
  * rather than the token's numeric account key, which is the database's and
  * means nothing to a customer.
  *
- * Read once per session. The cash on it is not kept fresh here; the
- * dashboard reads its own.
+ * Read once per session, and again when a screen that moved its cash asks
+ * (refresh): the order window shows the cash available.
  */
 @Injectable({ providedIn: 'root' })
 export class CurrentAccount {
@@ -30,6 +30,12 @@ export class CurrentAccount {
         }
       });
     });
+  }
+
+  /** Reads the account again: an order or a transfer has moved its cash. */
+  refresh(): Promise<void> {
+    const accountId = this.session.accountId();
+    return accountId === null ? Promise.resolve() : this.read(accountId);
   }
 
   private async read(accountId: number): Promise<void> {
