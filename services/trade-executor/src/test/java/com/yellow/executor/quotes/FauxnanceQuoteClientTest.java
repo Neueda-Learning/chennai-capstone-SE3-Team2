@@ -28,6 +28,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasKey;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
@@ -95,43 +96,27 @@ class FauxnanceQuoteClientTest {
         api.stubFor(get(urlPathEqualTo("/quotes/MRF.NS"))
                 .willReturn(ok(quoteBody("synthetic", false))));
 
-        // source is not a reason to refuse. Only stale is.
+        // Neither the source nor the staleness is a reason to refuse.
         assertThat(client.quote("MRF.NS").source(), is("synthetic"));
     }
 
-    // ------------------------------------------------------------- retried
-
     @Test
-    @DisplayName("a stale quote is retried, and a fresh one on the second attempt is used")
-    void staleIsRetriedThenSucceeds() {
-        api.stubFor(get(urlPathEqualTo("/quotes/MRF.NS"))
-                .inScenario("staleness").whenScenarioStateIs("Started")
-                .willReturn(ok(quoteBody("cache", true)))
-                .willSetStateTo("refreshed"));
-        api.stubFor(get(urlPathEqualTo("/quotes/MRF.NS"))
-                .inScenario("staleness").whenScenarioStateIs("refreshed")
-                .willReturn(ok(quoteBody("upstream:yfinance", false))));
-
-        Quote quote = client.quote("MRF.NS");
-
-        assertThat(quote.stale(), is(false));
-        api.verify(2, getRequestedFor(urlPathEqualTo("/quotes/MRF.NS")));
-    }
-
-    @Test
-    @DisplayName("a quote stale on every attempt exhausts the budget and refuses to price")
-    void permanentlyStaleThrows() {
+    @DisplayName("a stale quote is used as it is, marked stale, without asking again")
+    void staleQuoteIsUsed() {
         api.stubFor(get(urlPathEqualTo("/quotes/MRF.NS"))
                 .willReturn(ok(quoteBody("cache", true))));
 
-        QuoteUnavailableException thrown = assertThrows(QuoteUnavailableException.class,
-                () -> client.quote("MRF.NS"));
+        Quote quote = client.quote("MRF.NS");
 
-        // We would rather reject the order than fill it against a price the API
-        // itself says it could not refresh.
-        assertThat(thrown.attempts(), is(3));
-        api.verify(3, getRequestedFor(urlPathEqualTo("/quotes/MRF.NS")));
+        // Fauxnance's Indian upstream is down for hours at a time, and every
+        // stock order was rejected while it was. The last price is a price; the
+        // flag travels with it so the poller and the logs can say how old it is.
+        assertThat(quote.stale(), is(true));
+        assertThat(quote.price(), is(notNullValue()));
+        api.verify(1, getRequestedFor(urlPathEqualTo("/quotes/MRF.NS")));
     }
+
+    // ------------------------------------------------------------- retried
 
     @Test
     @DisplayName("a 503 is retried, then succeeds")

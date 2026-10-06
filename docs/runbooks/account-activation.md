@@ -263,12 +263,11 @@ With the UI running (`cd frontend && npm start`), all of it is screens:
 6. **Cash** → **Withdraw** → held at once, `✓ SUCCESS` a few seconds later.
 
 An order is `FILLED` only when the executor can price it: a valid
-`FAUXNANCE_API_KEY`, an instrument Fauxnance knows (`seed/005`: `TCS.NS`,
-`ITC.NS`, `HDFCBANK.NS`, `MRF.NS`), and a quote Fauxnance does not flag
-`stale` -- the executor refuses a stale one. When Fauxnance's Indian data is
-behind (`GET /health` reports the `IN` market `stale`), the `.NS` quotes come
-from its cache and every one is rejected `NO_PRICE`, except `MRF.NS`, which it
-prices synthetically. The fictional tickers from `seed/003` are always
+`FAUXNANCE_API_KEY` and an instrument Fauxnance knows (`seed/005`: `TCS.NS`,
+`ITC.NS`, `HDFCBANK.NS`, `MRF.NS`). A quote Fauxnance flags `stale` is still
+used: when its Indian data is behind (`GET /health` reports the `IN` market
+`stale`), orders fill at the last cached price, and the executor logs
+`using a stale quote`. The fictional tickers from `seed/003` are always
 `REJECTED` for want of a price.
 
 The rejection path: apply again with PAN `ABCPS0000A` and another address →

@@ -159,5 +159,5 @@ Then in the browser, `http://localhost:4200`:
 | `relation "bank_account" does not exist`, or KYC never passes | The database stops at migration 008 | The four commands in step 4 |
 | `Port 8085 was already in use` (Java) or `EADDRINUSE` (auth) | Something else holds the port, often a Docker stack also running | Stop it: one arrangement at a time |
 | trade-api health says `DOWN`, but the API answers | Its health check logs in to the mail server and the SMTP values are wrong | Fix `SMTP_USERNAME` / `SMTP_PASSWORD` |
-| Stock orders all `REJECTED` | No usable price: a wrong `FAUXNANCE_API_KEY`, or Fauxnance's Indian data is stale | Check the key. While the data is stale only `MRF.NS` fills |
+| Stock orders all `REJECTED` | No price at all: a wrong `FAUXNANCE_API_KEY`, or the day's quota is spent | Check the key and `GET /usage`. A stale quote is not the cause: it is used |
 | Fund orders all `REJECTED` | No NAV: `MF_NAV_API_KEY` is empty or wrong, or the fund is one of the three fictional ones | Set the key; use a real fund (`120586`, `122639`, `120716`, `118989`) |

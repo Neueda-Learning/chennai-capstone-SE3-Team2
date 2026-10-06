@@ -63,17 +63,15 @@ public class FauxnanceQuoteClient implements QuoteSource {
             }
 
             if (outcome.quote != null) {
-                JsonNode meta = outcome.body.path("meta");
-                boolean stale = meta.path("stale").asBoolean(false);
-
-                if (!stale) {
-                    return outcome.quote;
+                // A stale quote is still the last price anyone has, and it is
+                // used. Fauxnance's Indian upstream goes dark for hours, and
+                // refusing it rejected every stock order for as long. The flag
+                // stays on the quote for the poller and the log.
+                if (outcome.quote.stale()) {
+                    log.info("using a stale quote for {} (source={}, as of {})",
+                            symbol, outcome.quote.source(), outcome.quote.asOf());
                 }
-                // A 200 we refuse to use. See the class comment.
-                log.warn("quote for {} is stale (source={}), attempt {} of {}",
-                        symbol, meta.path("source").asText("unknown"),
-                        attempt, config.maxAttempts());
-                outcome = Outcome.retryable(Duration.ZERO, "stale quote");
+                return outcome.quote;
             }
 
             if (!outcome.retryable) {

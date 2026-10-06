@@ -29,9 +29,8 @@ import java.time.Instant;
  *       may be waking up or briefly over its limit</li>
  *   <li>404 (unknown fund), 422 (not an ISIN or scheme code), 401 (key
  *       refused) -- refused at once; asking again cannot change the answer</li>
- *   <li>a stale NAV -- refused at once: a NAV changes once a day, so a second
- *       ask a second later returns the same stale number</li>
  * </ul>
+ * A NAV the service marks stale is used, and marked stale on the quote.
  */
 @Component
 public class MfNavClient implements NavSource {
@@ -127,14 +126,14 @@ public class MfNavClient implements NavSource {
             if (!data.hasNonNull("nav")) {
                 return Outcome.refuse("response carried no NAV");
             }
-            if (meta.path("stale").asBoolean(false)) {
-                return Outcome.refuse("stale NAV, dated " + data.path("navDate").asText("unknown"));
-            }
             // Read as text, never through double: a paisa must not go missing.
             BigDecimal nav = new BigDecimal(data.path("nav").asText());
             Instant asOf = meta.hasNonNull("asOf") ? Instant.parse(meta.path("asOf").asText()) : null;
+            // A stale NAV is still the NAV the fund last published, and a fund
+            // deals at it. The flag travels with the price.
             return Outcome.ok(Quote.ofNav(identifier, nav, asOf,
-                    data.path("navDate").asText("unknown"), meta.path("source").asText("unknown")));
+                    data.path("navDate").asText("unknown"), meta.path("source").asText("unknown"),
+                    meta.path("stale").asBoolean(false)));
         } catch (Exception e) {
             log.warn("unparseable NAV response for {}: {}", identifier, e.getClass().getSimpleName());
             return Outcome.refuse("unparseable response");

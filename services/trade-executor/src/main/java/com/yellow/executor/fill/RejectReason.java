@@ -31,7 +31,7 @@ public enum RejectReason {
 
     /**
      * No price could be obtained: Fauxnance or the MF NAV service unreachable,
-     * out of quota, not knowing the instrument, or serving only a stale price.
+     * out of quota, or not knowing the instrument. A stale price is still a price.
      */
     NO_PRICE(false);
 

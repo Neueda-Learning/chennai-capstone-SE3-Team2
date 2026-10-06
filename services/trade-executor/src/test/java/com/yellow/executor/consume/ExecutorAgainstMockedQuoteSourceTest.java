@@ -152,15 +152,15 @@ class ExecutorAgainstMockedQuoteSourceTest {
     }
 
     @Test
-    @DisplayName("a stale quote on every attempt resolves as NO_PRICE rather than filling at an expired price")
-    void permanentlyStaleResolves() {
+    @DisplayName("a stale quote fills the order like a fresh one, from a single request")
+    void staleQuoteFills() {
         mapper.given(order("BUY", "4", "126000.00"), account("750000", "ACTIVE"));
         fauxnance.stubFor(get(urlPathEqualTo("/quotes/MRF.NS")).willReturn(quoteResponse(true)));
 
         service.execute(ORDER_ID);
 
-        assertThat(mapper.findOrder(ORDER_ID).getStatus(), is("REJECTED"));
-        assertThat(mapper.lastReason, is("NO_PRICE"));
+        assertThat(mapper.findOrder(ORDER_ID).getStatus(), is("FILLED"));
+        assertThat(fauxnance.getAllServeEvents().size(), is(1));
     }
 
     @Test

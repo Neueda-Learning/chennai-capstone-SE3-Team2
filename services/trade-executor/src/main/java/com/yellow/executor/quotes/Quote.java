@@ -29,8 +29,14 @@ public record Quote(
      * @param navDate the NAV's own date, carried as the market state
      */
     public static Quote ofNav(String symbol, BigDecimal nav, Instant asOf, String navDate, String source) {
+        return ofNav(symbol, nav, asOf, navDate, source, false);
+    }
+
+    /** As above, for a NAV the service itself marked stale. It is still the price a fund deals at. */
+    public static Quote ofNav(String symbol, BigDecimal nav, Instant asOf, String navDate, String source,
+                              boolean stale) {
         return new Quote(symbol, nav, nav, nav, BigDecimal.ZERO, "INR", null, null, null,
-                asOf, "NAV " + navDate, false, source);
+                asOf, "NAV " + navDate, stale, source);
     }
 
     /**

@@ -82,13 +82,16 @@ class MfNavClientTest {
     }
 
     @Test
-    @DisplayName("a stale NAV is refused at once: a NAV changes once a day, so asking again cannot help")
-    void staleNavIsRefused() {
+    @DisplayName("a stale NAV is used as it is, marked stale, without asking again")
+    void staleNavIsUsed() {
         api.stubFor(get(urlPathEqualTo(PATH)).willReturn(ok(body(true))));
 
-        QuoteUnavailableException e = assertThrows(QuoteUnavailableException.class, () -> client(KEY).nav("122639"));
+        Quote quote = client(KEY).nav("122639");
 
-        assertThat(e.getMessage(), containsString("stale"));
+        // A fund deals at its latest published NAV, however old the service
+        // says it is; the flag travels with the price.
+        assertThat(quote.stale(), is(true));
+        assertThat(quote.price(), comparesEqualTo(new BigDecimal("88.2569")));
         api.verify(1, getRequestedFor(urlPathEqualTo(PATH)));
     }
 
