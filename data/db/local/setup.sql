@@ -88,6 +88,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE :"superuser" IN SCHEMA public
 \ir ../seed/005_fauxnance_instruments.sql
 \ir ../seed/006_bank_accounts.sql
 \ir ../seed/007_mf_nav_funds.sql
+\ir ../seed/008_instrument_universe.sql
 
 -- ---------------------------------------------------------------------
 -- auth: privileges, then its migrations (13-auth-schema.sh)
