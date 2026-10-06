@@ -38,16 +38,59 @@ export class InstrumentsService extends BaseService {
     }
 
     /**
-     * The instruments a customer may order, by symbol
+     * Find instruments -- by text, by symbol, or every tradable one
+     * Three ways to ask, one at a time:  - &#x60;q&#x60; searches the tradable instruments by symbol and by name, best match   first: the exact symbol, then symbols starting with it, then names   starting with it, then names containing it. At most &#x60;limit&#x60; results. - &#x60;symbols&#x60; looks named instruments up, delisted ones included, so that a   holding in one can still be labelled. Unknown symbols are left out. - Neither: every tradable instrument, by symbol.  &#x60;type&#x60; narrows &#x60;q&#x60;, or the full list, to one instrument type. 
      * @endpoint get /api/v1/instruments
+     * @param q 
+     * @param type 
+     * @param limit The most results a &#x60;q&#x60; search returns.
+     * @param symbols 
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public getTradableInstruments(observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<Array<InstrumentResponse>>;
-    public getTradableInstruments(observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<Array<InstrumentResponse>>>;
-    public getTradableInstruments(observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<Array<InstrumentResponse>>>;
-    public getTradableInstruments(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public getTradableInstruments(q?: string, type?: 'STOCK' | 'ETF' | 'MF', limit?: number, symbols?: Array<string>, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<Array<InstrumentResponse>>;
+    public getTradableInstruments(q?: string, type?: 'STOCK' | 'ETF' | 'MF', limit?: number, symbols?: Array<string>, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<Array<InstrumentResponse>>>;
+    public getTradableInstruments(q?: string, type?: 'STOCK' | 'ETF' | 'MF', limit?: number, symbols?: Array<string>, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<Array<InstrumentResponse>>>;
+    public getTradableInstruments(q?: string, type?: 'STOCK' | 'ETF' | 'MF', limit?: number, symbols?: Array<string>, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+
+        let localVarQueryParameters = new OpenApiHttpParams(this.encoder);
+
+        localVarQueryParameters = this.addToHttpParams(
+            localVarQueryParameters,
+            'q',
+            <any>q,
+            QueryParamStyle.Form,
+            true,
+        );
+
+
+        localVarQueryParameters = this.addToHttpParams(
+            localVarQueryParameters,
+            'type',
+            <any>type,
+            QueryParamStyle.Form,
+            true,
+        );
+
+
+        localVarQueryParameters = this.addToHttpParams(
+            localVarQueryParameters,
+            'limit',
+            <any>limit,
+            QueryParamStyle.Form,
+            true,
+        );
+
+
+        localVarQueryParameters = this.addToHttpParams(
+            localVarQueryParameters,
+            'symbols',
+            <any>symbols,
+            QueryParamStyle.Form,
+            false,
+        );
+
 
         let localVarHeaders = this.defaultHeaders;
 
@@ -82,6 +125,7 @@ export class InstrumentsService extends BaseService {
         return this.httpClient.request<Array<InstrumentResponse>>('get', `${basePath}${localVarPath}`,
             {
                 context: localVarHttpContext,
+                params: localVarQueryParameters.toHttpParams(),
                 responseType: <any>responseType_,
                 ...(withCredentials ? { withCredentials } : {}),
                 headers: localVarHeaders,

@@ -62,10 +62,58 @@ paths:
     get:
       tags: [Instruments]
       operationId: getTradableInstruments
-      summary: The instruments a customer may order, by symbol
+      summary: Find instruments -- by text, by symbol, or every tradable one
+      description: |
+        Three ways to ask, one at a time:
+
+        - `q` searches the tradable instruments by symbol and by name, best match
+          first: the exact symbol, then symbols starting with it, then names
+          starting with it, then names containing it. At most `limit` results.
+        - `symbols` looks named instruments up, delisted ones included, so that a
+          holding in one can still be labelled. Unknown symbols are left out.
+        - Neither: every tradable instrument, by symbol.
+
+        `type` narrows `q`, or the full list, to one instrument type.
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 50
+          example: tata
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [STOCK, ETF, MF]
+        - name: limit
+          in: query
+          required: false
+          description: The most results a `q` search returns.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+        - name: symbols
+          in: query
+          required: false
+          style: form
+          explode: false
+          schema:
+            type: array
+            minItems: 1
+            maxItems: 50
+            items:
+              type: string
+              maxLength: 30
+          example: [MRF.NS, '122639']
       responses:
         '200':
-          description: Tradable instruments; delisted ones are left out
+          description: Matching instruments
           content:
             application/json:
               schema:
@@ -73,6 +121,8 @@ paths:
                 items:
                   $ref: '#/components/schemas/InstrumentResponse'
         '401':
+          $ref: '#/components/responses/Error'
+        '422':
           $ref: '#/components/responses/Error'
 
   /api/v1/accounts/{id}/bank-account:
@@ -257,7 +307,7 @@ components:
 
     InstrumentResponse:
       type: object
-      required: [symbol, name, type]
+      required: [symbol, name, type, tradable]
       properties:
         symbol:
           type: string
@@ -271,6 +321,9 @@ components:
           type: string
           nullable: true
           description: NSE or BSE; null for a mutual fund.
+        tradable:
+          type: boolean
+          description: False for a delisted instrument, which only a `symbols` lookup returns.
 
     BankAccountResponse:
       type: object

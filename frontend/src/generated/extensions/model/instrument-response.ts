@@ -20,6 +20,10 @@ export interface InstrumentResponse {
      * NSE or BSE; null for a mutual fund.
      */
     exchange?: string | null;
+    /**
+     * False for a delisted instrument, which only a `symbols` lookup returns.
+     */
+    tradable: boolean;
 }
 export namespace InstrumentResponse {
     export const TypeEnum = {
