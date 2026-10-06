@@ -1,0 +1,142 @@
+openapi: 3.0.3
+info:
+  title: Trade advice and signals
+  version: 1.0.0
+  description: |
+    Sprint 10 stretch module `com.yellow.trade.advice`, inside the Trade REST API. Written
+    before the controller.
+
+    A stated view on one instrument: BUY, SELL or HOLD, with how strong, the numbers behind it
+    and one sentence saying what produced it. One methodology: the 20-day against the 50-day
+    simple moving average of daily closes (the trend), confirmed by the 14-day RSI. The daily
+    candles come cached from the market-data module (they do not move inside a day); the latest
+    price comes from `market-data` (consumer group `advice-service`). Recomputed on a timer,
+    not on every quote.
+
+    Information, not advice to trade: the response says so, and the screen shows it. Market
+    data is public, so any signed-in customer may read any instrument's signal; there is no
+    account in the path to compare the token against.
+
+    Same error envelope as the contracts: `{ "errorCode", "message" }`.
+
+servers:
+  - url: http://localhost:8085
+    description: Local stack
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Advice
+    description: Signals computed from real candles.
+
+paths:
+  /api/v1/advice/{symbol}:
+    parameters:
+      - name: symbol
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 30
+    get:
+      tags: [Advice]
+      operationId: getSignal
+      summary: The signal for one stock
+      description: |
+        A fund has no daily candles here, so no signal: `VAL-422`. Too little history for a
+        50-day average is a HOLD saying so. No candles to be had at all is `MKT-503`.
+      responses:
+        '200':
+          description: The signal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Signal'
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    Error:
+      description: The platform's error envelope
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    Signal:
+      type: object
+      required: [symbol, direction, strength, methodology, reason, figures, computedAt, disclaimer]
+      properties:
+        symbol:
+          type: string
+        direction:
+          type: string
+          enum: [BUY, SELL, HOLD]
+        strength:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: How far the averages are apart and how the RSI agrees, as 0 to 100.
+        methodology:
+          type: string
+          example: 20/50-day moving average crossover, confirmed by RSI(14)
+        reason:
+          type: string
+          example: The 20-day average is 3.1% above the 50-day and RSI is 58, so the trend is up.
+        figures:
+          $ref: '#/components/schemas/SignalFigures'
+        computedAt:
+          type: string
+          format: date-time
+        disclaimer:
+          type: string
+          example: Information, not advice. Computed from delayed educational data.
+
+    SignalFigures:
+      type: object
+      required: [days]
+      properties:
+        sma20:
+          type: number
+          nullable: true
+        sma50:
+          type: number
+          nullable: true
+        rsi14:
+          type: number
+          nullable: true
+        lastPrice:
+          type: number
+          nullable: true
+        priceAsOf:
+          type: string
+          format: date-time
+          nullable: true
+        days:
+          type: integer
+          description: How many daily closes it was computed from.
+
+    ErrorResponse:
+      type: object
+      required: [errorCode, message]
+      properties:
+        errorCode:
+          type: string
+          enum: [AUTH-401, VAL-422, INS-404, MKT-503]
+        message:
+          type: string

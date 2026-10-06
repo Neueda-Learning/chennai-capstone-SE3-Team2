@@ -38,6 +38,73 @@
           "fileNaming": "kebab-case",
           "supportsES6": true
         }
+      },
+      "preferences": {
+        "generatorName": "typescript-angular",
+        "inputSpec": "../services/trade-api/openapi/preferences.yaml",
+        "output": "src/generated/preferences",
+        "additionalProperties": {
+          "ngVersion": "21.0.0",
+          "providedIn": "root",
+          "fileNaming": "kebab-case",
+          "supportsES6": true
+        }
+      },
+      "notifications": {
+        "generatorName": "typescript-angular",
+        "inputSpec": "../services/trade-api/openapi/notifications.yaml",
+        "output": "src/generated/notifications",
+        "additionalProperties": {
+          "ngVersion": "21.0.0",
+          "providedIn": "root",
+          "fileNaming": "kebab-case",
+          "supportsES6": true
+        }
+      },
+      "watchlists": {
+        "generatorName": "typescript-angular",
+        "inputSpec": "../services/trade-api/openapi/watchlists.yaml",
+        "output": "src/generated/watchlists",
+        "additionalProperties": {
+          "ngVersion": "21.0.0",
+          "providedIn": "root",
+          "fileNaming": "kebab-case",
+          "supportsES6": true
+        }
+      },
+      "portfolio": {
+        "generatorName": "typescript-angular",
+        "inputSpec": "../contracts/portfolio-api.yaml",
+        "output": "src/generated/portfolio",
+        "skipValidateSpec": true,
+        "additionalProperties": {
+          "ngVersion": "21.0.0",
+          "providedIn": "root",
+          "fileNaming": "kebab-case",
+          "supportsES6": true
+        }
+      },
+      "advice": {
+        "generatorName": "typescript-angular",
+        "inputSpec": "../services/trade-api/openapi/advice.yaml",
+        "output": "src/generated/advice",
+        "additionalProperties": {
+          "ngVersion": "21.0.0",
+          "providedIn": "root",
+          "fileNaming": "kebab-case",
+          "supportsES6": true
+        }
+      },
+      "strategy": {
+        "generatorName": "typescript-angular",
+        "inputSpec": "../services/trade-api/openapi/strategy.yaml",
+        "output": "src/generated/strategy",
+        "additionalProperties": {
+          "ngVersion": "21.0.0",
+          "providedIn": "root",
+          "fileNaming": "kebab-case",
+          "supportsES6": true
+        }
       }
     }
   }
