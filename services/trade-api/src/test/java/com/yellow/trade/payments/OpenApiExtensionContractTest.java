@@ -2,6 +2,10 @@ package com.yellow.trade.payments;
 
 import com.yellow.trade.instruments.InstrumentController;
 import com.yellow.trade.instruments.InstrumentResponse;
+import com.yellow.trade.marketdata.Candle;
+import com.yellow.trade.marketdata.CandleSeries;
+import com.yellow.trade.marketdata.MarketDataController;
+import com.yellow.trade.marketdata.PriceQuote;
 import com.yellow.trade.onboarding.ApplicationReceived;
 import com.yellow.trade.onboarding.ApplicationRequest;
 import com.yellow.trade.onboarding.OnboardingController;
@@ -41,7 +45,8 @@ import static org.hamcrest.Matchers.is;
 class OpenApiExtensionContractTest {
 
     private static final List<Class<?>> CONTROLLERS =
-            List.of(OnboardingController.class, InstrumentController.class, PaymentController.class);
+            List.of(OnboardingController.class, InstrumentController.class, PaymentController.class,
+                    MarketDataController.class);
 
     private static final Map<String, Class<? extends Record>> SCHEMAS = Map.of(
             "ApplicationRequest", ApplicationRequest.class,
@@ -49,7 +54,10 @@ class OpenApiExtensionContractTest {
             "InstrumentResponse", InstrumentResponse.class,
             "BankAccountResponse", BankAccountResponse.class,
             "TransferRequest", TransferRequest.class,
-            "TransferResponse", TransferResponse.class);
+            "TransferResponse", TransferResponse.class,
+            "Quote", PriceQuote.class,
+            "CandleSeries", CandleSeries.class,
+            "Candle", Candle.class);
 
     @SuppressWarnings("unchecked")
     private static Map<String, Object> spec() throws IOException {
@@ -123,6 +131,6 @@ class OpenApiExtensionContractTest {
                 PaymentRefusedException.notEnoughAvailableCash().code(),
                 PaymentRefusedException.noBankAccount().code(),
                 PaymentRefusedException.keyReused().code(),
-                "RATE-429", "ACC-403", "ACC-404", "VAL-422", "AUTH-401"));
+                "RATE-429", "ACC-403", "ACC-404", "VAL-422", "AUTH-401", "INS-404", "MKT-503"));
     }
 }

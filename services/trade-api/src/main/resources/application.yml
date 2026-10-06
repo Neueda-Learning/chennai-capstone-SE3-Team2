@@ -153,6 +153,26 @@ payments:
     enabled: ${PAYMENT_JOB_ENABLED:true}
     interval-ms: ${PAYMENT_JOB_INTERVAL_MS:2000}
 
+# Prices and charts for the screens: stocks from Fauxnance, funds from the MF
+# NAV service, both batched and kept a while (see marketdata/). An empty key
+# leaves those instruments unpriced; the service still starts.
+market-data:
+  fauxnance-base-url: ${FAUXNANCE_BASE_URL:https://y4t9nq2bqf.execute-api.eu-west-2.amazonaws.com/v1}
+  fauxnance-api-key: ${FAUXNANCE_API_KEY:}
+  mf-nav-base-url: ${MF_NAV_BASE_URL:https://mf-fauxnance-api.onrender.com}
+  mf-nav-api-key: ${MF_NAV_API_KEY:}
+  timeout: 10s
+  # The NAV service sleeps when idle; the day's first answer is slow.
+  nav-timeout: 20s
+  quote-ttl: 60s
+  # A NAV is struck once a day.
+  nav-ttl: 30m
+  # A daily candle does not move inside a day.
+  candle-ttl: 6h
+  # The key's 2000 a day are shared with the executor, which prices orders
+  # and runs the poller. This service takes at most this many.
+  fauxnance-daily-budget: ${MARKET_DATA_DAILY_BUDGET:400}
+
 # Publishes outbox_event rows (KYC_VERIFIED, today) to Kafka once their
 # transaction has committed. The same design as the auth service's relay.
 outbox:

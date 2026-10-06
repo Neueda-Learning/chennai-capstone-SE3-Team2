@@ -24,6 +24,10 @@ tags:
     description: Applying for an account. Public -- the applicant has no login yet.
   - name: Instruments
     description: What can be ordered.
+  - name: Market data
+    description: |
+      Latest prices and daily charts, served from a cache in front of Fauxnance and the MF NAV
+      service. The browser never calls either directly, and never sees a key.
   - name: Payments
     description: |
       Deposits and withdrawals, only to and from the account's registered bank account.
@@ -123,6 +127,86 @@ paths:
         '401':
           $ref: '#/components/responses/Error'
         '422':
+          $ref: '#/components/responses/Error'
+
+  /api/v1/quotes:
+    get:
+      tags: [Market data]
+      operationId: getQuotes
+      summary: The latest price of each named instrument
+      description: |
+        One entry per listed instrument among `symbols`, in the order asked; a symbol we do not
+        list is left out. Stocks are priced from Fauxnance, funds at their latest NAV. A price is
+        kept for a minute (a NAV for half an hour), so re-reading often costs nothing.
+
+        A price that could not be refreshed is the last one known, with `stale` true. An
+        instrument with no price at all has `price` null and `stale` true.
+      parameters:
+        - name: symbols
+          in: query
+          required: true
+          style: form
+          explode: false
+          schema:
+            type: array
+            minItems: 1
+            maxItems: 50
+            items:
+              type: string
+              maxLength: 30
+          example: [MRF.NS, '122639']
+      responses:
+        '200':
+          description: Latest prices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Quote'
+        '401':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+
+  /api/v1/instruments/{symbol}/candles:
+    get:
+      tags: [Market data]
+      operationId: getCandles
+      summary: Daily candles for a stock's chart
+      description: |
+        One candle per trading day, oldest first, reaching back `range` from today's date in
+        India. Kept for six hours. Funds have no chart yet (`VAL-422`). With Fauxnance
+        unreachable the last chart known is served; with none known, `MKT-503`.
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 30
+          example: MRF.NS
+        - name: range
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [1M, 3M, 6M, 1Y, 5Y]
+            default: 6M
+      responses:
+        '200':
+          description: The chart
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CandleSeries'
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+        '503':
           $ref: '#/components/responses/Error'
 
   /api/v1/accounts/{id}/bank-account:
@@ -325,6 +409,82 @@ components:
           type: boolean
           description: False for a delisted instrument, which only a `symbols` lookup returns.
 
+    Quote:
+      type: object
+      required: [symbol, currency, stale]
+      properties:
+        symbol:
+          type: string
+        price:
+          type: number
+          nullable: true
+          description: The last price, or a fund's NAV. Null when the instrument could not be priced.
+        change:
+          type: number
+          nullable: true
+          description: Against the previous close. Null for a fund.
+        changePercent:
+          type: number
+          nullable: true
+          description: Percentage points; -1.40 means down 1.4 per cent. Null for a fund.
+        previousClose:
+          type: number
+          nullable: true
+        bid:
+          type: number
+          nullable: true
+          description: What a sell settles at. Null for a fund, which deals at its NAV.
+        ask:
+          type: number
+          nullable: true
+          description: What a buy settles at. Null for a fund.
+        currency:
+          type: string
+          example: INR
+        asOf:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the price was observed; for a NAV, midnight of its NAV date in India.
+        stale:
+          type: boolean
+          description: The source could not refresh this price, or there is none.
+
+    CandleSeries:
+      type: object
+      required: [symbol, range, candles]
+      properties:
+        symbol:
+          type: string
+        range:
+          type: string
+          enum: [1M, 3M, 6M, 1Y, 5Y]
+        candles:
+          type: array
+          items:
+            $ref: '#/components/schemas/Candle'
+
+    Candle:
+      type: object
+      required: [date, open, high, low, close]
+      properties:
+        date:
+          type: string
+          format: date
+        open:
+          type: number
+        high:
+          type: number
+        low:
+          type: number
+        close:
+          type: number
+        volume:
+          type: integer
+          format: int64
+          nullable: true
+          description: Absent on a day Fauxnance filled in.
+
     BankAccountResponse:
       type: object
       required: [accountNumberLast4, ifsc, holderName]
@@ -395,6 +555,9 @@ components:
             | `PAY-404` | 404 | No bank account on file |
             | `PAY-409` | 409 | The idempotency key was used for a different transfer |
             | `RATE-429` | 429 | Too many applications from this address; try later |
-          enum: [ACC-403, ACC-404, AUTH-401, VAL-422, PAY-400, PAY-404, PAY-409, RATE-429]
+
+            And from the market-data routes, `INS-404` (no such instrument) and `MKT-503` (no price
+            source answered), the latter as `contracts/portfolio-api.yaml` defines it.
+          enum: [ACC-403, ACC-404, AUTH-401, VAL-422, PAY-400, PAY-404, PAY-409, RATE-429, INS-404, MKT-503]
         message:
           type: string

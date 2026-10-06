@@ -156,6 +156,13 @@ services:
       OUTBOX_POLL_MS: ${OUTBOX_POLL_MS:-2000}
       # How long a deposit or withdrawal waits before the gateway decides it.
       PAYMENT_DELAY: ${PAYMENT_DELAY:-3s}
+      # Prices and charts for the screens. Without a key, those instruments
+      # show unpriced; nothing else changes.
+      FAUXNANCE_API_KEY: ${FAUXNANCE_API_KEY:-}
+      FAUXNANCE_BASE_URL: ${FAUXNANCE_BASE_URL:-https://y4t9nq2bqf.execute-api.eu-west-2.amazonaws.com/v1}
+      MF_NAV_API_KEY: ${MF_NAV_API_KEY:-}
+      MF_NAV_BASE_URL: ${MF_NAV_BASE_URL:-https://mf-fauxnance-api.onrender.com}
+      MARKET_DATA_DAILY_BUDGET: ${MARKET_DATA_DAILY_BUDGET:-400}
     ports:
       - "${API_PUBLISHED_PORT:-8085}:8085"
     networks: [trading-net]
@@ -168,7 +175,8 @@ services:
     restart: unless-stopped
 
   # Consumes accepted orders, prices them, settles them. Hosts the
-  # market-data poller, so one process holds the API key and its budget.
+  # market-data poller. trade-api holds the same key for the screens, with
+  # a budget of its own (MARKET_DATA_DAILY_BUDGET).
   executor:
     build:
       # Repository root: depends on the sibling domain module.

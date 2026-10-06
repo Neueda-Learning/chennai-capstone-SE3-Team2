@@ -11,7 +11,7 @@
 
 export interface ErrorResponse { 
     /**
-     * The codes these routes answer with. The four new ones:  | Code | HTTP | Meaning | |---|---|---| | `PAY-400` | 400 | Not enough available cash for the withdrawal | | `PAY-404` | 404 | No bank account on file | | `PAY-409` | 409 | The idempotency key was used for a different transfer | | `RATE-429` | 429 | Too many applications from this address; try later | 
+     * The codes these routes answer with. The four new ones:  | Code | HTTP | Meaning | |---|---|---| | `PAY-400` | 400 | Not enough available cash for the withdrawal | | `PAY-404` | 404 | No bank account on file | | `PAY-409` | 409 | The idempotency key was used for a different transfer | | `RATE-429` | 429 | Too many applications from this address; try later |  And from the market-data routes, `INS-404` (no such instrument) and `MKT-503` (no price source answered), the latter as `contracts/portfolio-api.yaml` defines it. 
      */
     errorCode: ErrorResponse.ErrorCodeEnum;
     message: string;
@@ -26,6 +26,8 @@ export namespace ErrorResponse {
         Pay404: 'PAY-404',
         Pay409: 'PAY-409',
         Rate429: 'RATE-429',
+        Ins404: 'INS-404',
+        Mkt503: 'MKT-503',
     } as const;
     export type ErrorCodeEnum = typeof ErrorCodeEnum[keyof typeof ErrorCodeEnum];
 }

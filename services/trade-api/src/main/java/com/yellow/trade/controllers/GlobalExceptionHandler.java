@@ -12,6 +12,8 @@ import com.yellow.exceptions.OrderNotFoundException;
 import com.yellow.exceptions.StaleAccountVersionException;
 import com.yellow.exceptions.TradeException;
 import com.yellow.trade.dto.ErrorResponse;
+import com.yellow.trade.marketdata.ChartUnavailableException;
+import com.yellow.trade.marketdata.PricingUnavailableException;
 import com.yellow.trade.payments.PaymentRefusedException;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
@@ -92,6 +94,20 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handle(InvalidOrderException e) {
         log.warn("VAL-422: field {} was {}", e.field(), e.submittedValue());
         return envelope(HttpStatus.UNPROCESSABLE_ENTITY, e);
+    }
+
+    @ExceptionHandler(ChartUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handle(ChartUnavailableException e) {
+        log.warn("VAL-422: no chart for {}", e.symbol());
+        return envelope(HttpStatus.UNPROCESSABLE_ENTITY, "VAL-422", "Invalid input");
+    }
+
+    /** No price source answered: an extension code, kept with its exception like the payment codes. */
+    @ExceptionHandler(PricingUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handle(PricingUnavailableException e) {
+        log.warn("{}: {}", PricingUnavailableException.CODE, e.getMessage());
+        return envelope(HttpStatus.SERVICE_UNAVAILABLE, PricingUnavailableException.CODE,
+                PricingUnavailableException.PUBLIC_MESSAGE);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

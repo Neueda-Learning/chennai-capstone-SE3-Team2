@@ -5,6 +5,7 @@ api.base.service.ts
 api.module.ts
 api/api.ts
 api/instruments.service.ts
+api/market-data.service.ts
 api/onboarding.service.ts
 api/payments.service.ts
 configuration.ts
@@ -14,9 +15,12 @@ index.ts
 model/application-received.ts
 model/application-request.ts
 model/bank-account-response.ts
+model/candle-series.ts
+model/candle.ts
 model/error-response.ts
 model/instrument-response.ts
 model/models.ts
+model/quote.ts
 model/transfer-request.ts
 model/transfer-response.ts
 param.ts

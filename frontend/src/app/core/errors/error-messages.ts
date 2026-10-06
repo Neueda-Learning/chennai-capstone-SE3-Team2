@@ -6,7 +6,7 @@ import { ErrorResponse as TradeErrorResponse } from '../../../generated/trade';
 /** The codes each contract declares, read from the generated clients rather than typed out again. */
 export type TradeErrorCode = TradeErrorResponse.ErrorCodeEnum;
 export type AuthErrorCode = AuthErrorResponse.ErrorCodeEnum;
-/** The codes our extension routes add: onboarding, instruments, payments. */
+/** The codes our extension routes add: onboarding, instruments, payments, market data. */
 export type ExtensionErrorCode = ExtensionErrorResponse.ErrorCodeEnum;
 
 /**
@@ -44,6 +44,7 @@ export const ERROR_MESSAGES: Readonly<Record<KnownErrorCode, string>> = {
   'PAY-404': "There's no bank account registered on this account, so no money can move. Contact support.",
   'PAY-409': "That request was already used for a different transfer. Start a new one.",
   'RATE-429': 'Too many applications from this connection. Please try again in an hour.',
+  'MKT-503': "Prices can't be fetched right now. Please try again in a few minutes.",
   'SRV-500':
     'Something went wrong on our side. Your request may not have completed, so check your orders before trying again.',
 };
