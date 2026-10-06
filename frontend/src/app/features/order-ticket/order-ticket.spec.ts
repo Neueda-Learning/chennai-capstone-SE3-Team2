@@ -6,17 +6,19 @@ import { testToken } from '../../../testing/tokens';
 import { provideClients } from '../../core/api/provide-clients';
 import { ERROR_MESSAGES, UNREACHABLE_MESSAGE } from '../../core/errors/error-messages';
 import { Session } from '../../core/session/session';
+import { SEARCH_DELAY_MS } from '../../shared/instrument-search/instrument-search';
 import { OrderTicket } from './order-ticket';
 
 const TRADE = 'http://trade.test';
 const ORDERS = `${TRADE}/api/v1/orders`;
 const INSTRUMENTS = [
-  { symbol: 'INFY.NS', name: 'Infosys Ltd', type: 'STOCK', exchange: 'NSE' },
-  { symbol: 'TCS.NS', name: 'Tata Consultancy Services Ltd', type: 'STOCK', exchange: 'NSE' },
-  { symbol: 'NIFTYBEES', name: 'Nifty 50 ETF', type: 'ETF', exchange: 'NSE' },
-  { symbol: '120503', name: 'Bluechip Equity Fund', type: 'MF', exchange: null },
-  { symbol: '130000', name: 'Axis Liquid Fund', type: 'MF', exchange: null },
+  { symbol: 'INFY.NS', name: 'Infosys Ltd', type: 'STOCK', exchange: 'NSE', tradable: true },
+  { symbol: 'TCS.NS', name: 'Tata Consultancy Services Ltd', type: 'STOCK', exchange: 'NSE', tradable: true },
+  { symbol: 'NIFTYBEES', name: 'Nifty 50 ETF', type: 'ETF', exchange: 'NSE', tradable: true },
+  { symbol: '120503', name: 'Bluechip Equity Fund', type: 'MF', exchange: null, tradable: true },
+  { symbol: '130000', name: 'Axis Liquid Fund', type: 'MF', exchange: null, tradable: true },
 ];
+const INSTRUMENTS_URL = `${TRADE}/api/v1/instruments`;
 
 describe('OrderTicket', () => {
   let fixture: ComponentFixture<OrderTicket>;
@@ -31,6 +33,7 @@ describe('OrderTicket', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         provideClients({ tradeApiUrl: TRADE, authApiUrl: 'http://auth.test' }),
+        { provide: SEARCH_DELAY_MS, useValue: 0 },
       ],
     });
     TestBed.inject(Session).start(testToken({ accountId: 3 }));
@@ -45,19 +48,31 @@ describe('OrderTicket', () => {
     await settle();
   });
 
-  /** Answers the ticket's read of the tradable instruments. */
-  async function listInstruments(): Promise<void> {
-    http.expectOne(`${TRADE}/api/v1/instruments`).flush(INSTRUMENTS);
-    await settle();
-  }
-
   afterEach(() => http.verify());
 
   const field = (id: string) => page.querySelector<HTMLInputElement & HTMLSelectElement>(`[data-testid="${id}"]`)!;
 
-  function fill(order: { symbol?: string; side?: string; quantity?: string; price?: string }): void {
-    field('ticket-symbol').value = order.symbol ?? 'INFY.NS';
-    field('ticket-symbol').dispatchEvent(new Event('change'));
+  /** Searches for the symbol, as a customer types it, and picks it from the results. */
+  async function pick(symbol: string): Promise<void> {
+    if (page.querySelector('[data-testid="ticket-instrument"]')?.textContent?.includes(symbol)) {
+      return;
+    }
+    page.querySelector<HTMLButtonElement>('[data-testid="ticket-change-instrument"]')?.click();
+    await settle();
+    const box = field('instrument-search');
+    box.value = symbol;
+    box.dispatchEvent(new Event('input'));
+    await settle();
+    http
+      .expectOne((request) => request.url === INSTRUMENTS_URL && request.params.get('q') === symbol)
+      .flush(INSTRUMENTS.filter((instrument) => instrument.symbol === symbol));
+    await settle();
+    page.querySelector('[data-testid="instrument-search-option"]')!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    await settle();
+  }
+
+  async function fill(order: { symbol?: string; side?: string; quantity?: string; price?: string }): Promise<void> {
+    await pick(order.symbol ?? 'INFY.NS');
     for (const [id, value] of Object.entries({
       'ticket-quantity': order.quantity ?? '10',
       'ticket-price': order.price ?? '1450.50',
@@ -89,8 +104,7 @@ describe('OrderTicket', () => {
   }
 
   it('submits a valid order and shows the status the API returned, including NEW', async () => {
-    await listInstruments();
-    fill({ symbol: 'INFY.NS', side: 'SELL' });
+    await fill({ symbol: 'INFY.NS', side: 'SELL' });
     await submit();
 
     const request = http.expectOne(ORDERS);
@@ -116,8 +130,7 @@ describe('OrderTicket', () => {
   });
 
   it("after a fund order, sends the customer to the mutual funds dashboard, and names the fund", async () => {
-    await listInstruments();
-    fill({ symbol: '120503', quantity: '10', price: '50' });
+    await fill({ symbol: '120503', quantity: '10', price: '50' });
     await submit();
     respond(http.expectOne(ORDERS));
     await settle();
@@ -129,9 +142,8 @@ describe('OrderTicket', () => {
   });
 
   it('blocks an invalid quantity before submission', async () => {
-    await listInstruments();
     for (const quantity of ['0', '-5', '1.5', 'ten']) {
-      fill({ quantity });
+      await fill({ quantity });
       await submit();
 
       http.expectNone(ORDERS);
@@ -140,9 +152,8 @@ describe('OrderTicket', () => {
   });
 
   it('blocks a price with more than two decimal places, or not above zero, before submission', async () => {
-    await listInstruments();
     for (const price of ['10.555', '0', '0.00']) {
-      fill({ price });
+      await fill({ price });
       await submit();
 
       http.expectNone(ORDERS);
@@ -150,23 +161,7 @@ describe('OrderTicket', () => {
     }
   });
 
-  it('offers only the tradable instruments, grouped by type, and sends nothing until one is chosen', async () => {
-    await listInstruments();
-
-    const groups = [...field('ticket-symbol').querySelectorAll('optgroup')].map((group) => group.label);
-    expect(groups).toEqual(['Stocks', 'ETFs', 'Mutual funds']);
-    const options = [...field('ticket-symbol').querySelectorAll<HTMLOptionElement>('optgroup option')];
-    expect(options.map((option) => option.value)).toEqual(['INFY.NS', 'TCS.NS', 'NIFTYBEES', '130000', '120503']);
-    // A stock or ETF by its ticker, a fund by its name: nothing else. Funds
-    // in name order, since a customer looks a fund up by its name.
-    expect(options.map((option) => option.textContent?.trim())).toEqual([
-      'INFY.NS',
-      'TCS.NS',
-      'NIFTYBEES',
-      'Axis Liquid Fund',
-      'Bluechip Equity Fund',
-    ]);
-
+  it('sends nothing until an instrument is picked', async () => {
     field('ticket-quantity').value = '10';
     field('ticket-quantity').dispatchEvent(new Event('input'));
     field('ticket-price').value = '100';
@@ -174,37 +169,57 @@ describe('OrderTicket', () => {
     await submit();
 
     http.expectNone(ORDERS);
-    expect(page.textContent).toContain('Choose an instrument from the list.');
+    expect(page.textContent).toContain('Search for an instrument and pick it from the list.');
   });
 
-  it("opens filled in from a holding's Sell link, once the list shows the symbol is tradable", async () => {
+  it('shows the picked instrument in place of the search, and Change goes back to it', async () => {
+    await pick('120503');
+
+    expect(field('ticket-instrument').textContent).toContain('Bluechip Equity Fund');
+    expect(field('ticket-instrument').textContent).not.toContain('120503');
+    page.querySelector<HTMLButtonElement>('[data-testid="ticket-change-instrument"]')!.click();
+    await settle();
+    expect(page.querySelector('[data-testid="ticket-instrument"]')).toBeNull();
+    expect(field('instrument-search')).not.toBeNull();
+  });
+
+  it("opens filled in from a holding's Sell link, once a lookup shows the symbol is tradable", async () => {
     fixture.componentRef.setInput('symbol', 'tcs.ns');
     fixture.componentRef.setInput('side', 'SELL');
-    await listInstruments();
+    await settle();
+    http.expectOne((request) => request.url === INSTRUMENTS_URL && request.params.get('symbols') === 'TCS.NS').flush([INSTRUMENTS[1]]);
+    await settle();
 
-    expect(field('ticket-symbol').value).toBe('TCS.NS');
+    expect(field('ticket-instrument').textContent).toContain('TCS.NS');
     expect(field('ticket-side').value).toBe('SELL');
   });
 
   it('ignores a linked symbol that is not tradable, and a side that is neither BUY nor SELL', async () => {
-    fixture.componentRef.setInput('symbol', 'NOPE.NS');
+    fixture.componentRef.setInput('symbol', 'MERSTL');
     fixture.componentRef.setInput('side', 'SHORT');
-    await listInstruments();
+    await settle();
+    http
+      .expectOne((request) => request.url === INSTRUMENTS_URL && request.params.get('symbols') === 'MERSTL')
+      .flush([{ symbol: 'MERSTL', name: 'Meridian Steel Ltd', type: 'STOCK', exchange: 'NSE', tradable: false }]);
+    await settle();
 
-    expect(field('ticket-symbol').value).toBe('');
+    expect(page.querySelector('[data-testid="ticket-instrument"]')).toBeNull();
     expect(field('ticket-side').value).toBe('BUY');
   });
 
-  it('says so when the instruments cannot be read', async () => {
-    http.expectOne(`${TRADE}/api/v1/instruments`).flush({ errorCode: 'AUTH-401', message: 'x' }, { status: 401, statusText: 'Unauthorized' });
+  it('says so when a linked symbol cannot be looked up', async () => {
+    fixture.componentRef.setInput('symbol', 'TCS.NS');
+    await settle();
+    http
+      .expectOne((request) => request.url === INSTRUMENTS_URL)
+      .flush({ errorCode: 'AUTH-401', message: 'x' }, { status: 401, statusText: 'Unauthorized' });
     await settle();
 
     expect(page.querySelector('[role="alert"]')?.textContent).toContain('Your session has expired');
   });
 
   it('shows the mapped message for a business-rule rejection, not the API text', async () => {
-    await listInstruments();
-    fill({});
+    await fill({});
     await submit();
 
     http.expectOne(ORDERS).flush({ errorCode: 'ORD-400', message: 'Insufficient funds' }, { status: 400, statusText: 'Bad Request' });
@@ -216,11 +231,10 @@ describe('OrderTicket', () => {
   });
 
   it("shows the account by the reference the customer knows, read-only, and sends the token's account", async () => {
-    await listInstruments();
     expect(field('ticket-account').value).toBe('ACC-000003');
     expect(field('ticket-account').readOnly).toBe(true);
 
-    fill({});
+    await fill({});
     await submit();
 
     const request = http.expectOne(ORDERS);
@@ -230,8 +244,7 @@ describe('OrderTicket', () => {
   });
 
   it('reuses the idempotency key when retrying an order whose response never arrived', async () => {
-    await listInstruments();
-    fill({});
+    await fill({});
     await submit();
     const first = http.expectOne(ORDERS);
     const key = first.request.body.idempotencyKey;
@@ -245,7 +258,7 @@ describe('OrderTicket', () => {
     respond(retry);
     await settle();
 
-    fill({ quantity: '5' });
+    await fill({ quantity: '5' });
     await submit();
     const next = http.expectOne(ORDERS);
     expect(next.request.body.idempotencyKey).not.toBe(key);

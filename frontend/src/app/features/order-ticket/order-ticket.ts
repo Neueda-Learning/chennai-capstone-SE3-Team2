@@ -1,6 +1,6 @@
 import { CurrencyPipe, DecimalPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { Component, effect, inject, input, signal, untracked } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { InstrumentResponse } from '../../../generated/extensions';
@@ -10,6 +10,7 @@ import { TradeApi } from '../../core/api/trade-api';
 import { CurrentAccount } from '../../core/session/current-account';
 import { Session } from '../../core/session/session';
 import { ErrorMessage } from '../../shared/error-message/error-message';
+import { InstrumentSearch } from '../../shared/instrument-search/instrument-search';
 import { priceAboveZeroTwoDecimals, wholeNumberAboveZero } from './order-validators';
 
 /** What each status the API can return means to the person who just placed the order. */
@@ -20,22 +21,15 @@ const OUTCOME: Readonly<Record<OrderStatus, string>> = {
   CANCELLED: 'Cancelled.',
 };
 
-/** The picker's groups, in the order they are listed. */
-const GROUPS: ReadonlyArray<{ readonly type: InstrumentResponse['type']; readonly label: string }> = [
-  { type: 'STOCK', label: 'Stocks' },
-  { type: 'ETF', label: 'ETFs' },
-  { type: 'MF', label: 'Mutual funds' },
-];
-
 @Component({
   selector: 'app-order-ticket',
-  imports: [ReactiveFormsModule, ErrorMessage, RouterLink, CurrencyPipe, DecimalPipe],
+  imports: [ReactiveFormsModule, ErrorMessage, InstrumentSearch, RouterLink, CurrencyPipe, DecimalPipe],
   templateUrl: './order-ticket.html',
   styleUrl: './order-ticket.css',
 })
 export class OrderTicket {
   private readonly tradeApi = inject(TradeApi);
-  /** Shared with the dashboards: read once a session, not on every visit to the ticket. */
+  /** Names the instrument the result is about; looks up a linked symbol. */
   protected readonly catalog = inject(InstrumentCatalog);
 
   /** ?symbol= and ?side=, so a holding's Sell link opens the ticket filled in. */
@@ -57,7 +51,7 @@ export class OrderTicket {
   protected readonly outcome = OUTCOME;
 
   protected readonly form = new FormGroup({
-    // Picked from the tradable list, so only a symbol the API knows can be sent.
+    // Picked from a search of the tradable instruments, so only a symbol the API knows can be sent.
     symbol: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
     side: new FormControl<OrderSide>(OrderSide.Buy, { nonNullable: true }),
     quantity: new FormControl('', { nonNullable: true, validators: [Validators.required, wholeNumberAboveZero] }),
@@ -68,18 +62,10 @@ export class OrderTicket {
   protected readonly result = signal<OrderResponse | null>(null);
   protected readonly error = signal<unknown>(null);
 
-  protected readonly instruments = this.catalog.instruments;
-  protected readonly instrumentsError = this.catalog.error;
-  /** Stocks and ETFs by ticker, as the API lists them; funds by name, since that is how one is looked up. */
-  protected readonly groups = computed(() =>
-    GROUPS.map((group) => {
-      const instruments = (this.instruments() ?? []).filter((instrument) => instrument.type === group.type);
-      return {
-        label: group.label,
-        instruments: group.type === 'MF' ? [...instruments].sort((a, b) => a.name.localeCompare(b.name)) : instruments,
-      };
-    }).filter((group) => group.instruments.length > 0),
-  );
+  /** The instrument picked, shown in place of the search until changed. */
+  protected readonly chosen = signal<InstrumentResponse | null>(null);
+  /** Why a linked symbol could not be looked up. */
+  protected readonly lookupError = this.catalog.error;
 
   /**
    * The idempotency key of an order whose fate is unknown: sent, but no
@@ -90,12 +76,11 @@ export class OrderTicket {
   private unconfirmed: { readonly key: string; readonly order: string } | null = null;
 
   constructor() {
-    void this.catalog.load();
-    // A symbol from the link is taken only once the list shows it is tradable.
+    // A symbol from the link is taken only once a lookup shows it is tradable.
     effect(() => {
       const wanted = this.symbol()?.trim().toUpperCase();
-      if (wanted && this.instruments()?.some((instrument) => instrument.symbol === wanted)) {
-        untracked(() => this.form.controls.symbol.setValue(wanted));
+      if (wanted) {
+        untracked(() => void this.prefill(wanted));
       }
     });
     effect(() => {
@@ -106,9 +91,23 @@ export class OrderTicket {
     });
   }
 
-  /** How the picker names an instrument: a stock or ETF by its ticker, a fund by its name. */
-  protected optionLabel(instrument: InstrumentResponse): string {
-    return instrument.type === 'MF' ? instrument.name : instrument.symbol;
+  private async prefill(symbol: string): Promise<void> {
+    await this.catalog.resolve([symbol]);
+    const instrument = this.catalog.get(symbol);
+    if (instrument?.tradable) {
+      this.choose(instrument);
+    }
+  }
+
+  protected choose(instrument: InstrumentResponse): void {
+    this.chosen.set(instrument);
+    this.form.controls.symbol.setValue(instrument.symbol);
+  }
+
+  /** Back to the search, to pick another. */
+  protected change(): void {
+    this.chosen.set(null);
+    this.form.controls.symbol.setValue('');
   }
 
   async submit(): Promise<void> {

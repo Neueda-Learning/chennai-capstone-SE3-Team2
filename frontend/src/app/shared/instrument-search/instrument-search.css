@@ -1,0 +1,65 @@
+:host {
+  display: block;
+}
+
+.search {
+  position: relative;
+}
+
+input {
+  width: 100%;
+}
+
+.results {
+  position: absolute;
+  z-index: 20;
+  inset-inline: 0;
+  top: calc(100% + 4px);
+  max-height: 22rem;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0.25rem 0;
+  list-style: none;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 28px rgb(0 0 0 / 0.45);
+}
+
+.results li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+}
+
+.results li.active,
+.results li:hover {
+  background: var(--bg-soft);
+}
+
+.results li.active {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.primary {
+  color: var(--text);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.secondary {
+  color: var(--muted);
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.results li.none {
+  color: var(--muted);
+  cursor: default;
+}

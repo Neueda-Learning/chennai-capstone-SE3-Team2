@@ -21,3 +21,28 @@ button[type='submit'] {
 .alert p {
   margin: 0 0 0.5rem;
 }
+
+.chosen {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.chosen .name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.chosen .detail {
+  color: var(--muted);
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

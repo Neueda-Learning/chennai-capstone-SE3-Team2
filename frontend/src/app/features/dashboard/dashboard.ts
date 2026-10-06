@@ -56,8 +56,6 @@ export class Dashboard {
   });
 
   constructor() {
-    // Names, and which dashboard each holding belongs on. Read once a session.
-    void this.catalog.load();
     effect(() => {
       const accountId = this.accountId();
       if (accountId !== null) {
@@ -76,6 +74,8 @@ export class Dashboard {
       this.account.set(account);
       this.user.set(user);
       this.positions.set(positions);
+      // Each holding's name, and which dashboard it belongs on.
+      void this.catalog.resolve(positions.map((position) => position.symbol));
     } catch (failure) {
       this.error.set(failure);
     }
@@ -91,6 +91,7 @@ export class Dashboard {
       const [account, positions] = await Promise.all([this.tradeApi.account(accountId), this.tradeApi.positions(accountId)]);
       this.account.set(account);
       this.positions.set(positions);
+      void this.catalog.resolve(positions.map((position) => position.symbol));
     } catch (failure) {
       this.error.set(failure);
     }

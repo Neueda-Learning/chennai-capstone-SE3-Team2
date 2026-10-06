@@ -1,0 +1,42 @@
+<div class="search">
+  <input
+    type="search"
+    role="combobox"
+    autocomplete="off"
+    spellcheck="false"
+    data-testid="instrument-search"
+    [id]="inputId()"
+    [value]="text()"
+    [placeholder]="placeholder()"
+    [attr.aria-label]="ariaLabel()"
+    [attr.aria-invalid]="invalid()"
+    [attr.aria-describedby]="describedBy()"
+    aria-autocomplete="list"
+    [attr.aria-controls]="listId()"
+    [attr.aria-expanded]="results() !== null"
+    [attr.aria-activedescendant]="active() >= 0 ? optionId(active()) : null"
+    (input)="typed($any($event.target).value)"
+    (keydown)="keydown($event)"
+    (blur)="close()"
+  />
+  @if (results(); as results) {
+    <ul class="results" role="listbox" [id]="listId()">
+      @for (instrument of results; track instrument.symbol; let i = $index) {
+        <li
+          role="option"
+          data-testid="instrument-search-option"
+          [id]="optionId(i)"
+          [class.active]="i === active()"
+          [attr.aria-selected]="i === active()"
+          (mousedown)="$event.preventDefault(); choose(instrument)"
+        >
+          <span class="primary">{{ primary(instrument) }}</span>
+          <span class="secondary">{{ secondary(instrument) }}</span>
+        </li>
+      } @empty {
+        <li class="none" role="option" aria-disabled="true">No instrument matches “{{ text().trim() }}”.</li>
+      }
+    </ul>
+  }
+</div>
+<app-error-message [error]="error()" />

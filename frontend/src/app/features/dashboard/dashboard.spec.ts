@@ -11,9 +11,10 @@ import { Dashboard } from './dashboard';
 const TRADE = 'http://trade.test';
 const AUTH = 'http://auth.test';
 const INSTRUMENTS = [
-  { symbol: 'TCS.NS', name: 'Tata Consultancy Services Ltd', type: 'STOCK', exchange: 'NSE' },
-  { symbol: '120503', name: 'Bluechip Equity Fund', type: 'MF', exchange: null },
-  { symbol: 'SCH100001', name: 'Bluechip Growth Fund', type: 'MF', exchange: null },
+  { symbol: 'TCS.NS', name: 'Tata Consultancy Services Ltd', type: 'STOCK', exchange: 'NSE', tradable: true },
+  { symbol: '120503', name: 'Bluechip Equity Fund', type: 'MF', exchange: null, tradable: true },
+  { symbol: 'SCH100001', name: 'Bluechip Growth Fund', type: 'MF', exchange: null, tradable: true },
+  { symbol: 'MERSTL', name: 'Meridian Steel Ltd', type: 'STOCK', exchange: 'NSE', tradable: false },
 ];
 
 describe('Dashboard', () => {
@@ -42,9 +43,16 @@ describe('Dashboard', () => {
       fixture.componentRef.setInput('segment', segment);
     }
     await fixture.whenStable();
-    // What each instrument is called, and which dashboard it belongs on.
-    http.expectOne(`${TRADE}/api/v1/instruments`).flush(INSTRUMENTS);
     return fixture;
+  }
+
+  /** Answers the look-up of the holdings' instruments: what each is called, and its dashboard. */
+  async function lookUp(fixture: Awaited<ReturnType<typeof render>>, symbols: string[]): Promise<void> {
+    await settle(fixture);
+    http
+      .expectOne((request) => request.url === `${TRADE}/api/v1/instruments` && request.params.get('symbols') === symbols.join(','))
+      .flush(INSTRUMENTS.filter((instrument) => symbols.includes(instrument.symbol)));
+    await settle(fixture);
   }
 
   async function settle(fixture: Awaited<ReturnType<typeof render>>): Promise<void> {
@@ -97,7 +105,7 @@ describe('Dashboard', () => {
     http.expectOne(`${AUTH}/auth/me`).flush({ id: 'u-1', username: 'rohan.nair', accountId: 3, roles: ['CUSTOMER'] });
     http.expectOne(`${TRADE}/api/v1/accounts/3/positions`).flush([position('TCS.NS', 4, 3500.25), position('120503', 12.5, 41.2)]);
     http.expectOne(`${TRADE}/api/v1/accounts/3/orders`).flush([]);
-    await settle(fixture);
+    await lookUp(fixture, ['TCS.NS', '120503']);
 
     const page = fixture.nativeElement as HTMLElement;
     const rows = [...page.querySelectorAll('[data-testid="holdings-row"]')];
@@ -118,7 +126,7 @@ describe('Dashboard', () => {
     http.expectOne(`${AUTH}/auth/me`).flush({ id: 'u-1', username: 'rohan.nair', accountId: 3, roles: ['CUSTOMER'] });
     http.expectOne(`${TRADE}/api/v1/accounts/3/positions`).flush([position('MERSTL', 500, 84.3)]);
     http.expectOne(`${TRADE}/api/v1/accounts/3/orders`).flush([]);
-    await settle(fixture);
+    await lookUp(fixture, ['MERSTL']);
 
     const row = (fixture.nativeElement as HTMLElement).querySelector('[data-testid="holdings-row"]')!;
     expect(row.textContent).toContain('MERSTL');
@@ -131,7 +139,7 @@ describe('Dashboard', () => {
     http.expectOne(`${AUTH}/auth/me`).flush({ id: 'u-1', username: 'rohan.nair', accountId: 3, roles: ['CUSTOMER'] });
     http.expectOne(`${TRADE}/api/v1/accounts/3/positions`).flush([position('TCS.NS', 4, 3500.25), position('SCH100001', 3, 10)]);
     http.expectOne(`${TRADE}/api/v1/accounts/3/orders`).flush([]);
-    await settle(fixture);
+    await lookUp(fixture, ['TCS.NS', 'SCH100001']);
 
     const page = fixture.nativeElement as HTMLElement;
     const rows = [...page.querySelectorAll('[data-testid="holdings-row"]')];
@@ -177,7 +185,7 @@ describe('Dashboard', () => {
     http.expectOne(`${TRADE}/api/v1/accounts/3`).flush(account(735998.99));
     http.expectOne(`${TRADE}/api/v1/accounts/3/positions`).flush([position('TCS.NS', 4, 3500.25)]);
     http.expectNone(`${AUTH}/auth/me`);
-    await settle(fixture);
+    await lookUp(fixture, ['TCS.NS']);
 
     const page = fixture.nativeElement as HTMLElement;
     expect(page.querySelector('[data-testid="cash-balance"]')?.textContent).toContain('735,998.99');

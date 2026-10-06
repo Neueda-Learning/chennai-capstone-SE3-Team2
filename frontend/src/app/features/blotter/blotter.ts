@@ -116,6 +116,8 @@ export class Blotter {
       const orders = await this.tradeApi.orderHistory(accountId);
       this.orders.set(orders);
       this.error.set(null);
+      // Each order's instrument name, and which dashboard it belongs on.
+      void this.catalog.resolve(orders.map((order) => order.symbol));
       if (orders.some((o) => wasWorking.has(o.orderId) && o.status !== OrderStatus.New)) {
         this.settled.emit();
       }

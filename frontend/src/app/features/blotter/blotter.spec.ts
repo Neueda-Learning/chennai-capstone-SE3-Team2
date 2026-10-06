@@ -3,13 +3,18 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { OrderHistoryEntry } from '../../../generated/trade';
-import { InstrumentCatalog } from '../../core/api/instrument-catalog';
 import { provideClients } from '../../core/api/provide-clients';
 import { REREAD_POLICY } from '../../shared/reread/reread-policy';
 import { Blotter } from './blotter';
 
 const TRADE = 'http://trade.test';
 const HISTORY = `${TRADE}/api/v1/accounts/3/orders`;
+/** What the lookup of the orders' instruments answers. */
+const KNOWN = [
+  { symbol: 'INFY.NS', name: 'Infosys Ltd', type: 'STOCK', exchange: 'NSE', tradable: true },
+  { symbol: '120716', name: 'UTI Nifty 50 Index Fund', type: 'MF', exchange: null, tradable: true },
+  { symbol: 'SCH100001', name: 'Bluechip Growth Fund', type: 'MF', exchange: null, tradable: true },
+];
 
 function order(id: string, status: OrderHistoryEntry['status'], createdOn: string): OrderHistoryEntry {
   return { orderId: `ORD-${id}`, accountId: 3, symbol: 'INFY.NS', side: 'BUY', quantity: 10, price: 1450.5, executedPrice: status === 'FILLED' ? 1450.25 : null, status, createdOn };
@@ -62,6 +67,14 @@ describe('Blotter', () => {
     for (let i = 0; i < 5; i++) {
       await Promise.resolve();
     }
+    // The orders' instruments, looked up the first time they are seen.
+    for (const lookup of http.match((request) => request.url === `${TRADE}/api/v1/instruments`)) {
+      const symbols = lookup.request.params.get('symbols')!.split(',');
+      lookup.flush(KNOWN.filter((instrument) => symbols.includes(instrument.symbol)));
+    }
+    for (let i = 0; i < 5; i++) {
+      await Promise.resolve();
+    }
     await fixture.whenStable();
   }
 
@@ -99,14 +112,6 @@ describe('Blotter', () => {
     const fund = (id: string, symbol: string): OrderHistoryEntry => ({ ...order(id, 'FILLED', '2026-10-02T09:00:00Z'), symbol });
 
     it('lists funds by their type -- a scheme code that is not digits included -- and names each one', async () => {
-      const catalog = TestBed.inject(InstrumentCatalog);
-      const loaded = catalog.load();
-      http.expectOne(`${TRADE}/api/v1/instruments`).flush([
-        { symbol: 'INFY.NS', name: 'Infosys Ltd', type: 'STOCK', exchange: 'NSE' },
-        { symbol: '120716', name: 'UTI Nifty 50 Index Fund', type: 'MF', exchange: null },
-        { symbol: 'SCH100001', name: 'Bluechip Growth Fund', type: 'MF', exchange: null },
-      ]);
-      await loaded;
       fixture.componentRef.setInput('segment', 'mutual-funds');
 
       await respond([order('a', 'FILLED', '2026-10-02T09:00:00Z'), fund('b', '120716'), fund('c', 'SCH100001')]);

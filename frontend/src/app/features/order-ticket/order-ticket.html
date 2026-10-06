@@ -29,26 +29,29 @@
     <p class="hint" id="account-hint">The account your sign-in may trade. It cannot be changed here.</p>
 
     <label for="symbol">Instrument</label>
-    <select
-      id="symbol"
-      formControlName="symbol"
-      data-testid="ticket-symbol"
-      [attr.aria-invalid]="invalid('symbol')"
-      aria-describedby="symbol-error"
-    >
-      <option value="" disabled>{{ instruments() === null ? 'Loading instruments…' : 'Choose an instrument' }}</option>
-      @for (group of groups(); track group.label) {
-        <optgroup [label]="group.label">
-          @for (instrument of group.instruments; track instrument.symbol) {
-            <option [value]="instrument.symbol">{{ optionLabel(instrument) }}</option>
-          }
-        </optgroup>
+    @if (chosen(); as instrument) {
+      <div class="chosen" data-testid="ticket-instrument">
+        <span class="name">
+          <strong>{{ instrument.type === 'MF' ? instrument.name : instrument.symbol }}</strong>
+          <span class="detail">{{ instrument.type === 'MF' ? 'Mutual fund' : instrument.name }}</span>
+        </span>
+        <button type="button" class="secondary small" data-testid="ticket-change-instrument" (click)="change()">
+          Change
+        </button>
+      </div>
+    } @else {
+      <app-instrument-search
+        inputId="symbol"
+        data-testid="ticket-symbol"
+        [invalid]="invalid('symbol')"
+        describedBy="symbol-error"
+        (picked)="choose($event)"
+      />
+      @if (invalid('symbol')) {
+        <p class="field-error" id="symbol-error">Search for an instrument and pick it from the list.</p>
       }
-    </select>
-    @if (invalid('symbol')) {
-      <p class="field-error" id="symbol-error">Choose an instrument from the list.</p>
     }
-    <app-error-message [error]="instrumentsError()" />
+    <app-error-message [error]="lookupError()" />
 
     <label for="side">Side</label>
     <select id="side" formControlName="side" data-testid="ticket-side">

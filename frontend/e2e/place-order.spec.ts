@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { Page, expect, test } from '@playwright/test';
 import { env } from './env';
 import { signIn } from './sign-in';
 
@@ -6,6 +6,14 @@ import { signIn } from './sign-in';
  * Placing an order. Each test signs in afresh in its own browser context and
  * depends on no order another test placed.
  */
+/** Searches for the instrument as a customer would, and picks the matching result. */
+async function pickInstrument(page: Page, symbol: string): Promise<void> {
+  // The ticket's own search; the market watch beside it has one too.
+  await page.getByTestId('ticket-symbol').getByTestId('instrument-search').fill(symbol);
+  await page.getByRole('option', { name: new RegExp(symbol.replace('.', '\\.')) }).first().click();
+  await expect(page.getByTestId('ticket-instrument')).toBeVisible();
+}
+
 test.describe('place an order', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/trade');
@@ -30,7 +38,7 @@ test.describe('place an order', () => {
       }
     });
 
-    await page.getByTestId('ticket-symbol').selectOption(env.symbol);
+    await pickInstrument(page, env.symbol);
     await page.getByTestId('ticket-quantity').fill('0');
     await page.getByTestId('ticket-price').fill('10.555');
     await page.getByTestId('ticket-submit').click();
@@ -41,7 +49,7 @@ test.describe('place an order', () => {
   });
 
   test('a placed order shows whatever status the API returned', async ({ page }) => {
-    await page.getByTestId('ticket-symbol').selectOption(env.symbol);
+    await pickInstrument(page, env.symbol);
     await page.getByTestId('ticket-side').selectOption('BUY');
     await page.getByTestId('ticket-quantity').fill('1');
     await page.getByTestId('ticket-price').fill('100.00');
