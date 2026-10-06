@@ -5,43 +5,125 @@
   gap: 1rem;
 }
 
-.actions {
-  display: flex;
-  gap: 0.75rem;
-}
-
-
-.summary dl {
+.cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
   gap: 1rem;
-  margin: 0;
+  margin-bottom: 1rem;
 }
 
-.summary dt {
+.card h2 {
+  margin: 0 0 0.75rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: var(--muted);
-  font-size: 0.85rem;
 }
 
-.summary dd {
+.figure {
+  margin: 0;
+  font-size: 1.8rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.figure .percent {
+  margin-left: 0.5rem;
+  font-size: 1rem;
+}
+
+.label {
+  margin: 0.2rem 0 1rem;
+  color: var(--muted);
+}
+
+.small {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 0.5rem 1rem;
+  margin: 0 0 1rem;
+}
+
+.small dt {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.small dd {
   margin: 0;
   font-weight: 600;
-  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.up {
+  color: var(--success);
+}
+
+.down {
+  color: var(--danger);
 }
 
 .signed-in {
   color: var(--muted);
-  margin: 1rem 0 0;
+  margin: 0 0 0.75rem;
 }
 
-@media (max-width: 900px) {
-  .title {
-    flex-direction: column;
-    align-items: flex-start;
+.recent-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.open {
+  color: var(--warning);
+  font-size: 0.85rem;
+}
+
+.recent ul {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+}
+
+.recent li {
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+
+.recent li a {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.side {
+  font-weight: 700;
+  color: var(--success);
+}
+
+.side.sell {
+  color: var(--danger);
+}
+
+.qty,
+.when {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 640px) {
+  .recent li {
+    grid-template-columns: 3rem minmax(0, 1fr) auto;
   }
 
-  .actions {
-    width: 100%;
-    flex-wrap: wrap;
+  .recent li .qty,
+  .recent li .when {
+    display: none;
   }
 }

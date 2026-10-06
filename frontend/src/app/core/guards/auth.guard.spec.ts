@@ -114,7 +114,15 @@ describe('the application routes', () => {
   it('guard every screen behind sign-in', () => {
     const guarded = appRoutes.find((route) => route.canActivateChild?.includes(authGuard));
     const screens = (guarded?.children ?? []).filter((child) => child.loadComponent).map((child) => child.path);
-    expect(screens).toEqual(['stocks', 'mutual-funds', 'trade', 'cash', 'instrument/:symbol', 'market-watch']);
+    expect(screens).toEqual(['dashboard', 'orders', 'holdings', 'funds', 'trade', 'instrument/:symbol', 'market-watch']);
+  });
+
+  it('keeps the old addresses working: the two dashboards and Cash', () => {
+    const guarded = appRoutes.find((route) => route.canActivateChild?.includes(authGuard));
+    const redirects = Object.fromEntries(
+      (guarded?.children ?? []).filter((child) => typeof child.redirectTo === 'string').map((child) => [child.path, child.redirectTo]),
+    );
+    expect(redirects).toMatchObject({ '': 'dashboard', stocks: 'dashboard', 'mutual-funds': 'dashboard', cash: 'funds', '**': 'dashboard' });
   });
 
   describe('the home address', () => {
@@ -122,11 +130,11 @@ describe('the application routes', () => {
     const target = () =>
       TestBed.runInInjectionContext(() => (home().redirectTo as () => string)());
 
-    it('sends a signed-in customer to their stocks dashboard, not the public page', () => {
+    it('sends a signed-in customer to their dashboard, not the public page', () => {
       TestBed.configureTestingModule({});
       sessionStorage.clear();
       TestBed.inject(Session).start(testToken());
-      expect(target()).toBe('/stocks');
+      expect(target()).toBe('/dashboard');
     });
 
     it('sends a visitor to the landing page', () => {

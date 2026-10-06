@@ -192,6 +192,8 @@ export class OrderTicket {
   private unconfirmed: { readonly key: string; readonly order: string } | null = null;
 
   constructor() {
+    // The cash available now, not as it was at sign-in: a deposit may have landed since.
+    void this.current.refresh();
     // A symbol from the link is taken only once a lookup shows it is tradable.
     effect(() => {
       const wanted = this.symbol()?.trim().toUpperCase();

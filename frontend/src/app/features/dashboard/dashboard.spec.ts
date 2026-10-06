@@ -1,26 +1,43 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
+import { InstrumentResponse, Quote } from '../../../generated/extensions';
+import { OrderHistoryEntry } from '../../../generated/trade';
 import { testToken } from '../../../testing/tokens';
 import { provideClients } from '../../core/api/provide-clients';
+import { LIVE_PRICES_POLICY } from '../../core/market/live-prices';
 import { Session } from '../../core/session/session';
-import { REREAD_POLICY } from '../../shared/reread/reread-policy';
 import { Dashboard } from './dashboard';
 
 const TRADE = 'http://trade.test';
 const AUTH = 'http://auth.test';
-const INSTRUMENTS = [
+const LISTED: InstrumentResponse[] = [
   { symbol: 'TCS.NS', name: 'Tata Consultancy Services Ltd', type: 'STOCK', exchange: 'NSE', tradable: true },
   { symbol: '120503', name: 'Bluechip Equity Fund', type: 'MF', exchange: null, tradable: true },
-  { symbol: 'SCH100001', name: 'Bluechip Growth Fund', type: 'MF', exchange: null, tradable: true },
-  { symbol: 'MERSTL', name: 'Meridian Steel Ltd', type: 'STOCK', exchange: 'NSE', tradable: false },
+];
+const QUOTES: Quote[] = [
+  { symbol: 'TCS.NS', price: 3600, change: 10, changePercent: 0.28, currency: 'INR', stale: false },
+  { symbol: '120503', price: 45, currency: 'INR', stale: false },
 ];
 
+const order = (id: string, status: OrderHistoryEntry['status'], createdOn: string, symbol = 'TCS.NS'): OrderHistoryEntry => ({
+  orderId: `ORD-${id}`, accountId: 3, symbol, side: 'BUY', quantity: 1, price: 3500, status, createdOn,
+});
+
 describe('Dashboard', () => {
+  let fixture: ComponentFixture<Dashboard>;
+  let page: HTMLElement;
   let http: HttpTestingController;
 
-  beforeEach(() => {
+  async function settle(): Promise<void> {
+    for (let i = 0; i < 6; i++) {
+      await Promise.resolve();
+    }
+    await fixture.whenStable();
+  }
+
+  function configure(): void {
     sessionStorage.clear();
     TestBed.configureTestingModule({
       providers: [
@@ -28,167 +45,97 @@ describe('Dashboard', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         provideClients({ tradeApiUrl: TRADE, authApiUrl: AUTH }),
-        { provide: REREAD_POLICY, useValue: { intervalMs: 3000, maxRereads: 10, schedule: () => () => undefined } },
+        { provide: LIVE_PRICES_POLICY, useValue: { intervalMs: 15000, every: () => () => undefined, visible: () => true } },
       ],
     });
     TestBed.inject(Session).start(testToken({ accountId: 3 }));
     http = TestBed.inject(HttpTestingController);
-  });
-
-  afterEach(() => http.verify());
-
-  async function render(segment?: 'stocks' | 'mutual-funds') {
-    const fixture = TestBed.createComponent(Dashboard);
-    if (segment) {
-      fixture.componentRef.setInput('segment', segment);
-    }
-    await fixture.whenStable();
-    return fixture;
+    fixture = TestBed.createComponent(Dashboard);
+    page = fixture.nativeElement as HTMLElement;
   }
 
-  /** Answers the look-up of the holdings' instruments: what each is called, and its dashboard. */
-  async function lookUp(fixture: Awaited<ReturnType<typeof render>>, symbols: string[]): Promise<void> {
-    await settle(fixture);
-    http
-      .expectOne((request) => request.url === `${TRADE}/api/v1/instruments` && request.params.get('symbols') === symbols.join(','))
-      .flush(INSTRUMENTS.filter((instrument) => symbols.includes(instrument.symbol)));
-    await settle(fixture);
-  }
-
-  async function settle(fixture: Awaited<ReturnType<typeof render>>): Promise<void> {
-    for (let i = 0; i < 5; i++) {
-      await Promise.resolve();
-    }
-    await fixture.whenStable();
-  }
-
-  it("shows the token's account, who is signed in, and the account's orders", async () => {
-    const fixture = await render();
-
+  async function render(positions: unknown[], orders: OrderHistoryEntry[] = []): Promise<void> {
+    configure();
+    await settle();
     http.expectOne(`${TRADE}/api/v1/accounts/3`).flush({
       id: 3, accountId: 'ACC-000003', holderName: 'Rohan Nair', cashBalance: 750000, status: 'ACTIVE', version: 7, lastUpdated: '2026-10-02T09:00:00Z',
     });
     http.expectOne(`${AUTH}/auth/me`).flush({ id: 'u-1', username: 'rohan.nair', accountId: 3, roles: ['CUSTOMER'] });
-    http.expectOne(`${TRADE}/api/v1/accounts/3/positions`).flush([]);
-    http.expectOne(`${TRADE}/api/v1/accounts/3/orders`).flush([]);
-    await settle(fixture);
+    http.expectOne(`${TRADE}/api/v1/accounts/3/positions`).flush(positions);
+    http.expectOne(`${TRADE}/api/v1/accounts/3/orders`).flush(orders);
+    await settle();
+    for (const lookup of http.match((r) => r.url === `${TRADE}/api/v1/instruments`)) {
+      const symbols = lookup.request.params.get('symbols')!.split(',');
+      lookup.flush(LISTED.filter((i) => symbols.includes(i.symbol)));
+    }
+    for (const read of http.match((r) => r.url === `${TRADE}/api/v1/quotes`)) {
+      const symbols = read.request.params.get('symbols')!.split(',');
+      read.flush(QUOTES.filter((q) => symbols.includes(q.symbol)));
+    }
+    await settle();
+  }
 
-    const page = fixture.nativeElement as HTMLElement;
-    expect(page.querySelector('[data-testid="account-ref"]')?.textContent).toBe('ACC-000003');
-    expect(page.querySelector('[data-testid="cash-balance"]')?.textContent).toContain('750,000.00');
-    expect(page.querySelector('[data-testid="signed-in-as"]')?.textContent).toContain('rohan.nair');
-    expect(page.querySelector('app-blotter')).not.toBeNull();
+  afterEach(() => http.verify());
+
+  const text = (id: string) => page.querySelector(`[data-testid="${id}"]`)?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+  const position = (symbol: string, quantity: number, averageCost: number) => ({ accountId: 3, symbol, quantity, averageCost });
+
+  it('greets the customer by first name, with the cash available and the account they know', async () => {
+    await render([]);
+
+    expect(text('dashboard-greeting')).toBe('Hi, Rohan');
+    expect(text('cash-balance')).toContain('750,000.00');
+    expect(text('account-ref')).toBe('ACC-000003');
+    expect(text('signed-in-as')).toContain('rohan.nair');
+    expect(page.querySelector('[data-testid="dashboard-cash"]')?.getAttribute('href')).toBe('/funds');
+  });
+
+  it('shows the holdings at their live value and P&L, and leads to Holdings', async () => {
+    await render([position('TCS.NS', 4, 3500), position('120503', 100, 41.2)]);
+
+    // 4 x 3,600 + 100 x 45 = 18,900 now; 14,000 + 4,120 cost.
+    expect(text('dashboard-current')).toContain('18,900.00');
+    expect(text('dashboard-pnl')).toContain('+₹780.00');
+    expect(page.querySelector('[data-testid="dashboard-pnl"]')?.classList).toContain('up');
+    expect(text('dashboard-holdings')).toContain('Holdings (2)');
+    expect(page.querySelector('[data-testid="dashboard-view-holdings"]')?.getAttribute('href')).toBe('/holdings');
+  });
+
+  it('says so when nothing is held', async () => {
+    await render([]);
+
+    expect(text('dashboard-holdings')).toContain('Nothing held yet');
+  });
+
+  it('lists the five latest orders, newest first, and how many are still open', async () => {
+    await render([], [
+      order('a', 'FILLED', '2026-10-01T09:00:00Z'),
+      order('b', 'NEW', '2026-10-06T09:00:00Z'),
+      order('c', 'REJECTED', '2026-10-02T09:00:00Z'),
+      order('d', 'FILLED', '2026-10-03T09:00:00Z'),
+      order('e', 'CANCELLED', '2026-10-04T09:00:00Z'),
+      order('f', 'NEW', '2026-10-05T09:00:00Z', '120503'),
+    ]);
+
+    const rows = [...page.querySelectorAll('[data-testid="dashboard-order"]')];
+    expect(rows).toHaveLength(5);
+    expect(rows[0].textContent).toContain('TCS.NS');
+    expect(rows[1].textContent).toContain('Bluechip Equity Fund');
+    expect(text('dashboard-open')).toBe('2 open');
+    // Never the order id: it is the platform's.
+    expect(text('dashboard-orders')).not.toContain('ORD-');
+    expect(page.querySelector('[data-testid="dashboard-view-orders"]')?.getAttribute('href')).toBe('/orders');
   });
 
   it('says what went wrong when the account cannot be read', async () => {
-    const fixture = await render();
-
+    configure();
+    await settle();
     http.expectOne(`${TRADE}/api/v1/accounts/3`).flush({ errorCode: 'ACC-403', message: 'x' }, { status: 403, statusText: 'Forbidden' });
     http.expectOne(`${AUTH}/auth/me`).flush({ id: 'u-1', username: 'rohan.nair', accountId: 3, roles: ['CUSTOMER'] });
     http.expectOne(`${TRADE}/api/v1/accounts/3/positions`).flush([]);
     http.expectOne(`${TRADE}/api/v1/accounts/3/orders`).flush([]);
-    await settle(fixture);
+    await settle();
 
-    expect((fixture.nativeElement as HTMLElement).querySelector('[role="alert"]')?.textContent).toContain(
-      "This account can't place orders right now.",
-    );
-  });
-
-  const account = (cashBalance: number) => ({
-    id: 3, accountId: 'ACC-000003', holderName: 'Rohan Nair', cashBalance, status: 'ACTIVE', version: 7, lastUpdated: '2026-10-02T09:00:00Z',
-  });
-  const position = (symbol: string, quantity: number, averageCost: number) => ({ accountId: 3, symbol, quantity, averageCost });
-
-  it('shows what the account holds, at its cost, each with a link to sell it', async () => {
-    const fixture = await render();
-    http.expectOne(`${TRADE}/api/v1/accounts/3`).flush(account(750000));
-    http.expectOne(`${AUTH}/auth/me`).flush({ id: 'u-1', username: 'rohan.nair', accountId: 3, roles: ['CUSTOMER'] });
-    http.expectOne(`${TRADE}/api/v1/accounts/3/positions`).flush([position('TCS.NS', 4, 3500.25), position('120503', 12.5, 41.2)]);
-    http.expectOne(`${TRADE}/api/v1/accounts/3/orders`).flush([]);
-    await lookUp(fixture, ['TCS.NS', '120503']);
-
-    const page = fixture.nativeElement as HTMLElement;
-    const rows = [...page.querySelectorAll('[data-testid="holdings-row"]')];
-    expect(rows).toHaveLength(2);
-    expect(rows[0].textContent).toContain('TCS.NS');
-    expect(rows[0].textContent).toContain('3,500.25');
-    expect(rows[0].textContent).toContain('14,001.00');
-    // A fund by its name, never its scheme code.
-    expect(rows[1].textContent).toContain('Bluechip Equity Fund');
-    expect(rows[1].textContent).not.toContain('120503');
-    expect(rows[1].textContent).toContain('12.5');
-    expect(rows[0].querySelector('[data-testid="holdings-sell"]')?.getAttribute('href')).toBe('/trade?symbol=TCS.NS&side=SELL');
-  });
-
-  it('offers no Sell on a holding that can no longer be traded', async () => {
-    const fixture = await render();
-    http.expectOne(`${TRADE}/api/v1/accounts/3`).flush(account(750000));
-    http.expectOne(`${AUTH}/auth/me`).flush({ id: 'u-1', username: 'rohan.nair', accountId: 3, roles: ['CUSTOMER'] });
-    http.expectOne(`${TRADE}/api/v1/accounts/3/positions`).flush([position('MERSTL', 500, 84.3)]);
-    http.expectOne(`${TRADE}/api/v1/accounts/3/orders`).flush([]);
-    await lookUp(fixture, ['MERSTL']);
-
-    const row = (fixture.nativeElement as HTMLElement).querySelector('[data-testid="holdings-row"]')!;
-    expect(row.textContent).toContain('MERSTL');
-    expect(row.querySelector('[data-testid="holdings-sell"]')).toBeNull();
-  });
-
-  it('on the mutual funds dashboard, shows funds by their type, and no second set of dashboard links', async () => {
-    const fixture = await render('mutual-funds');
-    http.expectOne(`${TRADE}/api/v1/accounts/3`).flush(account(750000));
-    http.expectOne(`${AUTH}/auth/me`).flush({ id: 'u-1', username: 'rohan.nair', accountId: 3, roles: ['CUSTOMER'] });
-    http.expectOne(`${TRADE}/api/v1/accounts/3/positions`).flush([position('TCS.NS', 4, 3500.25), position('SCH100001', 3, 10)]);
-    http.expectOne(`${TRADE}/api/v1/accounts/3/orders`).flush([]);
-    await lookUp(fixture, ['TCS.NS', 'SCH100001']);
-
-    const page = fixture.nativeElement as HTMLElement;
-    const rows = [...page.querySelectorAll('[data-testid="holdings-row"]')];
-    expect(rows.map((row) => row.querySelector('td')?.textContent?.trim())).toEqual(['Bluechip Growth Fund']);
-    expect(page.querySelector('h1')?.textContent).toContain('Mutual funds');
-    // The header already links the two dashboards.
-    expect(page.querySelector('.segment-nav')).toBeNull();
-  });
-
-  it('calls the cash what it is: available, not the raw balance', async () => {
-    const fixture = await render();
-    http.expectOne(`${TRADE}/api/v1/accounts/3`).flush(account(750000));
-    http.expectOne(`${AUTH}/auth/me`).flush({ id: 'u-1', username: 'rohan.nair', accountId: 3, roles: ['CUSTOMER'] });
-    http.expectOne(`${TRADE}/api/v1/accounts/3/positions`).flush([]);
-    http.expectOne(`${TRADE}/api/v1/accounts/3/orders`).flush([]);
-    await settle(fixture);
-
-    const labels = [...(fixture.nativeElement as HTMLElement).querySelectorAll('.summary dt')].map((dt) => dt.textContent?.trim());
-    expect(labels).toContain('Available cash');
-  });
-
-  it('says so when the account holds nothing', async () => {
-    const fixture = await render();
-    http.expectOne(`${TRADE}/api/v1/accounts/3`).flush(account(750000));
-    http.expectOne(`${AUTH}/auth/me`).flush({ id: 'u-1', username: 'rohan.nair', accountId: 3, roles: ['CUSTOMER'] });
-    http.expectOne(`${TRADE}/api/v1/accounts/3/positions`).flush([]);
-    http.expectOne(`${TRADE}/api/v1/accounts/3/orders`).flush([]);
-    await settle(fixture);
-
-    expect((fixture.nativeElement as HTMLElement).querySelector('[data-testid="holdings-empty"]')).not.toBeNull();
-  });
-
-  it('reads the cash and the holdings again when an order settles', async () => {
-    const fixture = await render();
-    http.expectOne(`${TRADE}/api/v1/accounts/3`).flush(account(750000));
-    http.expectOne(`${AUTH}/auth/me`).flush({ id: 'u-1', username: 'rohan.nair', accountId: 3, roles: ['CUSTOMER'] });
-    http.expectOne(`${TRADE}/api/v1/accounts/3/positions`).flush([]);
-    http.expectOne(`${TRADE}/api/v1/accounts/3/orders`).flush([]);
-    await settle(fixture);
-
-    fixture.debugElement.query((el) => el.name === 'app-blotter').componentInstance.settled.emit();
-    await fixture.whenStable();
-    http.expectOne(`${TRADE}/api/v1/accounts/3`).flush(account(735998.99));
-    http.expectOne(`${TRADE}/api/v1/accounts/3/positions`).flush([position('TCS.NS', 4, 3500.25)]);
-    http.expectNone(`${AUTH}/auth/me`);
-    await lookUp(fixture, ['TCS.NS']);
-
-    const page = fixture.nativeElement as HTMLElement;
-    expect(page.querySelector('[data-testid="cash-balance"]')?.textContent).toContain('735,998.99');
-    expect(page.querySelectorAll('[data-testid="holdings-row"]')).toHaveLength(1);
+    expect(page.querySelector('[role="alert"]')?.textContent).toContain("This account can't place orders right now.");
   });
 });

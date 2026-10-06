@@ -162,7 +162,7 @@ describe('OrderTicket', () => {
       expect(result).toContain('Your order to sell 10 INFY.NS');
       // The order id is the platform's, not the customer's.
       expect(result).not.toContain('ORD-');
-      expect(field('ticket-result').querySelector('a')?.getAttribute('href')).toBe('/stocks');
+      expect(field('ticket-result').querySelector('a')?.getAttribute('href')).toBe('/orders');
     });
 
     it('blocks an invalid quantity before submission', async () => {
@@ -396,7 +396,7 @@ describe('OrderTicket', () => {
       respond(request);
       await settle();
       expect(text('ticket-result')).toContain('Bluechip Equity Fund');
-      expect(field('ticket-result').querySelector('a')?.getAttribute('href')).toBe('/mutual-funds');
+      expect(field('ticket-result').querySelector('a')?.getAttribute('href')).toBe('/orders');
     });
 
     it('stops an amount too small for one unit', async () => {

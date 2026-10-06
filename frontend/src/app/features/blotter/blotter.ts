@@ -1,4 +1,4 @@
-import { DatePipe, DecimalPipe } from '@angular/common';
+import { DatePipe, DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { Component, DestroyRef, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { OrderHistoryEntry, OrderStatus } from '../../../generated/trade';
@@ -21,7 +21,7 @@ import { StatusBadge } from '../../shared/status-badge/status-badge';
  */
 @Component({
   selector: 'app-blotter',
-  imports: [DatePipe, DecimalPipe, RouterLink, StatusBadge, ErrorMessage],
+  imports: [DatePipe, DecimalPipe, NgTemplateOutlet, RouterLink, StatusBadge, ErrorMessage],
   templateUrl: './blotter.html',
   styleUrl: './blotter.css',
 })
@@ -33,8 +33,13 @@ export class Blotter {
 
   /** The account whose orders to show: the session's own. */
   readonly accountId = input.required<number>();
-  /** Dashboard context for symbol filtering. */
+  /** Stocks and ETFs, mutual funds, or both. */
   readonly segment = input<'stocks' | 'mutual-funds' | 'all'>('all');
+  /**
+   * list: one table with status filters, as on the dashboard. split: Kite's
+   * Orders page, open orders above executed ones.
+   */
+  readonly layout = input<'list' | 'split'>('list');
 
   /**
    * An order left NEW -- filled, rejected or cancelled -- so the cash and the
@@ -59,20 +64,26 @@ export class Blotter {
   /** Newest first, rejections included: the rejection is the record that the desk tried. */
   protected readonly filterOptions = ['ALL', OrderStatus.New, OrderStatus.Filled, OrderStatus.Rejected, OrderStatus.Cancelled] as const;
 
-  protected readonly rows = computed(() =>
+  /** Newest first, in the segment shown. */
+  private readonly inSegment = computed(() =>
     [...(this.orders() ?? [])]
       .filter((order) => {
         const segment = this.segment();
-        if (segment !== 'all' && this.catalog.segmentOf(order.symbol) !== segment) {
-          return false;
-        }
-        const status = this.statusFilter();
-        return status === 'ALL' ? true : order.status === status;
+        return segment === 'all' || this.catalog.segmentOf(order.symbol) === segment;
       })
       .sort((a, b) => Date.parse(b.createdOn) - Date.parse(a.createdOn)),
   );
 
-  protected readonly working = computed(() => this.rows().filter((order) => order.status === OrderStatus.New).length);
+  protected readonly rows = computed(() => {
+    const status = this.statusFilter();
+    return this.inSegment().filter((order) => status === 'ALL' || order.status === status);
+  });
+  /** Still working: what Cancel applies to. */
+  protected readonly openRows = computed(() => this.inSegment().filter((order) => order.status === OrderStatus.New));
+  /** Filled, rejected or cancelled: done with. */
+  protected readonly executedRows = computed(() => this.inSegment().filter((order) => order.status !== OrderStatus.New));
+
+  protected readonly working = computed(() => this.inSegment().filter((order) => order.status === OrderStatus.New).length);
 
   protected readonly intervalSeconds = this.policy.intervalMs / 1000;
   protected readonly limitSeconds = (this.policy.intervalMs * this.policy.maxRereads) / 1000;
@@ -154,6 +165,11 @@ export class Blotter {
   /** Which order a Cancel button is for, said without the order id. */
   protected cancelLabel(order: OrderHistoryEntry): string {
     return `Cancel the ${order.side === 'BUY' ? 'buy' : 'sell'} of ${order.quantity} ${this.catalog.label(order.symbol)}`;
+  }
+
+  /** The table template's rows, typed: a template context is not. */
+  protected asOrders(rows: unknown): readonly OrderHistoryEntry[] {
+    return rows as readonly OrderHistoryEntry[];
   }
 
   protected setStatusFilter(filter: 'ALL' | OrderStatus): void {

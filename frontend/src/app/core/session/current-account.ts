@@ -38,7 +38,23 @@ export class CurrentAccount {
     return accountId === null ? Promise.resolve() : this.read(accountId);
   }
 
-  private async read(accountId: number): Promise<void> {
+  /** A read already on its way, shared rather than sent twice. */
+  private inflight: { readonly accountId: number; readonly done: Promise<void> } | null = null;
+
+  private read(accountId: number): Promise<void> {
+    if (this.inflight?.accountId === accountId) {
+      return this.inflight.done;
+    }
+    const done = this.fetch(accountId).finally(() => {
+      if (this.inflight?.done === done) {
+        this.inflight = null;
+      }
+    });
+    this.inflight = { accountId, done };
+    return done;
+  }
+
+  private async fetch(accountId: number): Promise<void> {
     try {
       const account = await this.tradeApi.account(accountId);
       if (this.session.accountId() === accountId) {

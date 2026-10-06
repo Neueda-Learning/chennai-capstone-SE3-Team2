@@ -9,9 +9,9 @@ import { signIn } from './sign-in';
  */
 test.describe('cash', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/cash');
+    await page.goto('/funds');
     await signIn(page);
-    await expect(page).toHaveURL(/\/cash$/);
+    await expect(page).toHaveURL(/\/funds$/);
   });
 
   test('shows the bank account masked to its last four digits, and nothing more of it', async ({ page }) => {

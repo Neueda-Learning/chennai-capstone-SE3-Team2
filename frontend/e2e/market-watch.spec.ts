@@ -12,9 +12,9 @@ test.describe('market watch', () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
   test.beforeEach(async ({ page }) => {
-    await page.goto('/stocks');
+    await page.goto('/dashboard');
     await signIn(page);
-    await expect(page).toHaveURL(/\/stocks$/);
+    await expect(page).toHaveURL(/\/dashboard$/);
   });
 
   test('sits beside the dashboard, each row with a price from the platform', async ({ page }) => {

@@ -19,6 +19,7 @@
     "e2e:order": "playwright test e2e/place-order.spec.ts",
     "e2e:cash": "playwright test e2e/cash.spec.ts",
     "e2e:market": "playwright test e2e/market-watch.spec.ts",
+    "e2e:portfolio": "playwright test e2e/portfolio.spec.ts",
     "check:bundle": "ng build && node scripts/check-bundle-secrets.mjs",
     "test:scripts": "node --test scripts/"
   },

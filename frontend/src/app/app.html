@@ -1,13 +1,13 @@
 <a class="skip-link" href="#main">Skip to content</a>
 <header class="app-header">
-  <a class="brand" [routerLink]="session.accessToken() ? '/stocks' : '/landing'">YELLOW // TRADE</a>
+  <a class="brand" [routerLink]="session.accessToken() ? '/dashboard' : '/landing'">YELLOW // TRADE</a>
   @if (session.accessToken()) {
     <nav aria-label="Main">
       <a routerLink="/market-watch" routerLinkActive="active" class="watch-link" data-testid="nav-market-watch">Market watch</a>
-      <a routerLink="/stocks" routerLinkActive="active">Stocks</a>
-      <a routerLink="/mutual-funds" routerLinkActive="active">Mutual funds</a>
-      <a routerLink="/trade" routerLinkActive="active" data-testid="nav-trade">Place an order</a>
-      <a routerLink="/cash" routerLinkActive="active" data-testid="nav-cash">Cash</a>
+      <a routerLink="/dashboard" routerLinkActive="active" data-testid="nav-dashboard">Dashboard</a>
+      <a routerLink="/orders" routerLinkActive="active" data-testid="nav-orders">Orders</a>
+      <a routerLink="/holdings" routerLinkActive="active" data-testid="nav-holdings">Holdings</a>
+      <a routerLink="/funds" routerLinkActive="active" data-testid="nav-funds">Funds</a>
     </nav>
     <span class="account" data-testid="header-account">
       @if (current.account(); as account) {

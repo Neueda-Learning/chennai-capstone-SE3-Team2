@@ -40,7 +40,7 @@ test.describe('sign in', () => {
     await expect(page.getByTestId('ticket-account')).toHaveValue(`ACC-${env.accountId.padStart(6, '0')}`);
 
     // The dashboard calls both APIs, the protected auth route included.
-    await page.getByRole('link', { name: 'Stocks', exact: true }).click();
+    await page.getByRole('link', { name: 'Dashboard', exact: true }).click();
     await expect(page.getByTestId('signed-in-as')).toContainText(env.username);
 
     // The market watch keeps re-reading prices. Stop collecting before
