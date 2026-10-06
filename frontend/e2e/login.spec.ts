@@ -43,6 +43,9 @@ test.describe('sign in', () => {
     await page.getByRole('link', { name: 'Stocks', exact: true }).click();
     await expect(page.getByTestId('signed-in-as')).toContainText(env.username);
 
+    // The market watch keeps re-reading prices. Stop collecting before
+    // waiting, so a re-read starting now is not left pending as the test ends.
+    page.removeAllListeners('request');
     const requests = await Promise.all(sent);
     const login = requests.find((r) => r.url === `${env.authApi}/auth/login`);
     expect(login, 'the sign-in call went out').toBeDefined();

@@ -2,11 +2,12 @@ import { Component, inject } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { CurrentAccount } from './core/session/current-account';
 import { Session } from './core/session/session';
+import { MarketWatch } from './features/market-watch/market-watch';
 
-/** The shell: a header, and the routed feature below it. */
+/** The shell: a header; beside a signed-in screen, the market watch; and the routed feature. */
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, MarketWatch],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })

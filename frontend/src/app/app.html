@@ -3,6 +3,7 @@
   <a class="brand" [routerLink]="session.accessToken() ? '/stocks' : '/landing'">YELLOW // TRADE</a>
   @if (session.accessToken()) {
     <nav aria-label="Main">
+      <a routerLink="/market-watch" routerLinkActive="active" class="watch-link" data-testid="nav-market-watch">Market watch</a>
       <a routerLink="/stocks" routerLinkActive="active">Stocks</a>
       <a routerLink="/mutual-funds" routerLinkActive="active">Mutual funds</a>
       <a routerLink="/trade" routerLinkActive="active" data-testid="nav-trade">Place an order</a>
@@ -23,6 +24,13 @@
     </nav>
   }
 </header>
-<main id="main" class="app-main">
-  <router-outlet />
-</main>
+<div class="workspace" [class.with-watch]="session.accessToken()">
+  @if (session.accessToken()) {
+    <aside class="watch-panel" aria-label="Market watch">
+      <app-market-watch />
+    </aside>
+  }
+  <main id="main" class="app-main">
+    <router-outlet />
+  </main>
+</div>

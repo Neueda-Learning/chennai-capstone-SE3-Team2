@@ -114,7 +114,7 @@ describe('the application routes', () => {
   it('guard every screen behind sign-in', () => {
     const guarded = appRoutes.find((route) => route.canActivateChild?.includes(authGuard));
     const screens = (guarded?.children ?? []).filter((child) => child.loadComponent).map((child) => child.path);
-    expect(screens).toEqual(['stocks', 'mutual-funds', 'trade', 'cash']);
+    expect(screens).toEqual(['stocks', 'mutual-funds', 'trade', 'cash', 'instrument/:symbol', 'market-watch']);
   });
 
   describe('the home address', () => {

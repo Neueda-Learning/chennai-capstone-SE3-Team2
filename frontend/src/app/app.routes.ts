@@ -66,6 +66,18 @@ export const routes: Routes = [
         title: 'Cash',
         loadComponent: () => import('./features/cash/cash').then((m) => m.Cash),
       },
+      {
+        // One instrument's price, chart and Buy/Sell. The symbol is its title.
+        path: 'instrument/:symbol',
+        title: (route) => route.paramMap.get('symbol') ?? 'Instrument',
+        loadComponent: () => import('./features/instrument/instrument-page').then((m) => m.InstrumentPage),
+      },
+      {
+        // On a narrow screen the market watch has no room beside the page: it is a page of its own.
+        path: 'market-watch',
+        title: 'Market watch',
+        loadComponent: () => import('./features/market-watch/market-watch').then((m) => m.MarketWatch),
+      },
       { path: '**', redirectTo: 'stocks' },
     ],
   },

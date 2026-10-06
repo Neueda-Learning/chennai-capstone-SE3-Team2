@@ -1,0 +1,128 @@
+@if (missing()) {
+  <section class="card missing">
+    <h1>{{ symbol() }}</h1>
+    <p>We couldn't find that instrument. It may have been delisted, or the link is wrong.</p>
+    <a routerLink="/stocks">Back to your dashboard</a>
+  </section>
+} @else {
+  <section class="instrument" aria-labelledby="instrument-title">
+    <header class="head">
+      <div class="who">
+        <h1 id="instrument-title" data-testid="instrument-title">{{ fund() ? (instrument()?.name ?? symbol()) : symbol() }}</h1>
+        <p class="meta">
+          @if (instrument(); as instrument) {
+            @if (fund()) {
+              Mutual fund · Direct Plan · Growth
+            } @else {
+              {{ instrument.name }} · {{ instrument.exchange }}
+            }
+          }
+        </p>
+      </div>
+      <div class="actions">
+        <a class="button buy" routerLink="/trade" [queryParams]="{ symbol: symbol(), side: 'BUY' }" data-testid="instrument-buy">Buy</a>
+        <a class="button sell" routerLink="/trade" [queryParams]="{ symbol: symbol(), side: 'SELL' }" data-testid="instrument-sell"
+          >Sell</a
+        >
+        <button
+          type="button"
+          class="secondary"
+          data-testid="instrument-watch"
+          [attr.aria-pressed]="watched()"
+          [disabled]="!watched() && watchList.full"
+          (click)="toggleWatch()"
+        >
+          {{ watched() ? 'In market watch' : 'Add to market watch' }}
+        </button>
+      </div>
+    </header>
+
+    <div class="price-line" data-testid="instrument-price">
+      @if (quote(); as quote) {
+        @if (quote.price !== null && quote.price !== undefined) {
+          <span class="ltp">{{ quote.price | currency: 'INR' : 'symbol' : (fund() ? '1.4-4' : '1.2-2') }}</span>
+          @if (quote.change !== null && quote.change !== undefined) {
+            <span class="change" data-testid="instrument-change" [class.up]="trend() === 'up'" [class.down]="trend() === 'down'"
+              >{{ trend() === 'up' ? '+' : '' }}{{ quote.change | number: '1.2-2' }} ({{ trend() === 'up' ? '+' : ''
+              }}{{ quote.changePercent | number: '1.2-2' }}%)</span
+            >
+          }
+          <span class="as-of">
+            @if (fund()) {
+              NAV of {{ quote.asOf | date: 'd MMM y' : '+0530' }}
+            } @else {
+              as of {{ quote.asOf | date: 'd MMM, HH:mm' : '+0530' }}
+            }
+          </span>
+          @if (quote.stale) {
+            <span class="stale" data-testid="instrument-stale" title="It could not be refreshed">Delayed: the last price known</span>
+          }
+        } @else {
+          <span class="none">No price available right now.</span>
+        }
+      } @else {
+        <span class="none">Loading the price…</span>
+      }
+    </div>
+
+    @if (fund()) {
+      <p class="note">A fund deals at its NAV, struck once a day. Charts for funds are on their way.</p>
+    } @else if (instrument()) {
+      <div class="ranges" role="group" aria-label="Chart range">
+        @for (option of ranges; track option) {
+          <button
+            type="button"
+            [class.active]="option === range()"
+            [attr.aria-pressed]="option === range()"
+            [attr.data-testid]="'range-' + option"
+            (click)="choose(option)"
+          >
+            {{ option }}
+          </button>
+        }
+      </div>
+
+      <app-error-message [error]="chartError()" />
+      @if (series(); as series) {
+        @if (series.candles.length > 0) {
+          <app-candle-chart class="chart" [candles]="series.candles" [label]="symbol() + ', daily prices over ' + rangeName()" />
+        } @else {
+          <p class="none">No price history for this instrument.</p>
+        }
+      } @else if (!chartError()) {
+        <p class="none">Loading the chart…</p>
+      }
+
+      <dl class="stats" data-testid="instrument-stats">
+        <div>
+          <dt>Open</dt>
+          <dd>{{ (lastDay()?.open | number: '1.2-2') ?? '—' }}</dd>
+        </div>
+        <div>
+          <dt>High</dt>
+          <dd>{{ (lastDay()?.high | number: '1.2-2') ?? '—' }}</dd>
+        </div>
+        <div>
+          <dt>Low</dt>
+          <dd>{{ (lastDay()?.low | number: '1.2-2') ?? '—' }}</dd>
+        </div>
+        <div>
+          <dt>Prev. close</dt>
+          <dd>{{ (quote()?.previousClose | number: '1.2-2') ?? '—' }}</dd>
+        </div>
+        <div>
+          <dt>Volume</dt>
+          <dd>{{ (lastDay()?.volume | number: '1.0-0') ?? '—' }}</dd>
+        </div>
+        <div>
+          <dt>52-week high</dt>
+          <dd>{{ (yearRange()?.high | number: '1.2-2') ?? '—' }}</dd>
+        </div>
+        <div>
+          <dt>52-week low</dt>
+          <dd>{{ (yearRange()?.low | number: '1.2-2') ?? '—' }}</dd>
+        </div>
+      </dl>
+    }
+  </section>
+}

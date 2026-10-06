@@ -33,6 +33,8 @@ describe('App', () => {
     expect(page.querySelector('header .brand')?.textContent).toContain('YELLOW // TRADE');
     expect(page.querySelector('main#main router-outlet')).not.toBeNull();
     expect(page.querySelector('[data-testid="sign-out"]')).toBeNull();
+    // A visitor has no market watch: it lives beside the signed-in screens.
+    expect(page.querySelector('app-market-watch')).toBeNull();
   });
 
   it('signing out clears the session and returns to sign-in', async () => {
@@ -53,6 +55,7 @@ describe('App', () => {
     expect(page.querySelector('[data-testid="header-account"]')?.textContent).toContain('Rohan Nair');
     expect(page.querySelector('[data-testid="header-account"]')?.textContent).toContain('ACC-000003');
     expect(page.querySelector('header')?.textContent).not.toMatch(/Account\s+3\b/);
+    expect(page.querySelector('aside[aria-label="Market watch"] app-market-watch')).not.toBeNull();
 
     page.querySelector<HTMLButtonElement>('[data-testid="sign-out"]')!.click();
     await fixture.whenStable();
@@ -61,5 +64,6 @@ describe('App', () => {
     expect(sessionStorage.length).toBe(0);
     expect(TestBed.inject(Router).url).toBe('/sign-in');
     expect(page.querySelector('[data-testid="sign-out"]')).toBeNull();
+    expect(page.querySelector('app-market-watch')).toBeNull();
   });
 });

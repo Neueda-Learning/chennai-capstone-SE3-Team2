@@ -18,6 +18,7 @@
     "e2e:login": "playwright test e2e/login.spec.ts",
     "e2e:order": "playwright test e2e/place-order.spec.ts",
     "e2e:cash": "playwright test e2e/cash.spec.ts",
+    "e2e:market": "playwright test e2e/market-watch.spec.ts",
     "check:bundle": "ng build && node scripts/check-bundle-secrets.mjs",
     "test:scripts": "node --test scripts/"
   },
@@ -28,6 +29,7 @@
     "@angular/forms": "^21.2.0",
     "@angular/platform-browser": "^21.2.0",
     "@angular/router": "^21.2.0",
+    "lightweight-charts": "^5.2.1",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
   },

@@ -70,6 +70,33 @@ nav a.button.primary {
   padding: 0 1.5rem;
 }
 
+/* Kite's layout: the market watch down the left, the page beside it. */
+.workspace.with-watch {
+  display: grid;
+  grid-template-columns: 21rem minmax(0, 1fr);
+  align-items: start;
+}
+
+.watch-panel {
+  position: sticky;
+  top: 4rem;
+  height: calc(100dvh - 4rem);
+  overflow-y: auto;
+  padding: 1rem;
+  background: var(--bg-soft);
+  border-right: 1px solid var(--border);
+}
+
+.workspace.with-watch .app-main {
+  width: 100%;
+  max-width: 72rem;
+}
+
+/* Only where the market watch has no room beside the page. */
+nav a.watch-link {
+  display: none;
+}
+
 .skip-link {
   position: absolute;
   left: -999px;
@@ -80,6 +107,20 @@ nav a.button.primary {
   top: 0.5rem;
   background: var(--surface);
   padding: 0.5rem;
+}
+
+@media (max-width: 960px) {
+  .workspace.with-watch {
+    display: block;
+  }
+
+  .watch-panel {
+    display: none;
+  }
+
+  nav a.watch-link {
+    display: inline;
+  }
 }
 
 @media (max-width: 900px) {
