@@ -60,16 +60,6 @@
   <app-error-message [error]="error()" />
 
   <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
-    <label for="account">Account</label>
-    <input
-      id="account"
-      readonly
-      [value]="account()?.accountId ?? ''"
-      data-testid="ticket-account"
-      aria-describedby="account-hint"
-    />
-    <p class="hint" id="account-hint">The account your sign-in may trade. It cannot be changed here.</p>
-
     <label for="symbol">Instrument</label>
     @if (chosen(); as instrument) {
       <div class="chosen" data-testid="ticket-instrument">

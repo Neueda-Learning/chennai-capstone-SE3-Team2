@@ -12,7 +12,7 @@ import { signIn } from './sign-in';
 const WATCHED = 'TATASTEEL.NS';
 
 function watch(page: Page) {
-  return page.getByRole('complementary', { name: 'Market watch' });
+  return page.getByRole('complementary', { name: 'Watchlist' });
 }
 
 async function signedIn(page: Page): Promise<void> {

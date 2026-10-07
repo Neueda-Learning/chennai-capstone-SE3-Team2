@@ -151,7 +151,7 @@ describe('InstrumentPage', () => {
     expect(page.querySelector('[data-testid="instrument-sell"]')?.getAttribute('href')).toBe('/trade?symbol=SBIN.NS&side=SELL');
   });
 
-  it('adds the instrument to the market watch, and says when it is there', async () => {
+  it('adds the instrument to the watchlist, and says when it is there', async () => {
     await openSbin();
     const toggle = page.querySelector<HTMLButtonElement>('[data-testid="instrument-watch"]')!;
     expect(toggle.getAttribute('aria-pressed')).toBe('false');
@@ -162,7 +162,7 @@ describe('InstrumentPage', () => {
     await settle();
 
     expect(toggle.getAttribute('aria-pressed')).toBe('true');
-    expect(toggle.textContent).toContain('In market watch');
+    expect(toggle.textContent).toContain('In watchlist');
   });
 
   it('sets a price alert on a stock, and says it will tell the customer once', async () => {

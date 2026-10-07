@@ -282,7 +282,7 @@ call.
 | Instrument | **Picked from a list**, not typed: every tradable instrument from `GET /api/v1/instruments`, grouped as Stocks, ETFs and Mutual funds. Delisted ones are not offered, so the API cannot be sent a symbol it does not know |
 | Quantity | A whole number, 1 or more |
 | Limit price | Above zero, at most two decimal places |
-| Account | **Read-only**, from the token's `accountId`, and shown as the reference the customer knows (`ACC-000003`) rather than the numeric key. An account field the user could edit is an authorisation decision moved into the browser |
+| Account | **Not a field.** The order goes to the token's `accountId`, which the header already names as the reference the customer knows (`ACC-000003`). An account field the user could edit is an authorisation decision moved into the browser |
 
 The checks live in `features/order-ticket/order-validators.ts`. They are not
 enforcement: business rules 1 to 8 live in the Trade REST API, and whatever
@@ -391,7 +391,7 @@ stub proves nothing about integration.
 | File | Covers |
 |---|---|
 | `e2e/login.spec.ts` | the guard redirect, a refused sign-in, a successful sign-in arriving where it was going -- and that the token went only to `/api/v1/**` and `/auth/me`, never to `/auth/login` |
-| `e2e/place-order.spec.ts` | the read-only account, an invalid order stopped before it is sent, a placed order and whatever status came back |
+| `e2e/place-order.spec.ts` | the account named in the header and not on the ticket, an invalid order stopped before it is sent, a placed order and whatever status came back |
 | `e2e/cash.spec.ts` | on Funds: the bank account masked, a deposit shown processing and then decided without a reload, a withdrawal over the available cash stopped before it is sent |
 | `e2e/portfolio.spec.ts` | a market buy at the live price moving from Open to Executed on the Orders page, and Holdings pricing every holding live with totals |
 | `e2e/preferences.spec.ts` | Sprint 10: a landing screen saved in Settings is where the next sign-in opens |

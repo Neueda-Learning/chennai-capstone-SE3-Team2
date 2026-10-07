@@ -18,7 +18,7 @@ test.describe('market watch', () => {
   });
 
   test('sits beside the dashboard, each row with a price from the platform', async ({ page }) => {
-    const watch = page.getByRole('complementary', { name: 'Market watch' });
+    const watch = page.getByRole('complementary', { name: 'Watchlist' });
     const rows = watch.getByTestId('watch-row');
 
     await expect(rows.first()).toBeVisible();
@@ -27,7 +27,7 @@ test.describe('market watch', () => {
   });
 
   test('adds a stock found by search, and opens its chart and its order window', async ({ page }) => {
-    const watch = page.getByRole('complementary', { name: 'Market watch' });
+    const watch = page.getByRole('complementary', { name: 'Watchlist' });
     const symbol = env.symbol;
 
     // Out first, so the add is the journey's own whatever an earlier run left.

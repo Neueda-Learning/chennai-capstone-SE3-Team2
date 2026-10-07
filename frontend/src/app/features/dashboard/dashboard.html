@@ -30,7 +30,9 @@
       @if (user(); as user) {
         <p class="signed-in" data-testid="signed-in-as">Signed in as {{ user.username }}</p>
       }
-      <a routerLink="/funds" data-testid="dashboard-cash">Add funds or withdraw →</a>
+      <div class="actions">
+        <a class="button secondary small" routerLink="/funds" data-testid="dashboard-cash">Add or withdraw funds</a>
+      </div>
     } @else if (!error()) {
       <p>Loading your account…</p>
     }
@@ -79,7 +81,9 @@
           </div>
         </dl>
       }
-      <a routerLink="/holdings" data-testid="dashboard-view-holdings">View holdings →</a>
+      <div class="actions">
+        <a class="button secondary small" routerLink="/holdings" data-testid="dashboard-view-holdings">View holdings</a>
+      </div>
     }
   </section>
 </div>
@@ -93,7 +97,7 @@
   </div>
   @if (orders(); as orders) {
     @if (orders.length === 0) {
-      <p class="label">No orders yet. <a routerLink="/trade">Place your first order.</a></p>
+      <p class="label">No orders yet.</p>
     } @else {
       <ul>
         @for (order of recent(); track order.orderId) {
@@ -107,6 +111,11 @@
         }
       </ul>
     }
-    <a routerLink="/orders" data-testid="dashboard-view-orders">View all orders →</a>
+    <div class="actions">
+      @if (orders.length === 0) {
+        <a class="button primary small" routerLink="/trade" data-testid="dashboard-first-order">Place your first order</a>
+      }
+      <a class="button secondary small" routerLink="/orders" data-testid="dashboard-view-orders">View all orders</a>
+    </div>
   }
 </section>

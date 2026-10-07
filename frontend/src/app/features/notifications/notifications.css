@@ -10,11 +10,6 @@
   flex-wrap: wrap;
 }
 
-.how {
-  color: var(--muted);
-  font-size: 0.9rem;
-}
-
 .empty {
   color: var(--muted);
 }

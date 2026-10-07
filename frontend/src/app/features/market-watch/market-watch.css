@@ -179,13 +179,6 @@
   outline-offset: 2px;
 }
 
-.list-name {
-  margin-left: 0.4rem;
-  color: var(--muted);
-  font-size: 0.8rem;
-  font-weight: 400;
-}
-
 .tabs {
   display: flex;
   gap: 0.25rem;

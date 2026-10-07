@@ -91,6 +91,11 @@ describe('Dashboard', () => {
   afterEach(() => http.verify());
 
   const text = (id: string) => page.querySelector(`[data-testid="${id}"]`)?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+  /** A card's action: where it goes, what it says, and whether it looks like a button rather than a bare link. */
+  const action = (id: string) => {
+    const link = page.querySelector<HTMLAnchorElement>(`a[data-testid="${id}"]`);
+    return link && { href: link.getAttribute('href'), text: link.textContent?.trim(), button: link.classList.contains('button') };
+  };
   /** A holding as the portfolio module prices it, at the fixture's quote. */
   const position = (symbol: string, quantity: number, averageCost: number) => {
     const lastPrice = QUOTES.find((q) => q.symbol === symbol)!.price!;
@@ -109,7 +114,7 @@ describe('Dashboard', () => {
     expect(text('cash-balance')).toContain('750,000.00');
     expect(text('account-ref')).toBe('ACC-000003');
     expect(text('signed-in-as')).toContain('rohan.nair');
-    expect(page.querySelector('[data-testid="dashboard-cash"]')?.getAttribute('href')).toBe('/funds');
+    expect(action('dashboard-cash')).toEqual({ href: '/funds', text: 'Add or withdraw funds', button: true });
   });
 
   it('shows the holdings at their live value and P&L, and leads to Holdings', async () => {
@@ -120,7 +125,7 @@ describe('Dashboard', () => {
     expect(text('dashboard-pnl')).toContain('+₹780.00');
     expect(page.querySelector('[data-testid="dashboard-pnl"]')?.classList).toContain('up');
     expect(text('dashboard-holdings')).toContain('Holdings (2)');
-    expect(page.querySelector('[data-testid="dashboard-view-holdings"]')?.getAttribute('href')).toBe('/holdings');
+    expect(action('dashboard-view-holdings')).toEqual({ href: '/holdings', text: 'View holdings', button: true });
   });
 
   it("shows the P&L realised by sales and the total with cash, as the portfolio module counts them", async () => {
@@ -153,7 +158,14 @@ describe('Dashboard', () => {
     expect(text('dashboard-open')).toBe('2 open');
     // Never the order id: it is the platform's.
     expect(text('dashboard-orders')).not.toContain('ORD-');
-    expect(page.querySelector('[data-testid="dashboard-view-orders"]')?.getAttribute('href')).toBe('/orders');
+    expect(action('dashboard-view-orders')).toEqual({ href: '/orders', text: 'View all orders', button: true });
+  });
+
+  it('with no orders yet, offers a button to place the first one', async () => {
+    await render([]);
+
+    expect(text('dashboard-orders')).toContain('No orders yet.');
+    expect(action('dashboard-first-order')).toEqual({ href: '/trade', text: 'Place your first order', button: true });
   });
 
   it('says what went wrong when the account cannot be read', async () => {

@@ -55,7 +55,7 @@ describe('App', () => {
     expect(page.querySelector('[data-testid="header-account"]')?.textContent).toContain('Rohan Nair');
     expect(page.querySelector('[data-testid="header-account"]')?.textContent).toContain('ACC-000003');
     expect(page.querySelector('header')?.textContent).not.toMatch(/Account\s+3\b/);
-    expect(page.querySelector('aside[aria-label="Market watch"] app-market-watch')).not.toBeNull();
+    expect(page.querySelector('aside[aria-label="Watchlist"] app-market-watch')).not.toBeNull();
 
     page.querySelector<HTMLButtonElement>('[data-testid="sign-out"]')!.click();
     await fixture.whenStable();
