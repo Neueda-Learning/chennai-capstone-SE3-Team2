@@ -77,6 +77,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/instrument/instrument-page').then((m) => m.InstrumentPage),
       },
       {
+        path: 'settings',
+        title: 'Settings',
+        loadComponent: () => import('./features/settings/settings').then((m) => m.Settings),
+      },
+      {
         // On a narrow screen the market watch has no room beside the page: it is a page of its own.
         path: 'market-watch',
         title: 'Market watch',

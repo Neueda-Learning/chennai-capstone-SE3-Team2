@@ -25,9 +25,13 @@ class CorsConfigTest {
     private final CorsFilter filter = new CorsConfig().corsFilter(List.of(UI)).getFilter();
 
     private static MockHttpServletRequest preflight(String origin) {
-        MockHttpServletRequest request = new MockHttpServletRequest("OPTIONS", "/api/v1/orders");
+        return preflight(origin, "POST", "/api/v1/orders");
+    }
+
+    private static MockHttpServletRequest preflight(String origin, String method, String path) {
+        MockHttpServletRequest request = new MockHttpServletRequest("OPTIONS", path);
         request.addHeader("Origin", origin);
-        request.addHeader("Access-Control-Request-Method", "POST");
+        request.addHeader("Access-Control-Request-Method", method);
         request.addHeader("Access-Control-Request-Headers", "authorization, content-type");
         return request;
     }
@@ -44,6 +48,17 @@ class CorsConfigTest {
         assertThat(response.getHeader("Access-Control-Allow-Origin"), is(UI));
         assertThat(response.getHeader("Access-Control-Allow-Headers"), containsString("authorization"));
         assertThat(chain.getRequest(), is(nullValue()));
+    }
+
+    @Test
+    @DisplayName("Allows a PUT from the UI: Settings saves the customer's preferences with one")
+    void preflightForAPut() throws Exception {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(preflight(UI, "PUT", "/api/v1/accounts/3/preferences"), response, new MockFilterChain());
+
+        assertThat(response.getStatus(), is(200));
+        assertThat(response.getHeader("Access-Control-Allow-Methods"), containsString("PUT"));
     }
 
     @Test

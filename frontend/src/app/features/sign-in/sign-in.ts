@@ -2,8 +2,9 @@ import { Component, inject, input, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AuthApi } from '../../core/api/auth-api';
+import { PreferencesApi } from '../../core/api/preferences-api';
 import { KnownErrorCode } from '../../core/errors/error-messages';
-import { safeReturnUrl } from '../../core/guards/return-url';
+import { DEFAULT_RETURN_URL, safeReturnUrl } from '../../core/guards/return-url';
 import { Session } from '../../core/session/session';
 import { ErrorMessage } from '../../shared/error-message/error-message';
 
@@ -23,6 +24,7 @@ export class SignIn {
   private readonly authApi = inject(AuthApi);
   private readonly session = inject(Session);
   private readonly router = inject(Router);
+  private readonly preferences = inject(PreferencesApi);
 
   /**
    * Where the guard was taking the user, from the `returnUrl` query parameter
@@ -53,7 +55,13 @@ export class SignIn {
       const { username, password } = this.form.getRawValue();
       const tokens = await this.authApi.signIn(username, password);
       this.session.start(tokens.accessToken, tokens.refreshToken);
-      await this.router.navigateByUrl(safeReturnUrl(this.returnUrl()));
+      // Where the guard was taking them, or else the landing screen they chose
+      // in Settings: the stored preference applied at this sign-in.
+      const returnTo = safeReturnUrl(this.returnUrl());
+      const accountId = this.session.accountId();
+      const target =
+        returnTo === DEFAULT_RETURN_URL && accountId !== null ? await this.preferences.landingUrl(accountId) : returnTo;
+      await this.router.navigateByUrl(target);
     } catch (failure) {
       this.form.controls.password.reset();
       this.error.set(failure);

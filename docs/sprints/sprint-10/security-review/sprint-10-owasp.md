@@ -43,6 +43,11 @@ module is dispositioned out of scope with the reason.
 |---|---|---|
 | Module boundaries | `ModuleBoundaryTest`, run in the build; a planted violation (a platform class using a watchlists class and naming a watchlists table) failed both checks | Holds |
 | Seam reachability | The seams are interfaces in `*.api` packages; no controller maps them | No route exists |
+| Preferences, A01 | `PreferencesControllerTest`, `PreferencesIntegrationTest`; live, with curl against the stack: another account's preferences, and a default account that is not the caller's | `403 ACC-403` both times, each logged with the token's account and the one addressed |
+| Preferences, A01/A07 | Live: no token, and a token signed with another key | `401` both times, before any preference code runs |
+| Preferences, A05 | Sprint 9's CORS rule allowed `GET`, `POST` and `DELETE`; Settings saves with `PUT`, so the rule now lists `PUT` too (`CorsConfig`, `CorsConfigTest`). The origins stay the exact list; no header added | The UI's preflight for a `PUT` answers 200; another origin's is still refused |
+| Preferences, A09 | `MaskingTest`, `ProfileChannelResolverTest`: the address on screen is masked, and `ResolvedChannel` prints without it | The address appears only in `contact`, masked, and in no log line |
+| Preferences, A03 | `PreferenceMapper` read: every value bound with `#{}` | No interpolation |
 
 ## Outstanding items
 

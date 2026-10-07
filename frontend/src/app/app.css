@@ -58,6 +58,17 @@ nav a.button.primary {
   font-size: 0.9rem;
 }
 
+.settings-link {
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+.settings-link.active,
+.settings-link:hover {
+  color: var(--text);
+}
+
 .account .ref {
   color: var(--muted);
   font-size: 0.78rem;
@@ -128,10 +139,10 @@ nav a.watch-link {
      menu on the second, scrolling sideways rather than wrapping. */
   .app-header {
     display: grid;
-    grid-template-columns: 1fr auto auto;
+    grid-template-columns: 1fr auto auto auto;
     grid-template-areas:
-      'brand account signout'
-      'nav nav nav';
+      'brand account settings signout'
+      'nav nav nav nav';
     gap: 0.6rem 0.8rem;
     padding: 0.7rem 1rem;
   }
@@ -147,6 +158,10 @@ nav a.watch-link {
 
   .sign-out {
     grid-area: signout;
+  }
+
+  .settings-link {
+    grid-area: settings;
   }
 
   nav {

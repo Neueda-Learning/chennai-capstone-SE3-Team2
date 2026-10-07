@@ -1,0 +1,48 @@
+<section class="card settings" aria-labelledby="settings-title">
+  <h1 id="settings-title">Settings</h1>
+
+  @if (saved(); as saved) {
+    <p class="alert success" role="status" data-testid="settings-saved">{{ saved }}</p>
+  }
+  <app-error-message [error]="error()" />
+
+  @if (preferences(); as preferences) {
+    @if (!preferences.stored) {
+      <p class="hint" data-testid="settings-defaults">These are the defaults: nothing has been saved yet.</p>
+    }
+
+    <form [formGroup]="form" (ngSubmit)="save()" novalidate>
+      <p class="label">Account</p>
+      <p class="value" data-testid="settings-account">{{ account()?.accountId ?? '…' }}</p>
+      <p class="hint">The account the application opens on: the one your sign-in trades.</p>
+
+      <label for="landing">Open on, after sign-in</label>
+      <select id="landing" formControlName="landingScreen" data-testid="settings-landing">
+        @for (screen of screens; track screen.value) {
+          <option [value]="screen.value">{{ screen.label }}</option>
+        }
+      </select>
+
+      <fieldset class="channel">
+        <legend>Order news and price alerts</legend>
+        <label class="choice">
+          <input type="radio" value="EMAIL" formControlName="alertChannel" data-testid="settings-channel-email" />
+          <span>
+            Email{{ preferences.contact ? ' to ' + preferences.contact : '' }}, and in the app
+            <span class="hint">To the address on your profile.</span>
+          </span>
+        </label>
+        <label class="choice">
+          <input type="radio" value="IN_APP" formControlName="alertChannel" data-testid="settings-channel-inapp" />
+          <span>In the app only</span>
+        </label>
+      </fieldset>
+
+      <button type="submit" class="primary" data-testid="settings-save" [disabled]="saving()">
+        {{ saving() ? 'Saving…' : 'Save' }}
+      </button>
+    </form>
+  } @else if (!error()) {
+    <p>Loading your settings…</p>
+  }
+</section>

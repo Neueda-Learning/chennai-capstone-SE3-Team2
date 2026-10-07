@@ -66,6 +66,7 @@ public abstract class PostgresSupport {
             "migrations/008_kyc_attempts.sql",
             "migrations/009_bank_account.sql",
             "migrations/010_payments.sql",
+            "migrations/011_preferences.sql",
             "indexes/001_performance_indexes.sql",
             "seed/001_reference_data.sql",
             "seed/002_clients.sql",

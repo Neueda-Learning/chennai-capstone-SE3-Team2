@@ -13,6 +13,14 @@ import { SignIn } from './sign-in';
 class Landing {}
 
 const AUTH = 'http://auth.test';
+const TRADE = 'http://trade.test';
+
+/** Answers the read of the customer's preferences with this landing screen. */
+function landsOn(http: HttpTestingController, screen: string): void {
+  http.expectOne(`${TRADE}/api/v1/accounts/3/preferences`).flush({
+    accountId: 3, defaultAccountId: 3, landingScreen: screen, alertChannel: 'EMAIL', contact: 'r•••@example.com', stored: true,
+  });
+}
 
 describe('SignIn', () => {
   let fixture: ComponentFixture<SignIn>;
@@ -27,6 +35,8 @@ describe('SignIn', () => {
           [
             { path: '', component: Landing },
             { path: 'orders', component: Landing },
+            { path: 'holdings', component: Landing },
+            { path: 'dashboard', component: Landing },
             { path: 'sign-in', component: SignIn },
           ],
           withComponentInputBinding(),
@@ -63,7 +73,7 @@ describe('SignIn', () => {
     await fixture.whenStable();
   }
 
-  it('signs in with valid credentials, keeps the token, and redirects', async () => {
+  it('signs in with valid credentials, keeps the token, and opens on the landing screen they chose', async () => {
     type('sign-in-username', 'priya.menon');
     type('sign-in-password', 'correct horse battery staple');
     await submit();
@@ -73,11 +83,26 @@ describe('SignIn', () => {
     const token = testToken({ accountId: 3 });
     login.flush({ accessToken: token, refreshToken: 'r'.repeat(64), tokenType: 'Bearer', expiresIn: 900 });
     await settle();
+    landsOn(http, 'holdings');
+    await settle();
 
     const session = TestBed.inject(Session);
     expect(session.isSignedIn()).toBe(true);
     expect(session.accessToken()).toBe(token);
     expect(session.refreshToken()).toBe('r'.repeat(64));
+    expect(TestBed.inject(Router).url).toBe('/holdings');
+  });
+
+  it('goes home when the preferences cannot be read: a preference never stops a sign-in', async () => {
+    type('sign-in-username', 'priya.menon');
+    type('sign-in-password', 'correct horse battery staple');
+    await submit();
+    http.expectOne(`${AUTH}/auth/login`).flush({ accessToken: testToken({ accountId: 3 }), refreshToken: 'r', tokenType: 'Bearer', expiresIn: 900 });
+    await settle();
+    http.expectOne(`${TRADE}/api/v1/accounts/3/preferences`).flush({ errorCode: 'SRV-500', message: 'x' }, { status: 500, statusText: 'Error' });
+    await settle();
+
+    expect(TestBed.inject(Session).isSignedIn()).toBe(true);
     expect(TestBed.inject(Router).url).toBe('/');
   });
 
@@ -125,23 +150,31 @@ describe('SignIn', () => {
       }
       form.querySelector<HTMLButtonElement>('[data-testid="sign-in-submit"]')!.click();
       await harness.fixture.whenStable();
-      http.expectOne(`${AUTH}/auth/login`).flush({ accessToken: testToken(), refreshToken: 'r', tokenType: 'Bearer', expiresIn: 900 });
+      http.expectOne(`${AUTH}/auth/login`).flush({ accessToken: testToken({ accountId: 3 }), refreshToken: 'r', tokenType: 'Bearer', expiresIn: 900 });
+      for (let i = 0; i < 5; i++) {
+        await Promise.resolve();
+      }
+      await harness.fixture.whenStable();
+      // No return address to follow: the stored landing screen is asked for.
+      for (const read of http.match(`${TRADE}/api/v1/accounts/3/preferences`)) {
+        read.flush({ accountId: 3, defaultAccountId: 3, landingScreen: 'dashboard', alertChannel: 'EMAIL', contact: null, stored: false });
+      }
       for (let i = 0; i < 5; i++) {
         await Promise.resolve();
       }
       await harness.fixture.whenStable();
     }
 
-    it('lands the user where they were going', async () => {
+    it('lands the user where they were going, not on the landing screen', async () => {
       await signInFrom('/sign-in?returnUrl=%2Forders');
 
       expect(TestBed.inject(Router).url).toBe('/orders');
     });
 
-    it('refuses an off-origin return address and lands at home instead', async () => {
+    it('refuses an off-origin return address and opens on the landing screen instead', async () => {
       await signInFrom('/sign-in?returnUrl=https%3A%2F%2Fevil.example%2Flogin');
 
-      expect(TestBed.inject(Router).url).toBe('/');
+      expect(TestBed.inject(Router).url).toBe('/dashboard');
     });
   });
 });

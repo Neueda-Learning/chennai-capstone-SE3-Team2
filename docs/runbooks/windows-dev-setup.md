@@ -104,6 +104,7 @@ rest, keeping your data:
 ```powershell
 psql -U postgres -d trading -v ON_ERROR_STOP=1 -f data/db/migrations/009_bank_account.sql
 psql -U postgres -d trading -v ON_ERROR_STOP=1 -f data/db/migrations/010_payments.sql
+psql -U postgres -d trading -v ON_ERROR_STOP=1 -f data/db/migrations/011_preferences.sql
 psql -U postgres -d trading -v ON_ERROR_STOP=1 -f data/db/seed/006_bank_accounts.sql
 psql -U postgres -d trading -v ON_ERROR_STOP=1 -f data/db/seed/007_mf_nav_funds.sql
 psql -U postgres -d trading -v ON_ERROR_STOP=1 -f data/db/seed/008_instrument_universe.sql
