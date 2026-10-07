@@ -17,6 +17,13 @@ info:
     data is public, so any signed-in customer may read any instrument's signal; there is no
     account in the path to compare the token against.
 
+    With too little data for a view there is no signal at all: `direction` and `strength` are
+    null and `reason` says what is missing. A HOLD is a view, not the absence of one.
+
+    `GET /api/v1/accounts/{id}/advice` gives a signal for every stock the account holds (read
+    from the portfolio module) and watches (read from the watchlists module), holdings first,
+    at most 30. The caller's own account only (`ACC-403`).
+
     Same error envelope as the contracts: `{ "errorCode", "message" }`.
 
 servers:
@@ -45,7 +52,8 @@ paths:
       summary: The signal for one stock
       description: |
         A fund has no daily candles here, so no signal: `VAL-422`. Too little history for a
-        50-day average is a HOLD saying so. No candles to be had at all is `MKT-503`.
+        50-day average is no signal: `direction` null, and the reason says so. No candles to be
+        had at all is `MKT-503`.
       responses:
         '200':
           description: The signal
@@ -60,6 +68,37 @@ paths:
         '422':
           $ref: '#/components/responses/Error'
         '503':
+          $ref: '#/components/responses/Error'
+
+  /api/v1/accounts/{id}/advice:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: The numeric account key; must be the token's own account (else `ACC-403`).
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    get:
+      tags: [Advice]
+      operationId: getAccountAdvice
+      summary: A signal for every stock the account holds or watches
+      description: |
+        Holdings first, then watchlist entries, each symbol once, at most 30 (`truncated` says
+        when there were more). A stock with no view to give is listed with no signal and the
+        reason: a fund, too little history, prices not readable just now, or no longer traded.
+        One stock's trouble never fails the list.
+      responses:
+        '200':
+          description: The signals
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountAdvice'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
           $ref: '#/components/responses/Error'
 
 components:
@@ -87,11 +126,14 @@ components:
         direction:
           type: string
           enum: [BUY, SELL, HOLD]
+          nullable: true
+          description: The view. Null is no signal at all, for too little data; `reason` says why.
         strength:
           type: integer
           minimum: 0
           maximum: 100
-          description: How far the averages are apart and how the RSI agrees, as 0 to 100.
+          nullable: true
+          description: How far the averages are apart and how the RSI agrees, as 0 to 100. Null with no signal.
         methodology:
           type: string
           example: 20/50-day moving average crossover, confirmed by RSI(14)
@@ -99,7 +141,10 @@ components:
           type: string
           example: The 20-day average is 3.1% above the 50-day and RSI is 58, so the trend is up.
         figures:
-          $ref: '#/components/schemas/SignalFigures'
+          allOf:
+            - $ref: '#/components/schemas/SignalFigures'
+          nullable: true
+          description: Null when nothing could be computed (a fund, or prices not readable).
         computedAt:
           type: string
           format: date-time
@@ -131,12 +176,40 @@ components:
           type: integer
           description: How many daily closes it was computed from.
 
+    AccountAdvice:
+      type: object
+      required: [accountId, items, truncated, disclaimer]
+      properties:
+        accountId:
+          type: integer
+          format: int64
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdviceItem'
+        truncated:
+          type: boolean
+          description: More than 30 stocks are held or watched; the first 30 are here, holdings first.
+        disclaimer:
+          type: string
+    AdviceItem:
+      type: object
+      required: [symbol, held, watched, signal]
+      properties:
+        symbol:
+          type: string
+        held:
+          type: boolean
+        watched:
+          type: boolean
+        signal:
+          $ref: '#/components/schemas/Signal'
     ErrorResponse:
       type: object
       required: [errorCode, message]
       properties:
         errorCode:
           type: string
-          enum: [AUTH-401, VAL-422, INS-404, MKT-503]
+          enum: [AUTH-401, ACC-403, VAL-422, INS-404, MKT-503]
         message:
           type: string

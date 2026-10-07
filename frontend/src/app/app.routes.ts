@@ -97,6 +97,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/strategies/strategies').then((m) => m.Strategies),
       },
       {
+        path: 'signals',
+        title: 'Signals',
+        loadComponent: () => import('./features/signals/signals').then((m) => m.Signals),
+      },
+      {
         // On a narrow screen the market watch has no room beside the page: it is a page of its own.
         path: 'market-watch',
         title: 'Watchlist',

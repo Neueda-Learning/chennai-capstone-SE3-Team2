@@ -12,14 +12,20 @@ import { SignalFigures } from './signal-figures';
 
 export interface Signal { 
     symbol: string;
-    direction: Signal.DirectionEnum;
     /**
-     * How far the averages are apart and how the RSI agrees, as 0 to 100.
+     * The view. Null is no signal at all, for too little data; `reason` says why.
      */
-    strength: number;
+    direction: Signal.DirectionEnum | null;
+    /**
+     * How far the averages are apart and how the RSI agrees, as 0 to 100. Null with no signal.
+     */
+    strength: number | null;
     methodology: string;
     reason: string;
-    figures: SignalFigures;
+    /**
+     * Null when nothing could be computed (a fund, or prices not readable).
+     */
+    figures: SignalFigures | null;
     computedAt: string;
     disclaimer: string;
 }

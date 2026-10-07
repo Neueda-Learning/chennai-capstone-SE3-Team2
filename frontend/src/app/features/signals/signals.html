@@ -1,0 +1,50 @@
+<section class="card signals" aria-labelledby="signals-title">
+  <div class="head">
+    <h1 id="signals-title">Signals</h1>
+    <button type="button" class="secondary small" data-testid="signals-refresh" [disabled]="loading()" (click)="refresh()">
+      {{ loading() ? 'Reading…' : 'Read again' }}
+    </button>
+  </div>
+  <p class="hint" data-testid="signals-method">
+    A view on every stock you hold or watch, from its daily prices: {{ method }}. Recomputed every few minutes, not
+    on every price.
+  </p>
+  <p class="disclaimer" data-testid="signals-disclaimer">{{ advice()?.disclaimer ?? disclaimer }}</p>
+
+  <app-error-message [error]="error()" />
+
+  @if (advice(); as advice) {
+    @if (advice.items.length === 0) {
+      <p class="empty" data-testid="signals-empty">
+        Nothing held or watched yet. Add a stock to your watchlist, or buy one, and its signal shows here.
+      </p>
+    } @else {
+      <ul class="list" data-testid="signals-list">
+        @for (item of advice.items; track item.symbol) {
+          <li class="item" data-testid="signal-row" [attr.data-symbol]="item.symbol" [attr.data-direction]="item.signal.direction ?? 'NONE'">
+            <div class="what">
+              <a class="symbol" [routerLink]="['/instrument', item.symbol]" data-testid="signal-name">{{ catalog.label(item.symbol) }}</a>
+              <span class="from" data-testid="signal-from">{{ from(item) }}</span>
+            </div>
+            <div class="verdict">
+              <span class="direction" [attr.data-direction]="item.signal.direction ?? 'NONE'" data-testid="signal-direction"
+                >{{ item.signal.direction ?? 'No signal' }}</span
+              >
+              @if (item.signal.strength !== null && item.signal.direction !== 'HOLD') {
+                <span class="strength" data-testid="signal-strength">{{ item.signal.strength }} of 100</span>
+              }
+            </div>
+            <p class="reason" data-testid="signal-reason">{{ item.signal.reason }}</p>
+          </li>
+        }
+      </ul>
+      @if (advice.truncated) {
+        <p class="hint" data-testid="signals-truncated">
+          Showing the first 30: your holdings, then your watchlists. Each new stock costs a call to the price service.
+        </p>
+      }
+    }
+  } @else if (!error()) {
+    <p>Reading the signals…</p>
+  }
+</section>

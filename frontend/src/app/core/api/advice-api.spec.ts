@@ -17,4 +17,19 @@ describe('AdviceApi', () => {
     expect((await read).direction).toBe('HOLD');
     http.verify();
   });
+
+  it("reads the signals for an account's holdings and watchlists", async () => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting(), provideClients({ tradeApiUrl: 'http://trade.test', authApiUrl: 'http://auth.test' })],
+    });
+    const http = TestBed.inject(HttpTestingController);
+
+    const read = TestBed.inject(AdviceApi).forAccount(3);
+    const request = http.expectOne('http://trade.test/api/v1/accounts/3/advice');
+    expect(request.request.method).toBe('GET');
+    request.flush({ accountId: 3, items: [], truncated: false, disclaimer: 'Information, not advice.' });
+
+    expect((await read).items).toEqual([]);
+    http.verify();
+  });
 });

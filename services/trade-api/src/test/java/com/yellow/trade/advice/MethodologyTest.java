@@ -72,11 +72,13 @@ class MethodologyTest {
     }
 
     @Test
-    @DisplayName("too little history for a 50-day average is HOLD, saying so; the figures it has, it gives")
+    @DisplayName("too little history for a 50-day average is no signal at all, saying so; the figures it has, it gives")
     void tooLittleHistory() {
         Methodology.Reading reading = Methodology.read(UPTREND.subList(0, 32));
 
-        assertThat(reading.direction(), is(Direction.HOLD));
+        // Not a HOLD: a HOLD is a view, and with 32 days there is none to give.
+        assertThat(reading.direction(), is(nullValue()));
+        assertThat(reading.strength(), is(nullValue()));
         assertThat(reading.days(), is(32));
         assertThat(reading.sma50(), is(nullValue()));
         assertThat(reading.sma20() == null, is(false));

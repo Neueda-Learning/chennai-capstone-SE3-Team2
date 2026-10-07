@@ -9,14 +9,14 @@ import java.util.Locale;
  * The one methodology, from daily closes: the 20-day simple moving average
  * against the 50-day (the trend), confirmed by Wilder's 14-day RSI.
  *
- * - fewer than 50 closes: HOLD, there is no 50-day average yet;
+ * - fewer than 50 closes: no signal at all, there is no 50-day average yet;
  * - the averages within 0.25% of each other: HOLD, no trend to follow;
  * - the 20-day above: BUY, unless RSI is 70 or more (overbought): HOLD;
  * - the 20-day below: SELL, unless RSI is 30 or less (oversold): HOLD.
  *
  * Strength, 0 to 100: 60 for how far apart the averages are (4% or more is
  * all of it) and 40 for how far RSI agrees past 50 (20 points is all of it).
- * A HOLD has none.
+ * A HOLD has none; no signal has no strength either.
  */
 final class Methodology {
 
@@ -29,7 +29,8 @@ final class Methodology {
     private static final double OVERSOLD = 30;
 
     /** The figures and the view they give. Averages and RSI null where there is too little history. */
-    record Reading(Direction direction, int strength, String reason, Double sma20, Double sma50, Double rsi14, int days) {
+    /** No signal at all is a null direction and strength. */
+    record Reading(Direction direction, Integer strength, String reason, Double sma20, Double sma50, Double rsi14, int days) {
     }
 
     private Methodology() {
@@ -41,7 +42,7 @@ final class Methodology {
         Double sma50 = sma(closes, LONG);
         Double rsi = rsi14(closes);
         if (sma50 == null || rsi == null) {
-            return new Reading(Direction.HOLD, 0, "Only " + days + " days of prices: a 50-day average needs " + LONG
+            return new Reading(null, null, "Only " + days + " days of prices: a 50-day average needs " + LONG
                     + ", so there is no signal yet.", sma20, sma50, rsi, days);
         }
         double gap = (sma20 - sma50) / sma50 * 100;
