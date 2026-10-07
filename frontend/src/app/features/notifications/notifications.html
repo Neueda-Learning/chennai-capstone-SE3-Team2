@@ -1,0 +1,41 @@
+<section class="card notifications" aria-labelledby="notifications-title">
+  <div class="head">
+    <h1 id="notifications-title">Notifications</h1>
+    <a routerLink="/settings" class="how" data-testid="notifications-settings">How these reach you</a>
+  </div>
+
+  <app-error-message [error]="error()" />
+
+  @if (items(); as items) {
+    @if (items.length === 0) {
+      <p class="empty" data-testid="notifications-empty">
+        Nothing yet. When an order is executed, rejected or cancelled, it lands here, and on your alert channel.
+      </p>
+    } @else {
+      <ul class="list" data-testid="notifications-list">
+        @for (notification of items; track notification.id) {
+          <li class="item" [class.unread]="!notification.readAt" data-testid="notification" [attr.data-id]="notification.id" [attr.data-kind]="notification.kind">
+            <div class="top">
+              <span class="kind" [attr.data-kind]="notification.kind">{{ kind(notification) }}</span>
+              <time class="when" [attr.datetime]="notification.createdAt">{{ notification.createdAt | date: 'd MMM, HH:mm' }}</time>
+            </div>
+            <p class="subject" data-testid="notification-subject">{{ notification.subject }}</p>
+            <p class="body">{{ notification.body }}</p>
+            <div class="bottom">
+              <span class="delivery" [attr.data-status]="notification.status" data-testid="notification-delivery">
+                {{ delivery(notification) }}
+              </span>
+              @if (!notification.readAt) {
+                <button type="button" class="secondary small" data-testid="notification-read" (click)="markRead(notification)">
+                  Mark read
+                </button>
+              }
+            </div>
+          </li>
+        }
+      </ul>
+    }
+  } @else if (!error()) {
+    <p>Loading your notifications…</p>
+  }
+</section>

@@ -3,11 +3,12 @@ import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/rou
 import { CurrentAccount } from './core/session/current-account';
 import { Session } from './core/session/session';
 import { MarketWatch } from './features/market-watch/market-watch';
+import { NotificationBell } from './shared/notification-bell/notification-bell';
 
 /** The shell: a header; beside a signed-in screen, the market watch; and the routed feature. */
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, MarketWatch],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, MarketWatch, NotificationBell],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })

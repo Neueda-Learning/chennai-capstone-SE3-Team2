@@ -1,6 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ErrorResponse as AuthErrorResponse } from '../../../generated/auth';
 import { ErrorResponse as ExtensionErrorResponse } from '../../../generated/extensions';
+import { ErrorResponse as NotificationsErrorResponse } from '../../../generated/notifications';
 import { ErrorResponse as TradeErrorResponse } from '../../../generated/trade';
 
 /** The codes each contract declares, read from the generated clients rather than typed out again. */
@@ -8,6 +9,8 @@ export type TradeErrorCode = TradeErrorResponse.ErrorCodeEnum;
 export type AuthErrorCode = AuthErrorResponse.ErrorCodeEnum;
 /** The codes our extension routes add: onboarding, instruments, payments, market data. */
 export type ExtensionErrorCode = ExtensionErrorResponse.ErrorCodeEnum;
+/** The codes the Sprint 10 notifications module adds. */
+export type NotificationsErrorCode = NotificationsErrorResponse.ErrorCodeEnum;
 
 /**
  * Codes our services really send that neither contract lists: the login
@@ -16,7 +19,7 @@ export type ExtensionErrorCode = ExtensionErrorResponse.ErrorCodeEnum;
 export const OFF_CATALOGUE_CODES = ['AUTH-429', 'SRV-500'] as const;
 export type OffCatalogueCode = (typeof OFF_CATALOGUE_CODES)[number];
 
-export type KnownErrorCode = TradeErrorCode | AuthErrorCode | ExtensionErrorCode | OffCatalogueCode;
+export type KnownErrorCode = TradeErrorCode | AuthErrorCode | ExtensionErrorCode | NotificationsErrorCode | OffCatalogueCode;
 
 /**
  * One sentence a trader can act on, per code. A Record over the generated
@@ -45,6 +48,7 @@ export const ERROR_MESSAGES: Readonly<Record<KnownErrorCode, string>> = {
   'PAY-409': "That request was already used for a different transfer. Start a new one.",
   'RATE-429': 'Too many applications from this connection. Please try again in an hour.',
   'MKT-503': "Prices can't be fetched right now. Please try again in a few minutes.",
+  'NTF-404': "That notification isn't on your account. Reload your notifications and try again.",
   'SRV-500':
     'Something went wrong on our side. Your request may not have completed, so check your orders before trying again.',
 };

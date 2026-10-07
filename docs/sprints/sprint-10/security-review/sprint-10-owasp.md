@@ -48,6 +48,12 @@ module is dispositioned out of scope with the reason.
 | Preferences, A05 | Sprint 9's CORS rule allowed `GET`, `POST` and `DELETE`; Settings saves with `PUT`, so the rule now lists `PUT` too (`CorsConfig`, `CorsConfigTest`). The origins stay the exact list; no header added | The UI's preflight for a `PUT` answers 200; another origin's is still refused |
 | Preferences, A09 | `MaskingTest`, `ProfileChannelResolverTest`: the address on screen is masked, and `ResolvedChannel` prints without it | The address appears only in `contact`, masked, and in no log line |
 | Preferences, A03 | `PreferenceMapper` read: every value bound with `#{}` | No interpolation |
+| Notifications, A01 | `NotificationsControllerTest`, `NotificationsIntegrationTest`: another account's history, and marking another account's notification read | `403 ACC-403` for the history; `404 NTF-404` for another's notification, the same answer as one that does not exist |
+| Notifications, A01 | The seam: `AlertDelivery` is a Java interface; `NotificationsContractTest` holds the routes to the three in the file, none of which sends | No route delivers anything |
+| Notifications, A08 | `NotificationsIntegrationTest`: the same event recorded twice; one quote crossing two customers' alerts | One message per event, one per alert; a replay sends nothing |
+| Notifications, A09, A02 | `NotificationDispatcherTest`: the mail server's error quoting the recipient | The stored error and the log name no address; the destination is stored masked |
+| Notifications, A10 | Read: `NotificationDispatcher` sends only to `ChannelResolver`'s answer, the profile's address | No destination comes from a request |
+| Notifications, A04 | Found in the live run: a new consumer group from the earliest offset queued a message for every trade on the topic | Fixed: a new group starts at the latest offset (decision log 0006, revised) |
 
 ## Outstanding items
 

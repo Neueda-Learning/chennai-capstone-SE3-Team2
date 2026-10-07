@@ -28,3 +28,14 @@ for delivery, not once the provider confirms.
 
 `notif_notification.event_id` is unique; QUEUED, SENT and FAILED are tracked with attempts. The
 channel is resolved at send time, so a preference changed while a message waits is honoured.
+
+Revised 2026-10-06, while building the module, on two points this entry had not seen:
+
+- **The key is the event and the alert.** One quote can cross several customers' alerts, and a
+  key on the quote's `eventId` alone would have queued the first and dropped the rest as
+  duplicates. `uq_notif_source` is `UNIQUE NULLS NOT DISTINCT (event_id, alert_id)`: a trade
+  event, which has no alert, is still unique on its `eventId`.
+- **A new consumer group starts at the latest offset, not the earliest.** `trade-events` keeps 30
+  days; switching notifications on from the beginning queued a message for every trade on it,
+  which on a real platform is a month of old news in every customer's mailbox. After the first
+  start the committed offset carries the consumer across restarts.

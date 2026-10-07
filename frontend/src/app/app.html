@@ -15,6 +15,7 @@
         <span class="ref">{{ account.accountId }}</span>
       }
     </span>
+    <app-notification-bell class="bell-slot" />
     <a class="settings-link" routerLink="/settings" routerLinkActive="active" data-testid="nav-settings">Settings</a>
     <button type="button" class="secondary sign-out" data-testid="sign-out" (click)="signOut()">Sign out</button>
   } @else {

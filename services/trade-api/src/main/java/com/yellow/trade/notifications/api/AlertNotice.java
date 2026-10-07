@@ -7,7 +7,7 @@ import java.util.UUID;
 /**
  * A price alert that a quote has crossed.
  *
- * @param eventId   the market-data quote's eventId: what makes a replay a no-op
+ * @param eventId   the market-data quote's eventId: with the alert, what makes a replay a no-op
  * @param accountId whose alert it is
  * @param alertId   the watchlists module's alert, for the customer to find
  * @param symbol    the instrument, as an order names it

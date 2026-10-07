@@ -95,7 +95,9 @@ paths:
       tags: [Notifications]
       operationId: markRead
       summary: Mark one notification read
-      description: Marking one already read changes nothing. Another account's is `NTF-404`.
+      description: |
+        Marking one already read changes nothing. Another account's is `NTF-404`. An id that is
+        not a UUID is `VAL-422`.
       responses:
         '204':
           description: Read
@@ -104,6 +106,8 @@ paths:
         '403':
           $ref: '#/components/responses/Error'
         '404':
+          $ref: '#/components/responses/Error'
+        '422':
           $ref: '#/components/responses/Error'
 
 components:
@@ -151,11 +155,14 @@ components:
         channel:
           type: string
           enum: [EMAIL, IN_APP]
-          description: The channel resolved from preferences when it was sent.
+          nullable: true
+          description: |
+            The channel resolved from preferences when it was sent; null while it is QUEUED, since
+            the channel is resolved at the moment of sending (decision log 0006).
         destination:
           type: string
           nullable: true
-          description: Where it went, masked (`r•••@gmail.com`); null for IN_APP.
+          description: Where it went, masked (`r•••@gmail.com`); null for IN_APP, and while QUEUED.
         status:
           type: string
           enum: [QUEUED, SENT, FAILED]

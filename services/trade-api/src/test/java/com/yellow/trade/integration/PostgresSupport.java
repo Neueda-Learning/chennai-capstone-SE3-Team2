@@ -67,6 +67,7 @@ public abstract class PostgresSupport {
             "migrations/009_bank_account.sql",
             "migrations/010_payments.sql",
             "migrations/011_preferences.sql",
+            "migrations/012_notifications.sql",
             "indexes/001_performance_indexes.sql",
             "seed/001_reference_data.sql",
             "seed/002_clients.sql",
@@ -104,6 +105,10 @@ public abstract class PostgresSupport {
         registry.add("kyc.job.enabled", () -> "false");
         registry.add("outbox.relay.enabled", () -> "false");
         registry.add("payments.job.enabled", () -> "false");
+        // Notifications: no broker to consume from, and nothing is ever sent;
+        // the tests that need the consumer or the dispatcher call them.
+        registry.add("notifications.consumer.auto-startup", () -> "false");
+        registry.add("notifications.dispatch.enabled", () -> "false");
     }
 
     public static void applySchema(JdbcTemplate jdbc) {

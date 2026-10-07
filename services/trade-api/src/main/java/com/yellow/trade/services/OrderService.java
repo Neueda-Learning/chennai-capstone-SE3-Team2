@@ -13,6 +13,7 @@ import com.yellow.exceptions.StaleAccountVersionException;
 import com.yellow.trade.OrderIdentifier;
 import com.yellow.trade.PlatformConstants;
 import com.yellow.trade.dto.OrderResponse;
+import com.yellow.trade.events.OrderCancelledDomainEvent;
 import com.yellow.trade.events.OrderPlacedDomainEvent;
 import com.yellow.trade.mappers.AccountMapper;
 import com.yellow.trade.mappers.AccountRow;
@@ -212,7 +213,8 @@ public class OrderService {
         }
 
         // 213: CANCELLATION
-        int affected = orderMapper.cancelIfNew(orderId, Instant.now(clock));
+        Instant cancelledAt = Instant.now(clock);
+        int affected = orderMapper.cancelIfNew(orderId, cancelledAt);
         if (affected == 0) {
             log.warn("ORD-409: order {} was {} when cancel ran", orderId, existing.getStatus());
             throw new OrderNotCancellableException(existing.getStatus());
@@ -227,6 +229,12 @@ public class OrderService {
 
         InstrumentRow instrument = instrumentMapper.findById(existing.getInstrumentId());
         log.info("order {} cancelled on account {}", orderId, existing.getClientId());
+
+        // Sprint 10: announce it on trade-events, as the executor announces a
+        // fill. Synchronous, inside this transaction: the outbox row commits
+        // with the cancel or not at all.
+        applicationEventPublisher.publishEvent(new OrderCancelledDomainEvent(
+                existing, instrument == null ? null : instrument.getSymbol(), cancelledAt));
 
         return new OrderResponse(
                 OrderIdentifier.display(existing.getOrderId()),

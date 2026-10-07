@@ -172,7 +172,7 @@ export class NotificationsService extends BaseService {
 
     /**
      * Mark one notification read
-     * Marking one already read changes nothing. Another account\&#39;s is &#x60;NTF-404&#x60;.
+     * Marking one already read changes nothing. Another account\&#39;s is &#x60;NTF-404&#x60;. An id that is not a UUID is &#x60;VAL-422&#x60;. 
      * @endpoint post /api/v1/accounts/{id}/notifications/{notificationId}/read
      * @param id The numeric account key; must be the token\&#39;s own account (else &#x60;ACC-403&#x60;).
      * @param notificationId 
