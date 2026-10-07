@@ -25,6 +25,11 @@ export class PlatformError extends HttpException {
     return new PlatformError(ErrorCode.ACT_404, 'Account not provisioned', HttpStatus.NOT_FOUND);
   }
 
+  /** Internal callers only: no login is bound to the account, so nobody can be acted for. */
+  static noLogin(): PlatformError {
+    return new PlatformError(ErrorCode.ACT_404, 'Account has no login', HttpStatus.NOT_FOUND);
+  }
+
   static alreadyClaimed(): PlatformError {
     return new PlatformError(ErrorCode.ACT_409, 'Account already has a login', HttpStatus.CONFLICT);
   }

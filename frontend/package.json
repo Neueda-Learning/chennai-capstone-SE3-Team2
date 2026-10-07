@@ -24,6 +24,7 @@
     "e2e:notifications": "playwright test e2e/notifications.spec.ts",
     "e2e:watchlists": "playwright test e2e/watchlists.spec.ts",
     "e2e:advice": "playwright test e2e/advice.spec.ts",
+    "e2e:strategies": "playwright test e2e/strategies.spec.ts",
     "check:bundle": "ng build && node scripts/check-bundle-secrets.mjs",
     "test:scripts": "node --test scripts/"
   },

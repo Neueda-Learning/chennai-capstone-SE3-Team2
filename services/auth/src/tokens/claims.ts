@@ -24,3 +24,13 @@ export interface AccessTokenClaims {
 export const CONTRACT_CLAIMS = ['sub', 'accountId', 'roles', 'iat', 'exp', 'iss'] as const;
 
 export const ACCESS_TOKEN_SECONDS = 900;
+
+/**
+ * Sprint 10: a token for an automated strategy, minted on an internal route
+ * (decision log 0012). Five minutes: it is used at once, to place one order,
+ * so anything longer only widens what a leak could do.
+ */
+export const STRATEGY_TOKEN_SECONDS = 300;
+
+/** The role a strategy's token carries beside the customer's own, so its orders can be told apart. */
+export const STRATEGY_ROLE = 'STRATEGY';

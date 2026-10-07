@@ -105,6 +105,8 @@ public interface ExecutionMapper {
               AND i.instrument_type <> 'MF'
               AND (EXISTS (SELECT 1 FROM position p
                             WHERE p.instrument_id = i.instrument_id)
+                OR EXISTS (SELECT 1 FROM strat_polled_symbols s
+                            WHERE s.instrument_id = i.instrument_id)
                 OR EXISTS (SELECT 1 FROM orders o
                             WHERE o.instrument_id = i.instrument_id
                               AND o.status = 'NEW')

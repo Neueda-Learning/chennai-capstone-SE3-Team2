@@ -2,6 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { ErrorResponse as AuthErrorResponse } from '../../../generated/auth';
 import { ErrorResponse as ExtensionErrorResponse } from '../../../generated/extensions';
 import { ErrorResponse as NotificationsErrorResponse } from '../../../generated/notifications';
+import { ErrorResponse as StrategyErrorResponse } from '../../../generated/strategy';
 import { ErrorResponse as TradeErrorResponse } from '../../../generated/trade';
 import { ErrorResponse as WatchlistsErrorResponse } from '../../../generated/watchlists';
 
@@ -14,6 +15,8 @@ export type ExtensionErrorCode = ExtensionErrorResponse.ErrorCodeEnum;
 export type NotificationsErrorCode = NotificationsErrorResponse.ErrorCodeEnum;
 /** The codes the Sprint 10 watchlists module adds. */
 export type WatchlistsErrorCode = WatchlistsErrorResponse.ErrorCodeEnum;
+/** The codes the Sprint 10 strategy module adds. */
+export type StrategyErrorCode = StrategyErrorResponse.ErrorCodeEnum;
 
 /**
  * Codes our services really send that neither contract lists: the login
@@ -28,6 +31,7 @@ export type KnownErrorCode =
   | ExtensionErrorCode
   | NotificationsErrorCode
   | WatchlistsErrorCode
+  | StrategyErrorCode
   | OffCatalogueCode;
 
 /**
@@ -60,7 +64,8 @@ export const ERROR_MESSAGES: Readonly<Record<KnownErrorCode, string>> = {
   'NTF-404': "That notification isn't on your account. Reload your notifications and try again.",
   'WCH-404': "That watchlist or alert isn't on your account any more. Reload the page and try again.",
   'LIM-409':
-    "You've reached a limit: 5 watchlists, 50 instruments in each, and 20 alerts waiting at once. Remove one to add another.",
+    "You've reached a limit: 5 watchlists, 50 instruments in each, 20 alerts waiting at once, and 10 strategies. Remove one to add another.",
+  'STR-404': "That strategy isn't on your account any more. Reload the page and try again.",
   'SRV-500':
     'Something went wrong on our side. Your request may not have completed, so check your orders before trying again.',
 };

@@ -76,7 +76,9 @@ anything else crosses, or if a module names another's tables.
   Built with portfolio.
 - **Auth issues a short-lived token for a strategy**, on an internal route behind the service
   secret, so a strategy's order goes through the order route like any other
-  ([0012](decision-log/0012-strategy-identity-is-an-auth-minted-short-token.md)).
+  ([0012](decision-log/0012-strategy-identity-is-an-auth-minted-short-token.md)). Built with
+  strategy: `POST /internal/strategy-tokens`, 300 seconds, the `STRATEGY` role beside the
+  customer's.
 
 ## Not built this sprint
 

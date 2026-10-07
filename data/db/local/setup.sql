@@ -84,6 +84,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE :"superuser" IN SCHEMA public
 \ir ../migrations/012_notifications.sql
 \ir ../migrations/013_watchlists.sql
 \ir ../migrations/014_portfolio.sql
+\ir ../migrations/015_strategy.sql
 \ir ../indexes/001_performance_indexes.sql
 \ir ../seed/001_reference_data.sql
 \ir ../seed/002_clients.sql
