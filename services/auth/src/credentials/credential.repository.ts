@@ -41,6 +41,16 @@ export class CredentialRepository {
     return rows.length ? this.toCredential(rows[0]) : null;
   }
 
+  /** The login bound to an account, for a strategy acting for it (Sprint 10). */
+  async findByAccountId(accountId: number): Promise<Credential | null> {
+    const { rows } = await this.pool.query(
+      `SELECT id, username, password_hash, account_id, roles
+         FROM credential WHERE account_id = $1`,
+      [accountId],
+    );
+    return rows.length ? this.toCredential(rows[0]) : null;
+  }
+
   /**
    * Consumes the activation token, claims its account and creates the
    * credential, in one transaction. A token consumed without a credential

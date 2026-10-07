@@ -5,6 +5,7 @@ import { AuthModule } from './auth/auth.module';
 import { DatabaseModule } from './database/database.module';
 import { MessagingModule } from './messaging/messaging.module';
 import { ProvisioningModule } from './provisioning/provisioning.module';
+import { StrategyTokenModule } from './strategy/strategy-token.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { ProvisioningModule } from './provisioning/provisioning.module';
     AuthModule,
     ProvisioningModule,
     ActivationModule,
+    StrategyTokenModule,
   ],
 })
 export class AppModule {}

@@ -70,6 +70,7 @@ public abstract class PostgresSupport {
             "migrations/012_notifications.sql",
             "migrations/013_watchlists.sql",
             "migrations/014_portfolio.sql",
+            "migrations/015_strategy.sql",
             "indexes/001_performance_indexes.sql",
             "seed/001_reference_data.sql",
             "seed/002_clients.sql",
@@ -117,6 +118,8 @@ public abstract class PostgresSupport {
         // Advice: no broker for market-data, and no timer; tests ask for a signal.
         registry.add("advice.consumer.auto-startup", () -> "false");
         registry.add("advice.refresh.enabled", () -> "false");
+        // Strategy: no broker for market-data or trade-events; tests hand it a quote or an outcome.
+        registry.add("strategy.consumer.auto-startup", () -> "false");
     }
 
     public static void applySchema(JdbcTemplate jdbc) {

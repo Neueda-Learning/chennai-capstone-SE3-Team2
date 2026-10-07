@@ -108,6 +108,7 @@ psql -U postgres -d trading -v ON_ERROR_STOP=1 -f data/db/migrations/011_prefere
 psql -U postgres -d trading -v ON_ERROR_STOP=1 -f data/db/migrations/012_notifications.sql
 psql -U postgres -d trading -v ON_ERROR_STOP=1 -f data/db/migrations/013_watchlists.sql
 psql -U postgres -d trading -v ON_ERROR_STOP=1 -f data/db/migrations/014_portfolio.sql
+psql -U postgres -d trading -v ON_ERROR_STOP=1 -f data/db/migrations/015_strategy.sql
 psql -U postgres -d trading -v ON_ERROR_STOP=1 -f data/db/seed/006_bank_accounts.sql
 psql -U postgres -d trading -v ON_ERROR_STOP=1 -f data/db/seed/007_mf_nav_funds.sql
 psql -U postgres -d trading -v ON_ERROR_STOP=1 -f data/db/seed/008_instrument_universe.sql
