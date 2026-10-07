@@ -106,7 +106,7 @@ public class OrderExecutionService {
         Optional<RejectReason> beforePricing = PreTradeChecks.beforePricing(instrument, account);
         if (beforePricing.isPresent()) {
             return Optional.of(settleAndPublish(
-                    new FillDecision.Reject(beforePricing.get()), order));
+                    new FillDecision.Reject(beforePricing.get()), order, Optional.empty()));
         }
 
         Quote quote;
@@ -121,15 +121,16 @@ public class OrderExecutionService {
             log.warn("no price for order {} ({} after {} attempts): rejecting",
                     orderId, e.getMessage(), e.attempts());
             return Optional.of(settleAndPublish(
-                    new FillDecision.Reject(RejectReason.NO_PRICE), order));
+                    new FillDecision.Reject(RejectReason.NO_PRICE), order, Optional.empty()));
         }
 
         FillDecision decision = ruleFor(instrument.assetClass()).decide(order, quote);
+        Optional<Position> held = Optional.empty();
 
         if (decision instanceof FillDecision.Fill fill) {
             // Rules 6 and 7, at the executed price rather than the limit. Both
             // were checked at acceptance against numbers that have since moved.
-            Optional<Position> held = Optional.ofNullable(
+            held = Optional.ofNullable(
                             mapper.findPosition(order.accountId(), order.instrumentId(), POSITION_TYPE))
                     .map(RowMapping::toPosition);
 
@@ -138,7 +139,7 @@ public class OrderExecutionService {
 
             if (atExecution.isPresent()) {
                 return Optional.of(settleAndPublish(
-                        new FillDecision.Reject(atExecution.get()), order));
+                        new FillDecision.Reject(atExecution.get()), order, Optional.empty()));
             }
 
             log.info("order {} is marketable: {} {} of {} at {} (bid {} / ask {}, spread {}bps, source {})",
@@ -146,19 +147,22 @@ public class OrderExecutionService {
                     fill.executedPrice(), quote.bid(), quote.ask(), quote.spreadBps(), quote.source());
         }
 
-        return Optional.of(settleAndPublish(decision, order));
+        return Optional.of(settleAndPublish(decision, order, held));
     }
 
-    /** Settle the order, then — if it was newly settled — publish the trade event. */
-    private SettlementResult settleAndPublish(FillDecision decision, OrderSnapshot order) {
+    /**
+     * Settle the order, then — if it was newly settled — publish the trade event.
+     * heldBefore is the position as it stood before a fill, read for rule 7.
+     */
+    private SettlementResult settleAndPublish(FillDecision decision, OrderSnapshot order, Optional<Position> heldBefore) {
         SettlementResult result = settlement.settle(decision, order);
         if (result == SettlementResult.SETTLED) {
-            publishTradeEvent(decision, order);
+            publishTradeEvent(decision, order, heldBefore);
         }
         return result;
     }
 
-    private void publishTradeEvent(FillDecision decision, OrderSnapshot order) {
+    private void publishTradeEvent(FillDecision decision, OrderSnapshot order, Optional<Position> heldBefore) {
         Instant eventTime = Instant.now(clock);
         boolean isFill = decision instanceof FillDecision.Fill;
 
@@ -176,6 +180,12 @@ public class OrderExecutionService {
             if (pos != null) {
                 positionQtyAfter = pos.getQuantity();
                 averageCostAfter = pos.getAveragePrice();
+            } else if (!order.isBuy() && heldBefore.isPresent()) {
+                // Sprint 10: the sale closed the position and its row is gone.
+                // A sale never changes average cost, so the cost the units were
+                // sold against is the one they were held at: realised P&L needs it.
+                positionQtyAfter = BigDecimal.ZERO;
+                averageCostAfter = heldBefore.get().averagePrice();
             }
         } else {
             cashDelta = BigDecimal.ZERO;

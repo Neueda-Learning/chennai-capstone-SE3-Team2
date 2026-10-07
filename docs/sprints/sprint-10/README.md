@@ -70,6 +70,10 @@ anything else crosses, or if a module names another's tables.
   executor's poller reads it ([0009](decision-log/0009-watched-symbols-reach-the-poller-through-a-view.md)).
 - **The browser may send `PUT`.** Sprint 9's CORS rule allowed `GET`, `POST` and `DELETE`;
   saving preferences is a `PUT`, so the rule lists it too. Built with preferences.
+- **A sale that closes a position announces its average cost.** The executor published
+  `averageCostAfter: null` for one, since the position row is gone; realised P&L needs the cost
+  the units were sold against ([0011](decision-log/0011-realised-pnl-from-a-trade-events-projection.md)).
+  Built with portfolio.
 - **Auth issues a short-lived token for a strategy**, on an internal route behind the service
   secret, so a strategy's order goes through the order route like any other
   ([0012](decision-log/0012-strategy-identity-is-an-auth-minted-short-token.md)).
@@ -88,6 +92,9 @@ not store.
   only**, which the contract allows when said ([0010](decision-log/0010-portfolio-prices-funds-at-nav-inr-only.md)).
 - One login has one account, so **"default account"** is paired with a default landing screen to
   make the preference visible ([0005](decision-log/0005-default-account-and-landing-screen.md)).
+- `PricedPosition.quantity` in `contracts/portfolio-api.yaml` is an integer; a fund holds
+  fractional units, so the portfolio module answers it as a number (`12.345678`). A stock's is
+  still whole.
 
 ## Open questions for the instructor
 

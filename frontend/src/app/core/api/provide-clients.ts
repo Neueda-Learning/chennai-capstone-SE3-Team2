@@ -3,6 +3,7 @@ import { provideApi as provideAuthApi } from '../../../generated/auth';
 import { provideApi as provideExtensionsApi } from '../../../generated/extensions';
 import { provideApi as provideNotificationsApi } from '../../../generated/notifications';
 import { provideApi as providePreferencesApi } from '../../../generated/preferences';
+import { provideApi as providePortfolioApi } from '../../../generated/portfolio';
 import { provideApi as provideTradeApi } from '../../../generated/trade';
 import { provideApi as provideWatchlistsApi } from '../../../generated/watchlists';
 import { API_CONFIG, ApiConfig } from '../config/api-config';
@@ -22,5 +23,7 @@ export function provideClients(config: ApiConfig): EnvironmentProviders {
     providePreferencesApi(config.tradeApiUrl),
     provideNotificationsApi(config.tradeApiUrl),
     provideWatchlistsApi(config.tradeApiUrl),
+    // The Sprint 10 portfolio module: contracts/portfolio-api.yaml, served by the Trade REST API.
+    providePortfolioApi(config.tradeApiUrl),
   ]);
 }

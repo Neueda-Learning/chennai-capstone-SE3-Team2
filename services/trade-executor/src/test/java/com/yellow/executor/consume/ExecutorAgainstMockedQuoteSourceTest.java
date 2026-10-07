@@ -15,7 +15,9 @@ import com.yellow.executor.config.MfNavProperties;
 import com.yellow.executor.quotes.FauxnanceQuoteClient;
 import com.yellow.executor.quotes.MfNavClient;
 import com.yellow.executor.quotes.QuotaCounter;
+import com.yellow.executor.settle.FullSettlement;
 import com.yellow.executor.settle.GuardedSettlement;
+import com.yellow.executor.settle.SettlementPort;
 import com.yellow.executor.settle.SettlementResult;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -56,28 +58,33 @@ class ExecutorAgainstMockedQuoteSourceTest {
     private WireMockServer fauxnance;
     private InMemoryExecutionMapper mapper;
     private OrderExecutionService service;
+    private KafkaTemplate<String, EventEnvelope<TradeEventPayload>> template;
 
     @BeforeEach
     void wire() {
         fauxnance = new WireMockServer(options().dynamicPort());
         fauxnance.start();
 
-        Clock fixed = Clock.fixed(NOW, ZoneOffset.UTC);
         mapper = new InMemoryExecutionMapper();
+        template = mockTemplate();
+        service = serviceSettlingWith(new GuardedSettlement(mapper, Clock.fixed(NOW, ZoneOffset.UTC)));
+    }
 
+    private OrderExecutionService serviceSettlingWith(SettlementPort settlement) {
+        Clock fixed = Clock.fixed(NOW, ZoneOffset.UTC);
         FauxnanceProperties props = new FauxnanceProperties(
                 "http://localhost:" + fauxnance.port(), "test-key",
                 Duration.ofSeconds(5), 2, Duration.ofMillis(10), Duration.ofMillis(50),
                 2000, 200);
 
-        service = new OrderExecutionService(
+        return new OrderExecutionService(
                 mapper,
                 new FauxnanceQuoteClient(props, new QuotaCounter(fixed), new ObjectMapper()),
                 // No fund orders here; without a key the NAV client refuses them unasked.
                 new MfNavClient(new MfNavProperties("http://localhost:" + fauxnance.port(), "",
                         null, 0, null, null), new ObjectMapper()),
-                new GuardedSettlement(mapper, fixed),
-                mockTemplate(),
+                settlement,
+                template,
                 fixed);
     }
 
@@ -100,6 +107,30 @@ class ExecutorAgainstMockedQuoteSourceTest {
         assertThat(mapper.lastResolvedAt, is(NOW));
         // A filled order carries no reason. The database enforces this too.
         assertThat(mapper.lastReason, is(nullValue()));
+    }
+
+    @Test
+    @DisplayName("a sale that closes the position announces quantity 0 and the average cost it was sold against")
+    @SuppressWarnings("unchecked")
+    void aClosingSaleCarriesItsAverageCost() {
+        mapper.given(order("SELL", "4", "125000.00"), account("750000", "ACTIVE"));
+        mapper.insertPosition(3L, 1L, "DELIVERY", new BigDecimal("4"), new BigDecimal("120000.0000"));
+        fauxnance.stubFor(get(urlPathEqualTo("/quotes/MRF.NS")).willReturn(quoteResponse(false)));
+
+        // The settlement that moves cash and positions, as the running executor uses.
+        OrderExecutionService settling = serviceSettlingWith(new FullSettlement(mapper, Clock.fixed(NOW, ZoneOffset.UTC)));
+        assertThat(settling.execute(ORDER_ID), is(Optional.of(SettlementResult.SETTLED)));
+        assertThat(mapper.findPosition(3L, 1L, "DELIVERY"), is(nullValue()));
+
+        org.mockito.ArgumentCaptor<EventEnvelope<TradeEventPayload>> sent =
+                org.mockito.ArgumentCaptor.forClass((Class<EventEnvelope<TradeEventPayload>>) (Class<?>) EventEnvelope.class);
+        Mockito.verify(template).send(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("3"), sent.capture());
+        TradeEventPayload payload = sent.getValue().payload();
+        assertThat(payload.status(), is("FILLED"));
+        // A sale never changes average cost; with the position gone, the event
+        // is the only place left that says what the units cost.
+        assertThat(payload.positionQuantityAfter(), comparesEqualTo(BigDecimal.ZERO));
+        assertThat(payload.averageCostAfter(), comparesEqualTo(new BigDecimal("120000.0000")));
     }
 
     @Test

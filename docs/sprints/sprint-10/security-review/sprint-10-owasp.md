@@ -61,6 +61,12 @@ module is dispositioned out of scope with the reason.
 | Watchlists, A01 | The seam: alerts reach the customer only through `AlertDelivery`; the module never resolves a channel. `ModuleBoundaryTest` holds it to `notifications.api` | No second path to a customer |
 | Watchlists, A03 | `WatchlistMapper`, `AlertMapper`, `LatestQuoteMapper` read: every value bound with `#{}`; a symbol in a path is resolved through `InstrumentMapper` before any write | No interpolation |
 | Watchlists, A05 | The executor reads `watch_polled_symbols`, a view, never the module's tables (0009); `PolledSymbolsIntegrationTest` in the executor | Watched and alerted stocks are polled; funds still are not |
+| Portfolio, A01 | `PortfolioIntegrationTest`, `PortfolioControllerTest`: another account's token on the three routes, and an account number that does not exist | `403 ACC-403` every time, never `404`: the claim is compared before anything is read, and logged |
+| Portfolio, A05 | `PortfolioIntegrationTest`: `/health` without a token | `200`, status and the two dependencies only; no customer data |
+| Portfolio, A08 | `RealisedBookTest`, `PortfolioIntegrationTest`: a sale replayed, and a sale event for an order `orders` never recorded | One booking; the forged one booked nothing |
+| Portfolio, A04 | `PortfolioIntegrationTest`: a fingerprint of `position`, `client_account` and `orders` before and after every portfolio route | Unchanged: read-only means read-only |
+| Portfolio, A03 | `RealisedMapper` read: every value bound with `#{}`; positions through the platform's `PositionMapper` | No interpolation |
+| Portfolio, A06/A02 | Prices through the platform's `PriceService`: the Fauxnance key stays on the server, batched 25 to a call, cached a minute; `/health` reports the quota from the service's own count, costing none | The browser never calls Fauxnance |
 
 ## Outstanding items
 

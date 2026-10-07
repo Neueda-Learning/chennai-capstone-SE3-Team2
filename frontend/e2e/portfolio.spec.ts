@@ -48,4 +48,28 @@ test.describe('orders and holdings', () => {
     await page.getByTestId('holdings-filter-stocks').click();
     await expect(page.getByTestId('holdings-filter-stocks')).toHaveAttribute('aria-pressed', 'true');
   });
+
+  test("a sale's realised P&L is booked from trade-events and shows on Holdings", async ({ page }) => {
+    // The executor fills, the portfolio module books, Holdings reads again every 15 seconds.
+    test.setTimeout(120_000);
+    await page.getByTestId('nav-holdings').click();
+    const realised = page.getByTestId('holdings-realised');
+    await expect(realised).toContainText('₹');
+    const before = (await realised.innerText()).trim();
+
+    // Buy one, then sell it: the sale books (sale price - average cost) for that unit.
+    for (const side of ['BUY', 'SELL']) {
+      await page.goto(`/trade?symbol=${encodeURIComponent(env.symbol)}&side=${side}`);
+      await expect(page.getByTestId('ticket-type-market')).toBeChecked();
+      await page.getByTestId('ticket-quantity').fill('1');
+      await page.getByTestId('ticket-submit').click();
+      await expect(page.getByTestId('ticket-status')).toHaveText(/^(NEW|FILLED|REJECTED)$/);
+      await page.getByTestId('ticket-see-orders').click();
+      const latest = page.getByTestId('orders-executed').getByTestId('blotter-row').first();
+      await expect(latest).toHaveAttribute('data-status', 'FILLED', { timeout: 30_000 });
+    }
+
+    await page.getByTestId('nav-holdings').click();
+    await expect(realised).not.toHaveText(before, { timeout: 45_000 });
+  });
 });

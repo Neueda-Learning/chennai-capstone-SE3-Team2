@@ -54,15 +54,28 @@ describe('Dashboard', () => {
     page = fixture.nativeElement as HTMLElement;
   }
 
-  async function render(positions: unknown[], orders: OrderHistoryEntry[] = []): Promise<void> {
+  /** What the portfolio module answers for these priced positions. */
+  const summaryOf = (positions: { marketValue: number; costBasis: number; unrealisedPnl: number }[]) => ({
+    accountId: 3, baseCurrency: 'INR', cashBalance: 750000,
+    marketValue: positions.reduce((sum, p) => sum + p.marketValue, 0),
+    costBasis: positions.reduce((sum, p) => sum + p.costBasis, 0),
+    unrealisedPnl: positions.reduce((sum, p) => sum + p.unrealisedPnl, 0),
+    unrealisedPnlPercent: null, realisedPnl: 312.4,
+    totalValue: 750000 + positions.reduce((sum, p) => sum + p.marketValue, 0),
+    positionCount: positions.length, partial: false, asOf: '2026-10-07T04:00:00Z',
+  });
+
+  async function render(positions: ReturnType<typeof position>[], orders: OrderHistoryEntry[] = []): Promise<void> {
     configure();
     await settle();
     http.expectOne(`${TRADE}/api/v1/accounts/3`).flush({
       id: 3, accountId: 'ACC-000003', holderName: 'Rohan Nair', cashBalance: 750000, status: 'ACTIVE', version: 7, lastUpdated: '2026-10-02T09:00:00Z',
     });
     http.expectOne(`${AUTH}/auth/me`).flush({ id: 'u-1', username: 'rohan.nair', accountId: 3, roles: ['CUSTOMER'] });
-    http.expectOne(`${TRADE}/api/v1/accounts/3/positions`).flush(positions);
     http.expectOne(`${TRADE}/api/v1/accounts/3/orders`).flush(orders);
+    await settle();
+    http.expectOne(`${TRADE}/api/v1/portfolio/3/positions`).flush(positions);
+    http.expectOne(`${TRADE}/api/v1/portfolio/3`).flush(summaryOf(positions));
     await settle();
     for (const lookup of http.match((r) => r.url === `${TRADE}/api/v1/instruments`)) {
       const symbols = lookup.request.params.get('symbols')!.split(',');
@@ -78,7 +91,16 @@ describe('Dashboard', () => {
   afterEach(() => http.verify());
 
   const text = (id: string) => page.querySelector(`[data-testid="${id}"]`)?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
-  const position = (symbol: string, quantity: number, averageCost: number) => ({ accountId: 3, symbol, quantity, averageCost });
+  /** A holding as the portfolio module prices it, at the fixture's quote. */
+  const position = (symbol: string, quantity: number, averageCost: number) => {
+    const lastPrice = QUOTES.find((q) => q.symbol === symbol)!.price!;
+    return {
+      accountId: 3, symbol, quantity, averageCost, costBasis: quantity * averageCost, lastPrice,
+      marketValue: quantity * lastPrice, unrealisedPnl: quantity * (lastPrice - averageCost),
+      unrealisedPnlPercent: ((lastPrice - averageCost) / averageCost) * 100, currency: 'INR',
+      priceAsOf: '2026-10-07T04:00:00Z', stale: false,
+    };
+  };
 
   it('greets the customer by first name, with the cash available and the account they know', async () => {
     await render([]);
@@ -99,6 +121,13 @@ describe('Dashboard', () => {
     expect(page.querySelector('[data-testid="dashboard-pnl"]')?.classList).toContain('up');
     expect(text('dashboard-holdings')).toContain('Holdings (2)');
     expect(page.querySelector('[data-testid="dashboard-view-holdings"]')?.getAttribute('href')).toBe('/holdings');
+  });
+
+  it("shows the P&L realised by sales and the total with cash, as the portfolio module counts them", async () => {
+    await render([position('TCS.NS', 4, 3500)]);
+
+    expect(text('dashboard-realised')).toContain('+₹312.40');
+    expect(text('dashboard-total')).toContain('₹764,400.00');
   });
 
   it('says so when nothing is held', async () => {
@@ -132,8 +161,10 @@ describe('Dashboard', () => {
     await settle();
     http.expectOne(`${TRADE}/api/v1/accounts/3`).flush({ errorCode: 'ACC-403', message: 'x' }, { status: 403, statusText: 'Forbidden' });
     http.expectOne(`${AUTH}/auth/me`).flush({ id: 'u-1', username: 'rohan.nair', accountId: 3, roles: ['CUSTOMER'] });
-    http.expectOne(`${TRADE}/api/v1/accounts/3/positions`).flush([]);
     http.expectOne(`${TRADE}/api/v1/accounts/3/orders`).flush([]);
+    await settle();
+    http.expectOne(`${TRADE}/api/v1/portfolio/3/positions`).flush([]);
+    http.expectOne(`${TRADE}/api/v1/portfolio/3`).flush(summaryOf([]));
     await settle();
 
     expect(page.querySelector('[role="alert"]')?.textContent).toContain("This account can't place orders right now.");

@@ -42,7 +42,17 @@
           </dd>
         </div>
         <div>
-          <dt>Total P&amp;L</dt>
+          <dt>Realised P&amp;L</dt>
+          <dd data-testid="holdings-realised" [class]="sign(summary()?.realisedPnl ?? null)">
+            @if (summary(); as summary) {
+              {{ summary.realisedPnl > 0 ? '+' : '' }}{{ summary.realisedPnl | currency: 'INR' : 'symbol' : '1.2-2' }}
+            } @else {
+              —
+            }
+          </dd>
+        </div>
+        <div>
+          <dt>Unrealised P&amp;L</dt>
           <dd data-testid="holdings-pnl" [class]="sign(totals.pnl)">
             {{ totals.pnl > 0 ? '+' : '' }}{{ totals.pnl | currency: 'INR' : 'symbol' : '1.2-2' }}
             @if (totals.pnlPercent !== null) {
@@ -51,7 +61,11 @@
           </dd>
         </div>
       </dl>
-      @if (totals.partial) {
+      @if (pricingUnavailable()) {
+        <p class="note" data-testid="holdings-unpriced">
+          Prices can't be fetched right now, so your holdings show at what they cost. They are still yours.
+        </p>
+      } @else if (totals.partial) {
         <p class="note" data-testid="holdings-partial">
           Some holdings have no price right now; the value and P&amp;L above leave them out.
         </p>

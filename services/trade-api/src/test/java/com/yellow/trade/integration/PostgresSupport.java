@@ -69,6 +69,7 @@ public abstract class PostgresSupport {
             "migrations/011_preferences.sql",
             "migrations/012_notifications.sql",
             "migrations/013_watchlists.sql",
+            "migrations/014_portfolio.sql",
             "indexes/001_performance_indexes.sql",
             "seed/001_reference_data.sql",
             "seed/002_clients.sql",
@@ -111,6 +112,8 @@ public abstract class PostgresSupport {
         registry.add("notifications.consumer.auto-startup", () -> "false");
         registry.add("notifications.dispatch.enabled", () -> "false");
         registry.add("watchlists.consumer.auto-startup", () -> "false");
+        // Portfolio: no broker to consume trade-events from; tests call the book.
+        registry.add("portfolio.consumer.auto-startup", () -> "false");
     }
 
     public static void applySchema(JdbcTemplate jdbc) {
