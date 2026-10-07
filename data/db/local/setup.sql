@@ -80,6 +80,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE :"superuser" IN SCHEMA public
 \ir ../migrations/008_kyc_attempts.sql
 \ir ../migrations/009_bank_account.sql
 \ir ../migrations/010_payments.sql
+\ir ../migrations/011_preferences.sql
 \ir ../indexes/001_performance_indexes.sql
 \ir ../seed/001_reference_data.sql
 \ir ../seed/002_clients.sql

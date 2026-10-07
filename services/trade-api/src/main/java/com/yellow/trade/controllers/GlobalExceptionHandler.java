@@ -15,6 +15,7 @@ import com.yellow.trade.dto.ErrorResponse;
 import com.yellow.trade.marketdata.ChartUnavailableException;
 import com.yellow.trade.marketdata.PricingUnavailableException;
 import com.yellow.trade.payments.PaymentRefusedException;
+import com.yellow.trade.security.AccountNotReachableException;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,6 +51,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccountNotActiveException.class)
     public ResponseEntity<ErrorResponse> handle(AccountNotActiveException e) {
         log.warn("ACC-403: account status {}, kyc {}", e.actualStatus(), e.kycStatus());
+        return envelope(HttpStatus.FORBIDDEN, e);
+    }
+
+    /** A Sprint 10 module route addressed another account; AccountAccess has logged it. */
+    @ExceptionHandler(AccountNotReachableException.class)
+    public ResponseEntity<ErrorResponse> handle(AccountNotReachableException e) {
         return envelope(HttpStatus.FORBIDDEN, e);
     }
 

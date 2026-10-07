@@ -68,6 +68,8 @@ anything else crosses, or if a module names another's tables.
 - **The poller prices watched and alerted stocks**, not only held and working ones, or an alert on
   a stock nobody holds never sees a quote. The watchlists module owns a view of its symbols; the
   executor's poller reads it ([0009](decision-log/0009-watched-symbols-reach-the-poller-through-a-view.md)).
+- **The browser may send `PUT`.** Sprint 9's CORS rule allowed `GET`, `POST` and `DELETE`;
+  saving preferences is a `PUT`, so the rule lists it too. Built with preferences.
 - **Auth issues a short-lived token for a strategy**, on an internal route behind the service
   secret, so a strategy's order goes through the order route like any other
   ([0012](decision-log/0012-strategy-identity-is-an-auth-minted-short-token.md)).

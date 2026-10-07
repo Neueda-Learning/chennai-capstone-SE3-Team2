@@ -37,7 +37,7 @@ public class CorsConfig {
 
         CorsConfiguration cors = new CorsConfiguration();
         cors.setAllowedOrigins(allowedOrigins);
-        cors.setAllowedMethods(List.of("GET", "POST", "DELETE"));
+        cors.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE"));
         cors.setAllowedHeaders(List.of("Authorization", "Content-Type"));
         // A bearer token in a header, never a cookie: nothing to send with credentials.
         cors.setAllowCredentials(false);

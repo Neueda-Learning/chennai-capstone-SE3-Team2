@@ -384,7 +384,7 @@ the money twice.
 
 ## End-to-end journeys
 
-Five Playwright journeys in `e2e/`, against the **real running stack** -- the UI,
+The Playwright journeys in `e2e/`, against the **real running stack** -- the UI,
 the Trade REST API and the Auth service. An end-to-end test that talks to a
 stub proves nothing about integration.
 
@@ -394,6 +394,7 @@ stub proves nothing about integration.
 | `e2e/place-order.spec.ts` | the read-only account, an invalid order stopped before it is sent, a placed order and whatever status came back |
 | `e2e/cash.spec.ts` | on Funds: the bank account masked, a deposit shown processing and then decided without a reload, a withdrawal over the available cash stopped before it is sent |
 | `e2e/portfolio.spec.ts` | a market buy at the live price moving from Open to Executed on the Orders page, and Holdings pricing every holding live with totals |
+| `e2e/preferences.spec.ts` | Sprint 10: a landing screen saved in Settings is where the next sign-in opens |
 | `e2e/market-watch.spec.ts` | the market watch beside the dashboard with platform prices, a stock added through the search, its chart and range buttons, and Buy opening the order window filled in |
 
 A placed order passes on `NEW`, `FILLED` or `REJECTED`. Asserting `FILLED`
@@ -424,7 +425,8 @@ npm run e2e:cash                             # one that only passes after its ne
 npm run e2e:order
 npm run e2e:market
 npm run e2e:portfolio
-npm run e2e                                  # all five
+npm run e2e:preferences
+npm run e2e                                  # every journey
 ```
 
 Each test starts in a fresh browser context and shares nothing: no token in a
