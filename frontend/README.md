@@ -397,6 +397,7 @@ stub proves nothing about integration.
 | `e2e/preferences.spec.ts` | Sprint 10: a landing screen saved in Settings is where the next sign-in opens |
 | `e2e/notifications.spec.ts` | Sprint 10: with the channel set to the inbox, a market buy's outcome arrives in the inbox on its own, and the bell counts it until it is read |
 | `e2e/watchlists.spec.ts` | Sprint 10: the market watch kept on the server, a stock added in one browser there in the next; an alert at the market price firing on the poller's next quote and arriving in the inbox |
+| `e2e/advice.spec.ts` | Sprint 10: a stock page reads its signal on request, from real daily candles: a view, the reason, and that it is not advice |
 | `e2e/market-watch.spec.ts` | the market watch beside the dashboard with platform prices, a stock added through the search, its chart and range buttons, and Buy opening the order window filled in |
 
 A placed order passes on `NEW`, `FILLED` or `REJECTED`. Asserting `FILLED`
@@ -430,6 +431,7 @@ npm run e2e:portfolio
 npm run e2e:preferences
 npm run e2e:notifications
 npm run e2e:watchlists
+npm run e2e:advice
 npm run e2e                                  # every journey
 ```
 

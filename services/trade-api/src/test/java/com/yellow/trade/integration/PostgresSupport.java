@@ -114,6 +114,9 @@ public abstract class PostgresSupport {
         registry.add("watchlists.consumer.auto-startup", () -> "false");
         // Portfolio: no broker to consume trade-events from; tests call the book.
         registry.add("portfolio.consumer.auto-startup", () -> "false");
+        // Advice: no broker for market-data, and no timer; tests ask for a signal.
+        registry.add("advice.consumer.auto-startup", () -> "false");
+        registry.add("advice.refresh.enabled", () -> "false");
     }
 
     public static void applySchema(JdbcTemplate jdbc) {

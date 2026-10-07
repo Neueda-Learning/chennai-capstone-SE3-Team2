@@ -67,6 +67,10 @@ module is dispositioned out of scope with the reason.
 | Portfolio, A04 | `PortfolioIntegrationTest`: a fingerprint of `position`, `client_account` and `orders` before and after every portfolio route | Unchanged: read-only means read-only |
 | Portfolio, A03 | `RealisedMapper` read: every value bound with `#{}`; positions through the platform's `PositionMapper` | No interpolation |
 | Portfolio, A06/A02 | Prices through the platform's `PriceService`: the Fauxnance key stays on the server, batched 25 to a call, cached a minute; `/health` reports the quota from the service's own count, costing none | The browser never calls Fauxnance |
+| Advice, A01 | `AdviceIntegrationTest`: the route without a token, a fund, a symbol nobody lists | `401`; `422 VAL-422`; `404 INS-404`. No account in the path: market data is public to any signed-in customer, a decision recorded in the A01 row |
+| Advice, A04 | Cost and cadence: candles through the platform's `CandleService`, kept six hours; a signal computed when first asked, then on a five-minute timer, never per quote (`AdviceServiceTest`) | A page that never asks costs nothing; asking again inside the window reads no candles |
+| Advice, A04 | What a signal may claim: one methodology, named in every response with the figures behind it; the disclaimer in the response and on screen before anything is read (decision log 0015) | `advice-signal.spec.ts` (UI), `AdviceControllerTest` |
+| Advice, A08 | `LatestPricesTest`: a quote observed earlier than the one held, and a message that is not a quote | Ignored; dead-lettered. The consumer holds prices in memory only and writes nothing |
 
 ## Outstanding items
 

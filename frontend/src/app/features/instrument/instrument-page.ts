@@ -12,6 +12,7 @@ import { MarketWatchList } from '../../core/market/market-watch-list';
 import { Session } from '../../core/session/session';
 import { CandleChart } from '../../shared/candle-chart/candle-chart';
 import { ErrorMessage } from '../../shared/error-message/error-message';
+import { AdviceSignal } from '../advice/advice-signal';
 import { trendOf } from '../market-watch/market-watch';
 
 const RANGE_NAMES: Readonly<Record<ChartRange, string>> = {
@@ -29,7 +30,7 @@ const RANGE_NAMES: Readonly<Record<ChartRange, string>> = {
  */
 @Component({
   selector: 'app-instrument-page',
-  imports: [CandleChart, CurrencyPipe, DatePipe, DecimalPipe, ErrorMessage, ReactiveFormsModule, RouterLink],
+  imports: [AdviceSignal, CandleChart, CurrencyPipe, DatePipe, DecimalPipe, ErrorMessage, ReactiveFormsModule, RouterLink],
   templateUrl: './instrument-page.html',
   styleUrl: './instrument-page.css',
 })
