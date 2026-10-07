@@ -1,5 +1,6 @@
 package com.yellow.executor.consume;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yellow.executor.settle.LockExhaustedException;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -11,6 +12,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,11 +25,13 @@ import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.ExponentialBackOffWithMaxRetries;
 import org.springframework.kafka.support.serializer.DeserializationException;
+import org.springframework.kafka.support.serializer.JsonSerializer;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -80,9 +84,32 @@ public class ConsumerErrorHandling {
     /**
      * DLT records carry either the original bytes (a deserialisation failure
      * preserved the raw payload) or JSON re-serialised from a rejected object.
+     * Two producers, one for each: the bytes one alone cannot send a record
+     * the listener had already read, and the recoverer failing to publish
+     * re-delivers the record, so one order the executor refused held up
+     * every order behind it on that partition, for ever.
      */
     @Bean
     public ProducerFactory<String, byte[]> dltProducerFactory(KafkaProperties kafka) {
+        return new DefaultKafkaProducerFactory<>(dltProducerProperties(kafka),
+            new StringSerializer(), new ByteArraySerializer());
+    }
+
+    /** The JSON side: a record the listener refused, written back as JSON, with no type headers. */
+    @Bean
+    public ProducerFactory<String, Object> dltJsonProducerFactory(KafkaProperties kafka, ObjectMapper objectMapper) {
+        JsonSerializer<Object> value = new JsonSerializer<>(objectMapper);
+        value.setAddTypeInfo(false);
+        return new DefaultKafkaProducerFactory<>(dltProducerProperties(kafka), new StringSerializer(), value);
+    }
+
+    @Bean
+    public KafkaTemplate<String, Object> dltJsonKafkaTemplate(
+            @Qualifier("dltJsonProducerFactory") ProducerFactory<String, Object> dltJsonProducerFactory) {
+        return new KafkaTemplate<>(dltJsonProducerFactory);
+    }
+
+    private static Map<String, Object> dltProducerProperties(KafkaProperties kafka) {
         Map<String, Object> props = new HashMap<>(kafka.buildProducerProperties(null));
         // 7): a DLT publish that silently drops leaves the poison record
         // processed nowhere.
@@ -90,23 +117,30 @@ public class ConsumerErrorHandling {
         props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
         props.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
         props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 5);
-        return new DefaultKafkaProducerFactory<>(props,
-            new StringSerializer(), new ByteArraySerializer());
+        return props;
     }
 
     @Bean
-        public KafkaTemplate<String, byte[]> dltKafkaTemplate(
-            ProducerFactory<String, byte[]> dltProducerFactory) {
+    public KafkaTemplate<String, byte[]> dltKafkaTemplate(
+            @Qualifier("dltProducerFactory") ProducerFactory<String, byte[]> dltProducerFactory) {
         return new KafkaTemplate<>(dltProducerFactory);
     }
 
     /** The error handler for the orders listener. */
     @Bean
     public DefaultErrorHandler orderPlacedErrorHandler(
-            KafkaOperations<String, byte[]> dltKafkaTemplate, Clock clock) {
+            @Qualifier("dltKafkaTemplate") KafkaOperations<String, byte[]> dltKafkaTemplate,
+            @Qualifier("dltJsonKafkaTemplate") KafkaOperations<String, Object> dltJsonKafkaTemplate,
+            Clock clock) {
+
+        // Chosen by the value's class, in this order: the raw bytes of a
+        // record that never parsed, else the object the listener refused.
+        Map<Class<?>, KafkaOperations<?, ?>> templates = new LinkedHashMap<>();
+        templates.put(byte[].class, dltKafkaTemplate);
+        templates.put(Object.class, dltJsonKafkaTemplate);
 
         DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(
-                dltKafkaTemplate,
+                templates,
                 // DLT. Partition -1 lets the broker choose; the DLT topics
                 // are one-partition each (no ordering needed for
                 (rec, ex) -> new TopicPartition(rec.topic() + ".DLT", -1));

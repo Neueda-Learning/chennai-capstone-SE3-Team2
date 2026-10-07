@@ -213,6 +213,63 @@ class ConsumerErrorHandlingIntegrationTest {
         assertHeader(dlt, ConsumerErrorHandling.H_ATTEMPT_COUNT, "1");
     }
 
+    // ------------------------------------------------------------- path 4
+
+    @Test
+    @DisplayName("an order the executor cannot execute is dead-lettered once, as the JSON it arrived as, and the partition moves on")
+    void rejectedOrderIsDeadLetteredAsJson() throws Exception {
+        // Well-formed, so the listener sees it, and then refuses it: the
+        // order is not in Postgres. Poison, every time it is delivered.
+        UUID unknown = UUID.randomUUID();
+        stub.failAlwaysFor(unknown, new UnknownOrderException(unknown));
+        ordersProducer.send(new ProducerRecord<>(ORDERS_TOPIC, 0, KEY,
+                WELL_FORMED_ENVELOPE.formatted(UUID.randomUUID(), unknown)));
+        UUID goodOrder = UUID.randomUUID();
+        ordersProducer.send(new ProducerRecord<>(ORDERS_TOPIC, 0, KEY,
+                WELL_FORMED_ENVELOPE.formatted(UUID.randomUUID(), goodOrder)));
+        ordersProducer.flush();
+
+        assertTrue(awaitSuccess(stub, 15, TimeUnit.SECONDS),
+                "the order behind the rejected one must still be executed");
+
+        ConsumerRecord<String, byte[]> dlt = pollOneDlt();
+        assertThat("the rejected order should be on the DLT", dlt, is(notNullValue()));
+        assertHeader(dlt, ConsumerErrorHandling.H_FAILURE_CLASS, "POISON");
+        assertHeader(dlt, ConsumerErrorHandling.H_ATTEMPT_COUNT, "1");
+        assertHeader(dlt, ConsumerErrorHandling.H_FAILURE_CLASS_FQCN, UnknownOrderException.class.getName());
+        // The record as the executor read it, as JSON a person or a replay tool can read.
+        var payload = new ObjectMapper().readTree(dlt.value()).path("payload");
+        assertThat(payload.path("orderId").asText(), is(unknown.toString()));
+        // Refused once, not again and again.
+        assertThat(stub.callsFor(unknown), is(1));
+    }
+
+    // ------------------------------------------------------------- path 5
+
+    @Test
+    @DisplayName("a transient failure that never clears is retried, then dead-lettered as JSON, and the partition moves on")
+    void exhaustedTransientIsDeadLetteredAsJson() throws Exception {
+        UUID stuck = UUID.randomUUID();
+        stub.failAlwaysFor(stuck, new TransientDataAccessResourceException("Postgres is not answering"));
+        ordersProducer.send(new ProducerRecord<>(ORDERS_TOPIC, 0, KEY,
+                WELL_FORMED_ENVELOPE.formatted(UUID.randomUUID(), stuck)));
+        ordersProducer.send(new ProducerRecord<>(ORDERS_TOPIC, 0, KEY,
+                WELL_FORMED_ENVELOPE.formatted(UUID.randomUUID(), UUID.randomUUID())));
+        ordersProducer.flush();
+
+        // Back-off 0.5 s, 2 s, 8 s: the budget is spent in about 11 seconds.
+        assertTrue(awaitSuccess(stub, 30, TimeUnit.SECONDS),
+                "the order behind the exhausted one must still be executed");
+
+        ConsumerRecord<String, byte[]> dlt = pollOneDlt(Duration.ofSeconds(15));
+        assertThat("the exhausted order should be on the DLT", dlt, is(notNullValue()));
+        assertHeader(dlt, ConsumerErrorHandling.H_FAILURE_CLASS, "TRANSIENT");
+        assertHeader(dlt, ConsumerErrorHandling.H_ATTEMPT_COUNT, Integer.toString(ConsumerErrorHandling.MAX_RETRIES + 1));
+        var payload = new ObjectMapper().readTree(dlt.value()).path("payload");
+        assertThat(payload.path("orderId").asText(), is(stuck.toString()));
+        assertThat(stub.callsFor(stuck), is(ConsumerErrorHandling.MAX_RETRIES + 1));
+    }
+
     // ----------------------------------------------------- test utilities
 
     private static boolean awaitSuccess(StubExecution stub, long timeout, TimeUnit unit) {
@@ -343,10 +400,24 @@ class ConsumerErrorHandlingIntegrationTest {
         private final AtomicInteger calls = new AtomicInteger();
         private final CountDownLatch successLatch = new CountDownLatch(1);
         private final AtomicReference<RuntimeException> failFirstOnce = new AtomicReference<>();
+        private final Map<UUID, RuntimeException> failAlways = new java.util.concurrent.ConcurrentHashMap<>();
+        private final Map<UUID, AtomicInteger> callsByOrder = new java.util.concurrent.ConcurrentHashMap<>();
 
         void reset() {
             calls.set(0);
             failFirstOnce.set(null);
+            failAlways.clear();
+            callsByOrder.clear();
+        }
+
+        /** Every delivery of this order throws. */
+        void failAlwaysFor(UUID orderId, RuntimeException ex) {
+            failAlways.put(orderId, ex);
+        }
+
+        int callsFor(UUID orderId) {
+            AtomicInteger count = callsByOrder.get(orderId);
+            return count == null ? 0 : count.get();
         }
 
         void failFirst(RuntimeException ex) {
@@ -355,6 +426,12 @@ class ConsumerErrorHandlingIntegrationTest {
 
         void onRecord(ConsumerRecord<String, EventEnvelope<OrderPlacedPayload>> rec) {
             calls.incrementAndGet();
+            UUID orderId = UUID.fromString(rec.value().payload().orderId());
+            callsByOrder.computeIfAbsent(orderId, id -> new AtomicInteger()).incrementAndGet();
+            RuntimeException always = failAlways.get(orderId);
+            if (always != null) {
+                throw always;
+            }
             RuntimeException toThrow = failFirstOnce.getAndSet(null);
             if (toThrow != null) {
                 throw toThrow;
