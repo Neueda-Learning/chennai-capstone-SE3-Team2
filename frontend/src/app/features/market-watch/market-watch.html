@@ -1,12 +1,12 @@
 <section class="market-watch" aria-labelledby="watch-title">
   <header class="watch-head">
-    <h2 id="watch-title">Market watch <span class="list-name" data-testid="watch-name">{{ list.active()?.name }}</span></h2>
+    <h2 id="watch-title" data-testid="watch-name">{{ list.active()?.name ?? 'Watchlist' }}</h2>
     <span class="count" data-testid="watch-count">{{ rows().length }} / {{ limit }}</span>
   </header>
 
   <app-instrument-search
     inputId="watch-search"
-    ariaLabel="Search for an instrument to add to your market watch"
+    ariaLabel="Search for an instrument to add to this watchlist"
     placeholder="Search and add: infy, tata, parag…"
     (picked)="add($event)"
   />
@@ -72,7 +72,7 @@
           <button
             type="button"
             class="act remove"
-            [attr.aria-label]="'Remove ' + row.label + ' from your market watch'"
+            [attr.aria-label]="'Remove ' + row.label + ' from this watchlist'"
             data-testid="watch-remove"
             (click)="remove(row.symbol)"
           >

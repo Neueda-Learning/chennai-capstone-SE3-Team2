@@ -217,9 +217,8 @@ describe('OrderTicket', () => {
       expect(alert).not.toContain('Insufficient funds');
     });
 
-    it("shows the account by the reference the customer knows, read-only, and sends the token's account", async () => {
-      expect(field('ticket-account').value).toBe('ACC-000003');
-      expect((field('ticket-account') as HTMLInputElement).readOnly).toBe(true);
+    it("has no account field, since the header shows the account, and sends the token's account", async () => {
+      expect(page.querySelector('[data-testid="ticket-account"]')).toBeNull();
 
       await fill({});
       await submit();

@@ -190,7 +190,7 @@ describe('MarketWatch', () => {
     page.querySelector('[data-testid="instrument-search-option"]')!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
     await settle();
 
-    expect(page.querySelector('[data-testid="watch-notice"]')?.textContent).toContain('ITC.NS is already in your market watch');
+    expect(page.querySelector('[data-testid="watch-notice"]')?.textContent).toContain('ITC.NS is already in this watchlist');
     expect(rows()).toHaveLength(1);
   });
 
@@ -256,5 +256,7 @@ describe('MarketWatch', () => {
 
     expect(rows().map((r) => r.dataset['symbol'])).toEqual(['ITC.NS']);
     expect(page.querySelector('[data-testid="watch-name"]')?.textContent).toContain('Banks');
+    // The heading is the watchlist itself, nothing more.
+    expect(page.querySelector('#watch-title')?.textContent?.trim()).toBe('Banks');
   });
 });

@@ -36,8 +36,8 @@ test.describe('sign in', () => {
     await signIn(page);
 
     await expect(page).toHaveURL(/\/trade$/);
-    // The account reference the customer knows: ACC- and the key in six digits.
-    await expect(page.getByTestId('ticket-account')).toHaveValue(`ACC-${env.accountId.padStart(6, '0')}`);
+    // The account reference the customer knows, in the header: ACC- and the key in six digits.
+    await expect(page.getByTestId('header-account')).toContainText(`ACC-${env.accountId.padStart(6, '0')}`);
 
     // The dashboard calls both APIs, the protected auth route included.
     await page.getByRole('link', { name: 'Dashboard', exact: true }).click();

@@ -51,6 +51,14 @@ describe('Alerts', () => {
 
   const texts = (id: string) => [...page.querySelectorAll(`[data-testid="${id}"]`)].map((e) => e.textContent?.replace(/\s+/g, ' ').trim());
 
+  it('leads to Settings with a button, to change how alerts reach you', async () => {
+    await render([]);
+
+    const how = page.querySelector<HTMLAnchorElement>('a[data-testid="alerts-settings"]')!;
+    expect(how.getAttribute('href')).toBe('/settings');
+    expect(how.classList).toContain('button');
+  });
+
   it('shows each alert with its condition and its state, a fired one with the price that crossed it', async () => {
     await render([WAITING, FIRED, CANCELLED]);
 

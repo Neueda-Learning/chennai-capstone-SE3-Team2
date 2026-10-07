@@ -3,7 +3,7 @@
   <a class="brand" [routerLink]="session.accessToken() ? '/dashboard' : '/landing'">YELLOW // TRADE</a>
   @if (session.accessToken()) {
     <nav aria-label="Main">
-      <a routerLink="/market-watch" routerLinkActive="active" class="watch-link" data-testid="nav-market-watch">Market watch</a>
+      <a routerLink="/market-watch" routerLinkActive="active" class="watch-link" data-testid="nav-market-watch">Watchlist</a>
       <a routerLink="/dashboard" routerLinkActive="active" data-testid="nav-dashboard">Dashboard</a>
       <a routerLink="/orders" routerLinkActive="active" data-testid="nav-orders">Orders</a>
       <a routerLink="/holdings" routerLinkActive="active" data-testid="nav-holdings">Holdings</a>
@@ -30,7 +30,7 @@
 </header>
 <div class="workspace" [class.with-watch]="session.accessToken()">
   @if (session.accessToken()) {
-    <aside class="watch-panel" aria-label="Market watch">
+    <aside class="watch-panel" aria-label="Watchlist">
       <app-market-watch />
     </aside>
   }

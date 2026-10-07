@@ -99,7 +99,7 @@ export const routes: Routes = [
       {
         // On a narrow screen the market watch has no room beside the page: it is a page of its own.
         path: 'market-watch',
-        title: 'Market watch',
+        title: 'Watchlist',
         loadComponent: () => import('./features/market-watch/market-watch').then((m) => m.MarketWatch),
       },
       // Before Kite's menu: the stocks and funds dashboards, and Cash.

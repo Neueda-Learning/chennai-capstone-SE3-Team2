@@ -62,6 +62,14 @@ describe('Notifications', () => {
 
   const all = (id: string) => Array.from(page.querySelectorAll(`[data-testid="${id}"]`)).map((e) => e.textContent?.trim());
 
+  it('leads to Settings with a button, to change how notifications reach you', async () => {
+    await render([]);
+
+    const how = page.querySelector<HTMLAnchorElement>('a[data-testid="notifications-settings"]')!;
+    expect(how.getAttribute('href')).toBe('/settings');
+    expect(how.classList).toContain('button');
+  });
+
   it('shows every notification newest first, with where each one went', async () => {
     await render([FILLED, REJECTED]);
 

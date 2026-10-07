@@ -100,9 +100,9 @@ export class MarketWatch {
   protected add(instrument: InstrumentResponse): void {
     const label = this.catalog.label(instrument.symbol);
     if (this.list.has(instrument.symbol)) {
-      this.notice.set(`${label} is already in your market watch.`);
+      this.notice.set(`${label} is already in this watchlist.`);
     } else if (!this.list.add(instrument.symbol)) {
-      this.notice.set(`Your market watch is full: ${this.limit} instruments. Remove one to add another.`);
+      this.notice.set(`This watchlist is full: ${this.limit} instruments. Remove one to add another.`);
     } else {
       this.notice.set(null);
     }

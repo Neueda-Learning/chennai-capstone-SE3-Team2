@@ -10,7 +10,6 @@
   flex-wrap: wrap;
 }
 
-.how,
 .hint,
 .empty {
   color: var(--muted);

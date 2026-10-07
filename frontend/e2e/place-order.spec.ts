@@ -27,13 +27,10 @@ test.describe('place an order', () => {
     await expect(page).toHaveURL(/\/trade$/);
   });
 
-  test('the account is the one this sign-in may trade, and cannot be edited', async ({ page }) => {
-    const account = page.getByTestId('ticket-account');
-
-    // Shown as the reference the customer knows, ACC- and the key in six digits.
-    await expect(account).toHaveValue(`ACC-${env.accountId.padStart(6, '0')}`);
-    await expect(account).toHaveAttribute('readonly', '');
-    await expect(account).not.toBeEditable();
+  test('the account is the one this sign-in may trade: named in the header, not a field on the ticket', async ({ page }) => {
+    // The reference the customer knows, ACC- and the key in six digits.
+    await expect(page.getByTestId('header-account')).toContainText(`ACC-${env.accountId.padStart(6, '0')}`);
+    await expect(page.getByTestId('ticket-account')).toHaveCount(0);
   });
 
   test('an invalid order is stopped before it reaches the API', async ({ page }) => {

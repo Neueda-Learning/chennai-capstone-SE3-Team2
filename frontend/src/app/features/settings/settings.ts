@@ -10,7 +10,7 @@ const SCREENS: ReadonlyArray<{ readonly value: LandingScreen; readonly label: st
   { value: 'dashboard', label: 'Dashboard' },
   { value: 'orders', label: 'Orders' },
   { value: 'holdings', label: 'Holdings' },
-  { value: 'market-watch', label: 'Market watch' },
+  { value: 'market-watch', label: 'Watchlist' },
 ];
 
 /**
