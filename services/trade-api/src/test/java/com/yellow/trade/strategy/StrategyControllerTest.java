@@ -46,7 +46,7 @@ class StrategyControllerTest {
     private static Strategy strategy(boolean enabled) {
         return new Strategy(7, "ITC.NS", OrderSide.BUY, 2, Trigger.FALLS_THROUGH, new BigDecimal("250.00"),
                 new BigDecimal("600.0000"), 20, enabled, StrategyStatus.ARMED, 0,
-                Instant.parse("2026-10-07T04:00:00Z"), null);
+                Instant.parse("2026-10-07T04:00:00Z"), null, null);
     }
 
     @Test
@@ -59,7 +59,7 @@ class StrategyControllerTest {
                 .andExpect(content().json("""
                         {"id":7,"symbol":"ITC.NS","side":"BUY","quantity":2,"trigger":"FALLS_THROUGH",
                          "triggerPrice":250.00,"maxSpend":600.0000,"maxPosition":20,"enabled":false,
-                         "status":"ARMED","failures":0,"createdAt":"2026-10-07T04:00:00Z","lastFiredAt":null}""", true));
+                         "status":"ARMED","failures":0,"createdAt":"2026-10-07T04:00:00Z","lastFiredAt":null,"indicator":null}""", true));
     }
 
     @Test
@@ -96,6 +96,22 @@ class StrategyControllerTest {
         mvc.perform(post("/api/v1/accounts/3/strategies").contentType(MediaType.APPLICATION_JSON).content(BUY_THE_DIP))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.errorCode").value("INS-404"));
+    }
+
+    @Test
+    @DisplayName("a crossover is created with no price; a level trigger without one, or an indicator with one, is 422 VAL-422")
+    void indicatorTriggers() throws Exception {
+        when(strategies.create(eq(3L), any())).thenReturn(strategy(false))
+                .thenThrow(new StrategyExceptions.TriggerPriceException("A falls-to or rises-to trigger needs a price"));
+        String crossover = """
+                {"symbol":"ITC.NS","side":"BUY","quantity":2,"trigger":"MA_CROSSOVER","maxSpend":600,"maxPosition":20}""";
+
+        mvc.perform(post("/api/v1/accounts/3/strategies").contentType(MediaType.APPLICATION_JSON).content(crossover))
+                .andExpect(status().isCreated());
+        mvc.perform(post("/api/v1/accounts/3/strategies").contentType(MediaType.APPLICATION_JSON)
+                        .content(BUY_THE_DIP.replace("\"triggerPrice\":250.00,", "")))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(content().json("{\"errorCode\":\"VAL-422\",\"message\":\"A falls-to or rises-to trigger needs a price\"}", true));
     }
 
     @Test

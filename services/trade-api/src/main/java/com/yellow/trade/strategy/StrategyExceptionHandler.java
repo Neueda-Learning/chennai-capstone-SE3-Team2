@@ -29,6 +29,11 @@ class StrategyExceptionHandler {
         return envelope(HttpStatus.UNPROCESSABLE_ENTITY, e);
     }
 
+    @ExceptionHandler(StrategyExceptions.TriggerPriceException.class)
+    ResponseEntity<ErrorResponse> handle(StrategyExceptions.TriggerPriceException e) {
+        return envelope(HttpStatus.UNPROCESSABLE_ENTITY, e);
+    }
+
     private static ResponseEntity<ErrorResponse> envelope(HttpStatus status, TradeException e) {
         return ResponseEntity.status(status).body(new ErrorResponse(e.catalogueCode(), e.getMessage()));
     }

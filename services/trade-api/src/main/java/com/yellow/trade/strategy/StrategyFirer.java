@@ -48,12 +48,20 @@ public class StrategyFirer {
         this.clock = clock;
     }
 
+    /** A level strategy: the quote's price is all it needs. */
     @Transactional
     public void fire(long strategyId, StrategyQuote quote) {
+        fire(strategyId, quote, null);
+    }
+
+    /** Any strategy; an indicator one with its instrument's view at this quote, or it does not fire. */
+    @Transactional
+    public void fire(long strategyId, StrategyQuote quote, Indicators.View view) {
         StrategyRow strategy = strategies.lockFireable(strategyId);
-        if (strategy == null || !crosses(strategy, quote.price())) {
+        if (strategy == null || !triggered(strategy, quote, view)) {
             return;
         }
+        Trigger trigger = Trigger.valueOf(strategy.getTriggerKind());
         Instant now = clock.instant();
         boolean buy = "BUY".equals(strategy.getSide());
         BigDecimal limit = buy
@@ -69,7 +77,8 @@ public class StrategyFirer {
             return;
         }
         // The run first, keyed on the quote: a replay stops here.
-        RunRow placing = RunRow.of(strategyId, RunOutcome.PLACED, quote.price(), null, null, quote.eventId(), now);
+        String why = trigger.needsPrice() ? null : Indicators.why(trigger, buy, view);
+        RunRow placing = RunRow.of(strategyId, RunOutcome.PLACED, quote.price(), why, null, quote.eventId(), now);
         if (strategies.insertRun(placing) == 0) {
             log.info("strategy {} already ran on quote {}: nothing placed again", strategyId, quote.eventId());
             return;
@@ -95,9 +104,15 @@ public class StrategyFirer {
         }
     }
 
-    private static boolean crosses(StrategyRow strategy, BigDecimal price) {
-        int against = price.compareTo(strategy.getTriggerPrice());
-        return "FALLS_THROUGH".equals(strategy.getTriggerKind()) ? against <= 0 : against >= 0;
+    /** Whether this quote meets the strategy's condition, read under its lock. */
+    private static boolean triggered(StrategyRow strategy, StrategyQuote quote, Indicators.View view) {
+        boolean buy = "BUY".equals(strategy.getSide());
+        return switch (Trigger.valueOf(strategy.getTriggerKind())) {
+            case FALLS_THROUGH -> quote.price().compareTo(strategy.getTriggerPrice()) <= 0;
+            case RISES_THROUGH -> quote.price().compareTo(strategy.getTriggerPrice()) >= 0;
+            case MA_CROSSOVER -> view != null && (buy ? view.crossedUp() : view.crossedDown());
+            case BOLLINGER -> view != null && (buy ? view.atLowerBand() : view.atUpperBand());
+        };
     }
 
     /** Why a buy may not go ahead, or null. */

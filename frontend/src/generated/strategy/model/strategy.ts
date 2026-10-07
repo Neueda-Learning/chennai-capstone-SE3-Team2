@@ -7,6 +7,7 @@
  * https://openapi-generator.tech
  * Do not edit the class manually.
  */
+import { StrategyIndicator } from './strategy-indicator';
 
 
 export interface Strategy { 
@@ -15,7 +16,10 @@ export interface Strategy {
     side: Strategy.SideEnum;
     quantity: number;
     trigger: Strategy.TriggerEnum;
-    triggerPrice: number;
+    /**
+     * The level of a falls-to or rises-to trigger; null for an indicator trigger.
+     */
+    triggerPrice: number | null;
     /**
      * The most one firing may cost, at its limit price.
      */
@@ -32,6 +36,10 @@ export interface Strategy {
     failures: number;
     createdAt: string;
     lastFiredAt?: string | null;
+    /**
+     * For an indicator trigger, what it waits on at the last quote seen; null for a level trigger, or before any quote since the service started. 
+     */
+    indicator?: StrategyIndicator | null;
 }
 export namespace Strategy {
     export const SideEnum = {
@@ -42,6 +50,8 @@ export namespace Strategy {
     export const TriggerEnum = {
         FallsThrough: 'FALLS_THROUGH',
         RisesThrough: 'RISES_THROUGH',
+        MaCrossover: 'MA_CROSSOVER',
+        Bollinger: 'BOLLINGER',
     } as const;
     export type TriggerEnum = typeof TriggerEnum[keyof typeof TriggerEnum];
     export const StatusEnum = {

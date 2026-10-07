@@ -60,6 +60,7 @@ public abstract class ExecutorPostgresSupport {
             "migrations/013_watchlists.sql",
             "migrations/014_portfolio.sql",
             "migrations/015_strategy.sql",
+            "migrations/016_strategy_indicators.sql",
             "indexes/001_performance_indexes.sql",
             "seed/001_reference_data.sql",
             "seed/002_clients.sql",

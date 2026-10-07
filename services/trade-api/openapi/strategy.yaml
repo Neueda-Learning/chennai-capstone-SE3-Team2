@@ -6,9 +6,14 @@ info:
     Sprint 10 stretch module `com.yellow.trade.strategy`, inside the Trade REST API. Written
     before the controller.
 
-    A rule set once and traded by the platform: buy a quantity when the price falls through a
-    level, or sell when it rises through one. Quotes from `market-data` trigger it and fills
-    from `trade-events` tell it what happened (consumer group `strategy-service` for both).
+    A rule set once and traded by the platform. Four triggers: buy or sell when the price falls
+    to or rises to a level (`FALLS_THROUGH`, `RISES_THROUGH`); when the 20-day moving average
+    crosses the 50-day (`MA_CROSSOVER`: a buy on the cross above, a sell on the cross below);
+    or when the price reaches its Bollinger band (`BOLLINGER`: the 20-day average two standard
+    deviations either side; a buy at the lower band, a sell at the upper). The indicators read
+    daily closes with the live price counted as today's close (decision log 0017). Quotes from
+    `market-data` trigger it and fills from `trade-events` tell it what happened (consumer group
+    `strategy-service` for both).
 
     A strategy places its order through `POST /api/v1/orders` over HTTP, never on the `orders`
     topic and never by calling the order service: the route's validation, authorisation and
@@ -206,9 +211,11 @@ components:
           minimum: 1
         trigger:
           type: string
-          enum: [FALLS_THROUGH, RISES_THROUGH]
+          enum: [FALLS_THROUGH, RISES_THROUGH, MA_CROSSOVER, BOLLINGER]
         triggerPrice:
           type: number
+          nullable: true
+          description: The level of a falls-to or rises-to trigger; null for an indicator trigger.
         maxSpend:
           type: number
           description: The most one firing may cost, at its limit price.
@@ -230,11 +237,18 @@ components:
           type: string
           format: date-time
           nullable: true
+        indicator:
+          allOf:
+            - $ref: '#/components/schemas/StrategyIndicator'
+          nullable: true
+          description: |
+            For an indicator trigger, what it waits on at the last quote seen; null for a level
+            trigger, or before any quote since the service started.
 
     StrategyRequest:
       type: object
       additionalProperties: false
-      required: [symbol, side, quantity, trigger, triggerPrice, maxSpend, maxPosition]
+      required: [symbol, side, quantity, trigger, maxSpend, maxPosition]
       properties:
         symbol:
           type: string
@@ -247,12 +261,14 @@ components:
           minimum: 1
         trigger:
           type: string
-          enum: [FALLS_THROUGH, RISES_THROUGH]
+          enum: [FALLS_THROUGH, RISES_THROUGH, MA_CROSSOVER, BOLLINGER]
         triggerPrice:
           type: number
+          nullable: true
           exclusiveMinimum: true
           minimum: 0
           multipleOf: 0.01
+          description: Required for FALLS_THROUGH and RISES_THROUGH; absent for MA_CROSSOVER and BOLLINGER (else `VAL-422`).
         maxSpend:
           type: number
           exclusiveMinimum: true
@@ -268,6 +284,36 @@ components:
       properties:
         enabled:
           type: boolean
+
+    StrategyIndicator:
+      type: object
+      required: [price, asOf, days]
+      properties:
+        price:
+          type: number
+          description: The quote's price, counted as today's close.
+        asOf:
+          type: string
+          format: date-time
+        days:
+          type: integer
+          description: How many daily closes the figures were computed from, today's price counted as one.
+        shortAverage:
+          type: number
+          nullable: true
+          description: The 20-day simple moving average.
+        longAverage:
+          type: number
+          nullable: true
+          description: The 50-day simple moving average.
+        lowerBand:
+          type: number
+          nullable: true
+          description: The lower Bollinger band, the 20-day average less two standard deviations.
+        upperBand:
+          type: number
+          nullable: true
+          description: The upper Bollinger band.
 
     StrategyRun:
       type: object

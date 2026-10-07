@@ -8,5 +8,5 @@ import java.time.Instant;
 /** One strategy as openapi/strategy.yaml describes it. */
 public record Strategy(long id, String symbol, OrderSide side, int quantity, Trigger trigger, BigDecimal triggerPrice,
                        BigDecimal maxSpend, int maxPosition, boolean enabled, StrategyStatus status, int failures,
-                       Instant createdAt, Instant lastFiredAt) {
+                       Instant createdAt, Instant lastFiredAt, StrategyIndicator indicator) {
 }

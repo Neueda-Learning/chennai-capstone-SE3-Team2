@@ -14,7 +14,10 @@ export interface StrategyRequest {
     side: StrategyRequest.SideEnum;
     quantity: number;
     trigger: StrategyRequest.TriggerEnum;
-    triggerPrice: number;
+    /**
+     * Required for FALLS_THROUGH and RISES_THROUGH; absent for MA_CROSSOVER and BOLLINGER (else `VAL-422`).
+     */
+    triggerPrice?: number | null;
     maxSpend: number;
     maxPosition: number;
 }
@@ -27,6 +30,8 @@ export namespace StrategyRequest {
     export const TriggerEnum = {
         FallsThrough: 'FALLS_THROUGH',
         RisesThrough: 'RISES_THROUGH',
+        MaCrossover: 'MA_CROSSOVER',
+        Bollinger: 'BOLLINGER',
     } as const;
     export type TriggerEnum = typeof TriggerEnum[keyof typeof TriggerEnum];
 }

@@ -25,25 +25,35 @@ public class StrategyService {
     private final StrategyMapper strategies;
     private final InstrumentMapper instruments;
     private final AccountAccess access;
+    private final IndicatorReader indicators;
     private final Clock clock;
 
-    public StrategyService(StrategyMapper strategies, InstrumentMapper instruments, AccountAccess access, Clock clock) {
+    public StrategyService(StrategyMapper strategies, InstrumentMapper instruments, AccountAccess access,
+                           IndicatorReader indicators, Clock clock) {
         this.strategies = strategies;
         this.instruments = instruments;
         this.access = access;
+        this.indicators = indicators;
         this.clock = clock;
     }
 
     @Transactional(readOnly = true)
     public List<Strategy> list(long accountId) {
         access.requireOwn(accountId);
-        return strategies.findForClient(accountId).stream().map(StrategyRow::toStrategy).toList();
+        return strategies.findForClient(accountId).stream().map(this::shown).toList();
     }
 
     /** Created disabled: nothing fires until the customer switches it on. Only on a tradable stock. */
     @Transactional
     public Strategy create(long accountId, StrategyRequest request) {
         access.requireOwn(accountId);
+        if (request.trigger().needsPrice() && request.triggerPrice() == null) {
+            throw new StrategyExceptions.TriggerPriceException("A falls-to or rises-to trigger needs a price");
+        }
+        if (!request.trigger().needsPrice() && request.triggerPrice() != null) {
+            throw new StrategyExceptions.TriggerPriceException(
+                    "An indicator trigger takes no price: it fires on the averages or the band");
+        }
         InstrumentRow instrument = instruments.findBySymbol(request.symbol());
         if (instrument == null) {
             throw new InstrumentNotFoundException(request.symbol(), Reason.UNKNOWN);
@@ -69,7 +79,7 @@ public class StrategyService {
         row.setMaxPosition(request.maxPosition());
         row.setCreatedAt(clock.instant());
         strategies.insert(row);
-        return owned(accountId, row.getStrategyId()).toStrategy();
+        return shown(owned(accountId, row.getStrategyId()));
     }
 
     /** Off at once (it waits for a firing under way, and the next sees it off); on re-arms it. */
@@ -82,7 +92,7 @@ public class StrategyService {
         } else {
             strategies.disable(accountId, strategyId);
         }
-        return owned(accountId, strategyId).toStrategy();
+        return shown(owned(accountId, strategyId));
     }
 
     @Transactional
@@ -98,6 +108,14 @@ public class StrategyService {
         access.requireOwn(accountId);
         owned(accountId, strategyId);
         return strategies.findRuns(strategyId).stream().map(RunRow::toRun).toList();
+    }
+
+    /** As the customer sees it: an indicator strategy with the figures it waits on, from the last quote seen. */
+    private Strategy shown(StrategyRow row) {
+        if (Trigger.valueOf(row.getTriggerKind()).needsPrice()) {
+            return row.toStrategy();
+        }
+        return row.toStrategy(indicators.latest(row.getSymbol()).map(StrategyIndicator::of).orElse(null));
     }
 
     private StrategyRow owned(long accountId, long strategyId) {
