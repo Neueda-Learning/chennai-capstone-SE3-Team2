@@ -11,6 +11,7 @@ import com.yellow.exceptions.OrderNotCancellableException;
 import com.yellow.exceptions.OrderNotFoundException;
 import com.yellow.exceptions.StaleAccountVersionException;
 import com.yellow.trade.dto.OrderResponse;
+import com.yellow.trade.events.OrderCancelledDomainEvent;
 import com.yellow.trade.mappers.AccountMapper;
 import com.yellow.trade.mappers.AccountRow;
 import com.yellow.trade.mappers.InstrumentMapper;
@@ -25,6 +26,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -267,6 +269,35 @@ class OrderServiceTest {
 
         // The same figure placement reserved.
         verify(accountMapper).releaseFunds(ACCOUNT, new BigDecimal("14500.0000"), 7);
+    }
+
+    @Test
+    @DisplayName("a cancel announces ORDER_CANCELLED, once, inside its own transaction: what notifications reads")
+    void cancelIsAnnounced() {
+        UUID orderId = UUID.randomUUID();
+        when(orderMapper.findById(orderId)).thenReturn(orderRow(orderId, OrderStatus.NEW));
+        when(orderMapper.cancelIfNew(eq(orderId), any())).thenReturn(1);
+
+        service.cancelOrder(orderId);
+
+        ArgumentCaptor<Object> event = ArgumentCaptor.forClass(Object.class);
+        verify(applicationEventPublisher).publishEvent(event.capture());
+        OrderCancelledDomainEvent cancelled = (OrderCancelledDomainEvent) event.getValue();
+        assertThat(cancelled.order().getOrderId(), is(orderId));
+        assertThat(cancelled.symbol(), is("ACME"));
+        assertThat(cancelled.cancelledAt(), is(NOW));
+    }
+
+    @Test
+    @DisplayName("a cancel that lost its race announces nothing: the order was not cancelled")
+    void aLostCancelIsNotAnnounced() {
+        UUID orderId = UUID.randomUUID();
+        when(orderMapper.findById(orderId)).thenReturn(orderRow(orderId, OrderStatus.FILLED));
+        when(orderMapper.cancelIfNew(eq(orderId), any())).thenReturn(0);
+
+        assertThrows(OrderNotCancellableException.class, () -> service.cancelOrder(orderId));
+
+        verify(applicationEventPublisher, never()).publishEvent(any());
     }
 
     @Test

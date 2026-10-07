@@ -15,11 +15,11 @@ export interface Notification {
     subject: string;
     body: string;
     /**
-     * The channel resolved from preferences when it was sent.
+     * The channel resolved from preferences when it was sent; null while it is QUEUED, since the channel is resolved at the moment of sending (decision log 0006). 
      */
-    channel: Notification.ChannelEnum;
+    channel: Notification.ChannelEnum | null;
     /**
-     * Where it went, masked (`r•••@gmail.com`); null for IN_APP.
+     * Where it went, masked (`r•••@gmail.com`); null for IN_APP, and while QUEUED.
      */
     destination?: string | null;
     status: Notification.StatusEnum;

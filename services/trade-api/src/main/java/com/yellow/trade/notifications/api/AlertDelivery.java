@@ -9,9 +9,14 @@ package com.yellow.trade.notifications.api;
  *
  * The notification is recorded QUEUED in the caller's transaction and sent
  * after it commits, on the channel the preferences module resolves at that
- * moment; the caller never chooses a channel. Keyed on {@link AlertNotice#eventId()}:
- * the same quote delivered twice queues one notification, and the second
- * call answers the first one's receipt with {@code duplicate} true.
+ * moment; the caller never chooses a channel. Keyed on the quote and the alert,
+ * {@link AlertNotice#eventId()} with {@link AlertNotice#alertId()}: one quote
+ * crossing two customers' alerts queues a notification for each, and the same
+ * quote delivered twice for one alert queues one, the second call answering
+ * the first one's receipt with {@code duplicate} true.
+ *
+ * Must be called inside the caller's transaction; a call with none to join is
+ * refused (IllegalTransactionStateException) rather than committed on its own.
  */
 public interface AlertDelivery {
 

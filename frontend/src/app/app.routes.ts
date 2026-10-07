@@ -77,6 +77,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/instrument/instrument-page').then((m) => m.InstrumentPage),
       },
       {
+        path: 'notifications',
+        title: 'Notifications',
+        loadComponent: () => import('./features/notifications/notifications').then((m) => m.Notifications),
+      },
+      {
         path: 'settings',
         title: 'Settings',
         loadComponent: () => import('./features/settings/settings').then((m) => m.Settings),

@@ -139,10 +139,10 @@ nav a.watch-link {
      menu on the second, scrolling sideways rather than wrapping. */
   .app-header {
     display: grid;
-    grid-template-columns: 1fr auto auto auto;
+    grid-template-columns: 1fr auto auto auto auto;
     grid-template-areas:
-      'brand account settings signout'
-      'nav nav nav nav';
+      'brand account bell settings signout'
+      'nav nav nav nav nav';
     gap: 0.6rem 0.8rem;
     padding: 0.7rem 1rem;
   }
@@ -162,6 +162,10 @@ nav a.watch-link {
 
   .settings-link {
     grid-area: settings;
+  }
+
+  .bell-slot {
+    grid-area: bell;
   }
 
   nav {
