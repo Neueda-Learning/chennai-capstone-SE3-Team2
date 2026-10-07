@@ -4,6 +4,7 @@ import { provideApi as provideExtensionsApi } from '../../../generated/extension
 import { provideApi as provideNotificationsApi } from '../../../generated/notifications';
 import { provideApi as providePreferencesApi } from '../../../generated/preferences';
 import { provideApi as provideTradeApi } from '../../../generated/trade';
+import { provideApi as provideWatchlistsApi } from '../../../generated/watchlists';
 import { API_CONFIG, ApiConfig } from '../config/api-config';
 
 /**
@@ -20,5 +21,6 @@ export function provideClients(config: ApiConfig): EnvironmentProviders {
     // The Sprint 10 modules: routes on the Trade REST API, one description each.
     providePreferencesApi(config.tradeApiUrl),
     provideNotificationsApi(config.tradeApiUrl),
+    provideWatchlistsApi(config.tradeApiUrl),
   ]);
 }

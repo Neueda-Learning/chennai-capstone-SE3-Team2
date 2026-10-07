@@ -91,8 +91,10 @@ public interface ExecutionMapper {
                     @Param("rejectionReason") String rejectionReason);
 
     /**
-     * The symbols worth polling: everything someone holds or has working,
-     * minus the instrument classes this venue cannot price.
+     * The symbols worth polling: everything someone holds or has working, or
+     * watches or has an alert on (Sprint 10: watch_polled_symbols, the view the
+     * watchlists module publishes, decision log 0009), minus the instrument
+     * classes this venue cannot price.
      */
     @Select("""
             SELECT DISTINCT COALESCE(e.ticker, m.scheme_code) AS symbol
@@ -105,7 +107,9 @@ public interface ExecutionMapper {
                             WHERE p.instrument_id = i.instrument_id)
                 OR EXISTS (SELECT 1 FROM orders o
                             WHERE o.instrument_id = i.instrument_id
-                              AND o.status = 'NEW'))
+                              AND o.status = 'NEW')
+                OR EXISTS (SELECT 1 FROM watch_polled_symbols w
+                            WHERE w.instrument_id = i.instrument_id))
             ORDER BY symbol
             """)
     java.util.List<String> findSymbolsWorthPolling();

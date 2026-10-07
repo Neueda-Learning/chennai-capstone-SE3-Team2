@@ -178,3 +178,37 @@
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+.list-name {
+  margin-left: 0.4rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.tab {
+  min-width: 2rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.tab[aria-selected='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.tab.add {
+  color: var(--text);
+}

@@ -3,6 +3,7 @@ import { ErrorResponse as AuthErrorResponse } from '../../../generated/auth';
 import { ErrorResponse as ExtensionErrorResponse } from '../../../generated/extensions';
 import { ErrorResponse as NotificationsErrorResponse } from '../../../generated/notifications';
 import { ErrorResponse as TradeErrorResponse } from '../../../generated/trade';
+import { ErrorResponse as WatchlistsErrorResponse } from '../../../generated/watchlists';
 
 /** The codes each contract declares, read from the generated clients rather than typed out again. */
 export type TradeErrorCode = TradeErrorResponse.ErrorCodeEnum;
@@ -11,6 +12,8 @@ export type AuthErrorCode = AuthErrorResponse.ErrorCodeEnum;
 export type ExtensionErrorCode = ExtensionErrorResponse.ErrorCodeEnum;
 /** The codes the Sprint 10 notifications module adds. */
 export type NotificationsErrorCode = NotificationsErrorResponse.ErrorCodeEnum;
+/** The codes the Sprint 10 watchlists module adds. */
+export type WatchlistsErrorCode = WatchlistsErrorResponse.ErrorCodeEnum;
 
 /**
  * Codes our services really send that neither contract lists: the login
@@ -19,7 +22,13 @@ export type NotificationsErrorCode = NotificationsErrorResponse.ErrorCodeEnum;
 export const OFF_CATALOGUE_CODES = ['AUTH-429', 'SRV-500'] as const;
 export type OffCatalogueCode = (typeof OFF_CATALOGUE_CODES)[number];
 
-export type KnownErrorCode = TradeErrorCode | AuthErrorCode | ExtensionErrorCode | NotificationsErrorCode | OffCatalogueCode;
+export type KnownErrorCode =
+  | TradeErrorCode
+  | AuthErrorCode
+  | ExtensionErrorCode
+  | NotificationsErrorCode
+  | WatchlistsErrorCode
+  | OffCatalogueCode;
 
 /**
  * One sentence a trader can act on, per code. A Record over the generated
@@ -49,6 +58,9 @@ export const ERROR_MESSAGES: Readonly<Record<KnownErrorCode, string>> = {
   'RATE-429': 'Too many applications from this connection. Please try again in an hour.',
   'MKT-503': "Prices can't be fetched right now. Please try again in a few minutes.",
   'NTF-404': "That notification isn't on your account. Reload your notifications and try again.",
+  'WCH-404': "That watchlist or alert isn't on your account any more. Reload the page and try again.",
+  'LIM-409':
+    "You've reached a limit: 5 watchlists, 50 instruments in each, and 20 alerts waiting at once. Remove one to add another.",
   'SRV-500':
     'Something went wrong on our side. Your request may not have completed, so check your orders before trying again.',
 };

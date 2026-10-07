@@ -29,3 +29,8 @@ remains the one place the quota is spent on it.
 
 `watch_polled_symbols` is the module's published surface to the executor and is covered by its
 tests. More watched symbols lengthen the poll interval within the poller's budget.
+
+Built 2026-10-06 with the watchlists module: migration 013 creates the view (an instrument on any
+watchlist, or with an ACTIVE alert), and the executor's `findSymbolsWorthPolling` adds it to what
+is held and what is working. On the live stack the poll grew from 10 symbols to 17 once the
+first watchlist existed, still one request a cycle.

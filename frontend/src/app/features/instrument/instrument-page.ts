@@ -1,11 +1,15 @@
 import { CurrencyPipe, DatePipe, DecimalPipe } from '@angular/common';
 import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { AlertRequest } from '../../../generated/watchlists';
 import { CandleSeries } from '../../../generated/extensions';
 import { InstrumentCatalog } from '../../core/api/instrument-catalog';
 import { CHART_RANGES, ChartRange, MarketDataApi } from '../../core/api/market-data-api';
 import { watchPrices } from '../../core/market/live-prices';
+import { WatchlistsApi } from '../../core/api/watchlists-api';
 import { MarketWatchList } from '../../core/market/market-watch-list';
+import { Session } from '../../core/session/session';
 import { CandleChart } from '../../shared/candle-chart/candle-chart';
 import { ErrorMessage } from '../../shared/error-message/error-message';
 import { trendOf } from '../market-watch/market-watch';
@@ -25,7 +29,7 @@ const RANGE_NAMES: Readonly<Record<ChartRange, string>> = {
  */
 @Component({
   selector: 'app-instrument-page',
-  imports: [CandleChart, CurrencyPipe, DatePipe, DecimalPipe, ErrorMessage, RouterLink],
+  imports: [CandleChart, CurrencyPipe, DatePipe, DecimalPipe, ErrorMessage, ReactiveFormsModule, RouterLink],
   templateUrl: './instrument-page.html',
   styleUrl: './instrument-page.css',
 })
@@ -44,6 +48,18 @@ export class InstrumentPage {
   protected readonly quote = computed(() => this.live.quote(this.symbol()));
   protected readonly trend = computed(() => trendOf(this.quote()));
   protected readonly watched = computed(() => this.watchList.symbols().includes(this.symbol()));
+
+  /** A price alert on this stock (Sprint 10). A fund has no live price to set one on. */
+  private readonly watchlists = inject(WatchlistsApi);
+  private readonly accountId = inject(Session).accountId;
+  protected readonly alertForm = new FormGroup({
+    direction: new FormControl<AlertRequest.DirectionEnum>('ABOVE', { nonNullable: true }),
+    threshold: new FormControl<number | null>(null),
+  });
+  protected readonly settingAlert = signal(false);
+  protected readonly alertSet = signal<string | null>(null);
+  protected readonly alertError = signal<unknown>(null);
+  protected readonly alertInvalid = signal(false);
 
   protected readonly ranges = CHART_RANGES;
   protected readonly range = signal<ChartRange>('6M');
@@ -84,6 +100,28 @@ export class InstrumentPage {
         untracked(() => void this.loadYear(instrument.symbol));
       }
     });
+  }
+
+  async setAlert(): Promise<void> {
+    const accountId = this.accountId();
+    const { direction, threshold } = this.alertForm.getRawValue();
+    this.alertSet.set(null);
+    this.alertError.set(null);
+    this.alertInvalid.set(threshold === null || !(threshold > 0));
+    if (accountId === null || threshold === null || !(threshold > 0)) {
+      return;
+    }
+    this.settingAlert.set(true);
+    try {
+      const alert = await this.watchlists.setAlert(accountId, { symbol: this.symbol(), direction, threshold });
+      const moves = alert.direction === 'ABOVE' ? 'rises to' : 'falls to';
+      this.alertSet.set(`Alert set: you will be told once when ${alert.symbol} ${moves} ₹${alert.threshold.toFixed(2)}.`);
+      this.alertForm.controls.threshold.reset(null);
+    } catch (failure) {
+      this.alertError.set(failure);
+    } finally {
+      this.settingAlert.set(false);
+    }
   }
 
   protected choose(range: ChartRange): void {
