@@ -86,6 +86,9 @@ describe('InstrumentPage', () => {
     fixture.componentRef.setInput('symbol', symbol);
     page = fixture.nativeElement as HTMLElement;
     await settle();
+    // The market watch, on the server: one watchlist, empty.
+    http.expectOne(`${TRADE}/api/v1/accounts/3/watchlists`).flush([{ id: 1, name: 'Watchlist 1', position: 1, items: [] }]);
+    await settle();
   }
 
   afterEach(() => http.verify());
@@ -155,9 +158,38 @@ describe('InstrumentPage', () => {
 
     toggle.click();
     await settle();
+    http.expectOne(`${TRADE}/api/v1/accounts/3/watchlists/1/items/SBIN.NS`).flush(null, { status: 204, statusText: 'No Content' });
+    await settle();
 
     expect(toggle.getAttribute('aria-pressed')).toBe('true');
     expect(toggle.textContent).toContain('In market watch');
+  });
+
+  it('sets a price alert on a stock, and says it will tell the customer once', async () => {
+    await openSbin();
+    page.querySelector<HTMLSelectElement>('[data-testid="alert-direction"]')!.value = 'BELOW';
+    page.querySelector<HTMLSelectElement>('[data-testid="alert-direction"]')!.dispatchEvent(new Event('change'));
+    const price = page.querySelector<HTMLInputElement>('[data-testid="alert-threshold"]')!;
+    price.value = '780';
+    price.dispatchEvent(new Event('input'));
+
+    page.querySelector<HTMLFormElement>('[data-testid="alert-form"]')!.dispatchEvent(new Event('submit'));
+    await settle();
+    const set = http.expectOne(`${TRADE}/api/v1/accounts/3/alerts`);
+    expect(set.request.body).toEqual({ symbol: 'SBIN.NS', direction: 'BELOW', threshold: 780 });
+    set.flush({ id: 5, symbol: 'SBIN.NS', direction: 'BELOW', threshold: 780, status: 'ACTIVE', createdAt: '2026-10-06T10:00:00Z' });
+    await settle();
+
+    expect(text('alert-set')).toContain('you will be told once when SBIN.NS falls to ₹780.00');
+  });
+
+  it('sends no alert without a price above zero', async () => {
+    await openSbin();
+
+    page.querySelector<HTMLFormElement>('[data-testid="alert-form"]')!.dispatchEvent(new Event('submit'));
+    await settle();
+
+    expect(text('alert-invalid')).toContain('Enter a price above zero');
   });
 
   it('says a price is delayed when it could not be refreshed', async () => {
@@ -173,7 +205,7 @@ describe('InstrumentPage', () => {
     expect(page.textContent).toContain('No price history');
   });
 
-  it('heads a fund with its name and NAV, and draws no chart', async () => {
+  it('heads a fund with its name and NAV, and draws no chart and offers no alert', async () => {
     await open('122639');
     http.expectOne(lookup).flush([FUND]);
     http.expectOne(quotes).flush([{ symbol: '122639', price: 88.762, currency: 'INR', stale: false, asOf: '2026-10-04T18:30:00Z' }]);
@@ -183,6 +215,7 @@ describe('InstrumentPage', () => {
     expect(text('instrument-price')).toContain('88.7620');
     expect(text('instrument-price')).toContain('NAV of 5 Oct 2026');
     expect(page.querySelector('[data-testid="candle-chart"]')).toBeNull();
+    expect(page.querySelector('[data-testid="alert-form"]')).toBeNull();
     http.expectNone((r) => r.url.includes('/candles'));
   });
 

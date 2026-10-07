@@ -1,0 +1,58 @@
+<section class="card alerts" aria-labelledby="alerts-title">
+  <div class="head">
+    <h1 id="alerts-title">Price alerts</h1>
+    <a routerLink="/settings" class="how">How alerts reach you</a>
+  </div>
+  <p class="hint">An alert tells you once, on your alert channel, when the price reaches it. Re-arm it to be told again.</p>
+
+  <app-error-message [error]="error()" />
+
+  @if (alerts(); as alerts) {
+    @if (alerts.length === 0) {
+      <p class="empty" data-testid="alerts-empty">No alerts yet. Set one from any stock's page, under its price.</p>
+    } @else {
+      <ul class="list" data-testid="alerts-list">
+        @for (alert of alerts; track alert.id) {
+          <li class="item" data-testid="alert" [attr.data-status]="alert.status" [attr.data-symbol]="alert.symbol">
+            <div class="what">
+              <a class="symbol" [routerLink]="['/instrument', alert.symbol]">{{ alert.symbol }}</a>
+              <span class="condition" data-testid="alert-condition"
+                >{{ condition(alert) }} {{ alert.threshold | currency: 'INR' : 'symbol' : '1.2-2' }}</span
+              >
+            </div>
+            <div class="state">
+              @switch (alert.status) {
+                @case ('ACTIVE') {
+                  <span class="badge active" data-testid="alert-status">Waiting</span>
+                }
+                @case ('TRIGGERED') {
+                  <span class="badge triggered" data-testid="alert-status"
+                    >Fired at {{ alert.triggeredPrice | currency: 'INR' : 'symbol' : '1.2-2' }},
+                    {{ alert.triggeredAt | date: 'd MMM, HH:mm' : '+0530' }}</span
+                  >
+                  <a routerLink="/notifications" class="sent" data-testid="alert-notification">See what was sent</a>
+                }
+                @case ('CANCELLED') {
+                  <span class="badge cancelled" data-testid="alert-status">Cancelled</span>
+                }
+              }
+            </div>
+            <div class="actions">
+              @if (alert.status === 'ACTIVE') {
+                <button type="button" class="secondary small" data-testid="alert-cancel" [disabled]="busy() !== null" (click)="cancel(alert)">
+                  Cancel
+                </button>
+              } @else {
+                <button type="button" class="secondary small" data-testid="alert-rearm" [disabled]="busy() !== null" (click)="rearm(alert)">
+                  Re-arm
+                </button>
+              }
+            </div>
+          </li>
+        }
+      </ul>
+    }
+  } @else if (!error()) {
+    <p>Loading your alerts…</p>
+  }
+</section>

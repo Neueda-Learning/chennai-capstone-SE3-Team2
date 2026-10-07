@@ -65,6 +65,36 @@
       }
     </div>
 
+    @if (instrument() && !fund()) {
+      <form class="alert-form" [formGroup]="alertForm" (ngSubmit)="setAlert()" novalidate data-testid="alert-form">
+        <label for="alert-direction">Tell me once when the price</label>
+        <select id="alert-direction" formControlName="direction" data-testid="alert-direction">
+          <option value="ABOVE">rises to</option>
+          <option value="BELOW">falls to</option>
+        </select>
+        <input
+          type="number"
+          inputmode="decimal"
+          step="0.05"
+          min="0.05"
+          formControlName="threshold"
+          aria-label="Alert price in rupees"
+          [placeholder]="quote()?.price ?? ''"
+          data-testid="alert-threshold"
+        />
+        <button type="submit" class="secondary" data-testid="alert-submit" [disabled]="settingAlert()">
+          {{ settingAlert() ? 'Setting…' : 'Set alert' }}
+        </button>
+      </form>
+      @if (alertInvalid()) {
+        <p class="alert error" role="alert" data-testid="alert-invalid">Enter a price above zero.</p>
+      }
+      @if (alertSet(); as message) {
+        <p class="alert success" role="status" data-testid="alert-set">{{ message }} <a routerLink="/alerts">Your alerts</a></p>
+      }
+      <app-error-message [error]="alertError()" />
+    }
+
     @if (fund()) {
       <p class="note">A fund deals at its NAV, struck once a day. Charts for funds are on their way.</p>
     } @else if (instrument()) {

@@ -26,20 +26,30 @@ export class InstrumentCatalog {
   private readonly known = signal<ReadonlyMap<string, InstrumentResponse>>(new Map());
   /** Looked up already, found or not, or being looked up now. */
   private readonly asked = new Set<string>();
+  /** Lookups under way, by symbol: a second screen asking waits for the first answer. */
+  private readonly pending = new Map<string, Promise<unknown>>();
   /** Looked up, and nobody lists them. */
   private readonly missing = signal<ReadonlySet<string>>(new Set());
 
   /** Why the last lookup failed, for the screen to say; null otherwise. */
   readonly error = signal<unknown>(null);
 
-  /** Looks up the symbols not asked for yet. A failed lookup is asked again next time. */
+  /**
+   * Looks up the symbols not asked for yet, and waits for any another screen
+   * is already looking up, so the caller can read them when this returns. A
+   * failed lookup is asked again next time.
+   */
   async resolve(symbols: Iterable<string>): Promise<void> {
-    const wanted = [...new Set(symbols)].filter((symbol) => !this.asked.has(symbol));
+    const distinct = [...new Set(symbols)];
+    const underWay = new Set(distinct.flatMap((symbol) => this.pending.get(symbol) ?? []));
+    const wanted = distinct.filter((symbol) => !this.asked.has(symbol));
     wanted.forEach((symbol) => this.asked.add(symbol));
     for (let start = 0; start < wanted.length; start += LOOKUP_LIMIT) {
       const chunk = wanted.slice(start, start + LOOKUP_LIMIT);
+      const lookup = this.api.lookup(chunk);
+      chunk.forEach((symbol) => this.pending.set(symbol, lookup));
       try {
-        const found = await this.api.lookup(chunk);
+        const found = await lookup;
         this.remember(found);
         const listed = new Set(found.map((instrument) => instrument.symbol));
         const absent = chunk.filter((symbol) => !listed.has(symbol));
@@ -50,7 +60,13 @@ export class InstrumentCatalog {
       } catch (failure) {
         chunk.forEach((symbol) => this.asked.delete(symbol));
         this.error.set(failure);
+      } finally {
+        chunk.forEach((symbol) => this.pending.delete(symbol));
       }
+    }
+    // Another screen's lookup of some of these: its answer, whatever it is, before this returns.
+    for (const lookup of underWay) {
+      await lookup.catch(() => undefined);
     }
   }
 

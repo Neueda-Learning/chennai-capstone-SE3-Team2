@@ -4,6 +4,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { InstrumentResponse, Quote } from '../../../generated/extensions';
+import { Watchlist, WatchlistItem } from '../../../generated/watchlists';
 import { testToken } from '../../../testing/tokens';
 import { provideClients } from '../../core/api/provide-clients';
 import { LIVE_PRICES_POLICY } from '../../core/market/live-prices';
@@ -14,6 +15,7 @@ import { MarketWatch, trendOf } from './market-watch';
 
 const TRADE = 'http://trade.test';
 const INSTRUMENTS = `${TRADE}/api/v1/instruments`;
+const WATCHLISTS = `${TRADE}/api/v1/accounts/3/watchlists`;
 const LISTED: InstrumentResponse[] = [
   { symbol: 'MRF.NS', name: 'MRF Limited', type: 'STOCK', exchange: 'NSE', tradable: true },
   { symbol: 'ITC.NS', name: 'ITC Limited', type: 'STOCK', exchange: 'NSE', tradable: true },
@@ -55,6 +57,15 @@ describe('MarketWatch', () => {
   let http: HttpTestingController;
   let storage: Storage;
 
+  const entry = (symbol: string, position: number, lastPrice: number | null = null): WatchlistItem => ({
+    symbol,
+    position,
+    lastPrice,
+    changePercent: lastPrice === null ? null : 0.4,
+    priceAsOf: lastPrice === null ? null : '2026-10-06T05:00:00Z',
+    stale: false,
+  });
+
   async function settle(): Promise<void> {
     for (let i = 0; i < 5; i++) {
       await Promise.resolve();
@@ -62,10 +73,10 @@ describe('MarketWatch', () => {
     await fixture.whenStable();
   }
 
-  /** Signs in with this list stored, renders, and answers the lookup and the prices. */
-  async function render(stored: string[]): Promise<void> {
+  /** Signs in with this watchlist on the server, renders, and answers the lookup and the prices. */
+  async function render(stored: string[], lists?: Watchlist[]): Promise<void> {
     sessionStorage.clear();
-    storage = memory({ 'yellow.market-watch.3': JSON.stringify(stored) });
+    storage = memory();
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
@@ -81,6 +92,10 @@ describe('MarketWatch', () => {
     http = TestBed.inject(HttpTestingController);
     fixture = TestBed.createComponent(MarketWatch);
     page = fixture.nativeElement as HTMLElement;
+    await settle();
+    http
+      .expectOne(WATCHLISTS)
+      .flush(lists ?? [{ id: 1, name: 'Watchlist 1', position: 1, items: stored.map((symbol, i) => entry(symbol, i + 1)) }]);
     await settle();
     answer();
     await settle();
@@ -157,7 +172,9 @@ describe('MarketWatch', () => {
     await settle();
 
     expect(rows().map((r) => r.dataset['symbol'])).toEqual(['MRF.NS', 'ITC.NS']);
-    expect(JSON.parse(storage.getItem('yellow.market-watch.3')!)).toEqual(['MRF.NS', 'ITC.NS']);
+    const added = http.expectOne(`${WATCHLISTS}/1/items/ITC.NS`);
+    expect(added.request.method).toBe('PUT');
+    added.flush(null, { status: 204, statusText: 'No Content' });
     expect(page.querySelector('[data-testid="watch-count"]')?.textContent).toContain('2 / 50');
   });
 
@@ -184,6 +201,60 @@ describe('MarketWatch', () => {
     await settle();
 
     expect(rows().map((r) => r.dataset['symbol'])).toEqual(['ITC.NS']);
-    expect(JSON.parse(storage.getItem('yellow.market-watch.3')!)).toEqual(['ITC.NS']);
+    const removed = http.expectOne(`${WATCHLISTS}/1/items/MRF.NS`);
+    expect(removed.request.method).toBe('DELETE');
+    removed.flush(null, { status: 204, statusText: 'No Content' });
+  });
+
+  it("prices a stock from the stream when the watchlist has its latest quote, and asks the quotes route for nothing else", async () => {
+    sessionStorage.clear();
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideClients({ tradeApiUrl: TRADE, authApiUrl: 'http://auth.test' }),
+        { provide: MARKET_WATCH_STORAGE, useValue: memory() },
+        { provide: SEARCH_DELAY_MS, useValue: 0 },
+        { provide: LIVE_PRICES_POLICY, useValue: { intervalMs: 15000, every: () => () => undefined, visible: () => true } },
+      ],
+    });
+    TestBed.inject(Session).start(testToken({ accountId: 3 }));
+    http = TestBed.inject(HttpTestingController);
+    fixture = TestBed.createComponent(MarketWatch);
+    page = fixture.nativeElement as HTMLElement;
+    await settle();
+    http.expectOne(WATCHLISTS).flush([{ id: 1, name: 'Watchlist 1', position: 1, items: [entry('ITC.NS', 1, 271.1), entry('122639', 2)] }]);
+    await settle();
+    const quotesAsked = http.match((r) => r.url === `${TRADE}/api/v1/quotes`).map((r) => r.request.params.get('symbols'));
+    expect(quotesAsked).toEqual(['122639']);
+    for (const lookup of http.match((r) => r.url === INSTRUMENTS)) {
+      lookup.flush(LISTED);
+    }
+    await settle();
+
+    const itc = rows().find((r) => r.dataset['symbol'] === 'ITC.NS')!;
+    expect(itc.dataset['source']).toBe('stream');
+    expect(itc.querySelector('[data-testid="watch-price"]')?.textContent).toContain('271.10');
+    expect(itc.querySelector('[data-testid="watch-change"]')?.textContent?.trim()).toBe('+0.40%');
+  });
+
+  it('shows each watchlist as a tab, and picking one shows its entries', async () => {
+    await render([], [
+      { id: 1, name: 'Long term', position: 1, items: [entry('MRF.NS', 1)] },
+      { id: 2, name: 'Banks', position: 2, items: [entry('ITC.NS', 1)] },
+    ]);
+
+    const tabs = [...page.querySelectorAll<HTMLButtonElement>('[data-testid="watch-tab"]')];
+    expect(tabs.map((t) => t.getAttribute('aria-label'))).toEqual(['Long term', 'Banks']);
+    expect(tabs[0].getAttribute('aria-selected')).toBe('true');
+
+    tabs[1].click();
+    await settle();
+    answer();
+    await settle();
+
+    expect(rows().map((r) => r.dataset['symbol'])).toEqual(['ITC.NS']);
+    expect(page.querySelector('[data-testid="watch-name"]')?.textContent).toContain('Banks');
   });
 });

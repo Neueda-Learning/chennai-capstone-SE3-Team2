@@ -81,6 +81,20 @@ describe('InstrumentCatalog', () => {
     http.expectNone((request) => request.url === `${TRADE}/api/v1/instruments`);
   });
 
+  it('a screen asking for a symbol another is already looking up waits for that answer, and asks nothing twice', async () => {
+    const first = catalog.resolve(['MRF.NS', 'GOLDBEES']);
+    const second = catalog.resolve(['MRF.NS']);
+    let secondDone = false;
+    void second.then(() => (secondDone = true));
+    await Promise.resolve();
+    expect(secondDone).toBe(false);
+
+    http.expectOne(lookup('MRF.NS,GOLDBEES')).flush([LIST[0], LIST[1]]);
+    await Promise.all([first, second]);
+
+    expect(catalog.get('MRF.NS')?.name).toBe('MRF Limited');
+  });
+
   it('knows a symbol nobody lists, once the lookup has answered', async () => {
     expect(catalog.isMissing('NOPE.NS')).toBe(false);
     const done = catalog.resolve(['NOPE.NS', 'MRF.NS']);

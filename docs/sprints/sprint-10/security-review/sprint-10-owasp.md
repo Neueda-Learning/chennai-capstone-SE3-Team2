@@ -54,6 +54,13 @@ module is dispositioned out of scope with the reason.
 | Notifications, A09, A02 | `NotificationDispatcherTest`: the mail server's error quoting the recipient | The stored error and the log name no address; the destination is stored masked |
 | Notifications, A10 | Read: `NotificationDispatcher` sends only to `ChannelResolver`'s answer, the profile's address | No destination comes from a request |
 | Notifications, A04 | Found in the live run: a new consumer group from the earliest offset queued a message for every trade on the topic | Fixed: a new group starts at the latest offset (decision log 0006, revised) |
+| Watchlists, A01 | `WatchlistsIntegrationTest`, `WatchlistsControllerTest`: another account's token on the routes, and another account's watchlist id on one's own | `403 ACC-403`; `404 WCH-404`, the same answer as an id that does not exist, and nothing written |
+| Watchlists, A04 | `WatchlistsIntegrationTest`: a sixth watchlist, a twenty-first active alert; `WatchlistServiceTest`, `AlertServiceTest`: the cap decided under the account's advisory lock | `409 LIM-409`; the table holds exactly the cap |
+| Watchlists, A04 | The hot path: `AlertMapper.lockCrossed` reads only `ix_watch_alert_active`, a partial index on ACTIVE alerts, so fired and cancelled ones cost the consumer nothing; an alert fires once (0007) | A replayed quote fires nothing twice (tested) |
+| Watchlists, A08 | `QuoteEvaluatorTest`, `WatchlistsIntegrationTest`: a quote observed before the one held, and delivery failing | The older quote changes nothing; a failed delivery rolls the trigger back and the alert stays ACTIVE |
+| Watchlists, A01 | The seam: alerts reach the customer only through `AlertDelivery`; the module never resolves a channel. `ModuleBoundaryTest` holds it to `notifications.api` | No second path to a customer |
+| Watchlists, A03 | `WatchlistMapper`, `AlertMapper`, `LatestQuoteMapper` read: every value bound with `#{}`; a symbol in a path is resolved through `InstrumentMapper` before any write | No interpolation |
+| Watchlists, A05 | The executor reads `watch_polled_symbols`, a view, never the module's tables (0009); `PolledSymbolsIntegrationTest` in the executor | Watched and alerted stocks are polled; funds still are not |
 
 ## Outstanding items
 

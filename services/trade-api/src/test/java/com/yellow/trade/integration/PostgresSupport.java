@@ -68,6 +68,7 @@ public abstract class PostgresSupport {
             "migrations/010_payments.sql",
             "migrations/011_preferences.sql",
             "migrations/012_notifications.sql",
+            "migrations/013_watchlists.sql",
             "indexes/001_performance_indexes.sql",
             "seed/001_reference_data.sql",
             "seed/002_clients.sql",
@@ -109,6 +110,7 @@ public abstract class PostgresSupport {
         // the tests that need the consumer or the dispatcher call them.
         registry.add("notifications.consumer.auto-startup", () -> "false");
         registry.add("notifications.dispatch.enabled", () -> "false");
+        registry.add("watchlists.consumer.auto-startup", () -> "false");
     }
 
     public static void applySchema(JdbcTemplate jdbc) {

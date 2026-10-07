@@ -1,7 +1,13 @@
-import { Injectable, InjectionToken, effect, inject, signal, untracked } from '@angular/core';
+import { Injectable, InjectionToken, computed, effect, inject, signal, untracked } from '@angular/core';
+import { Watchlist, WatchlistItem } from '../../../generated/watchlists';
+import { WatchlistsApi } from '../api/watchlists-api';
 import { Session } from '../session/session';
 
-/** Where the list is kept. null when the browser refuses storage: the list then lasts the visit. */
+/**
+ * Where the market watch was kept before Sprint 10, in this browser. Read
+ * once, to start a customer's first server-side watchlist from it, then
+ * cleared. null when the browser refuses storage.
+ */
 export const MARKET_WATCH_STORAGE = new InjectionToken<Storage | null>('MARKET_WATCH_STORAGE', {
   providedIn: 'root',
   factory: () => {
@@ -13,7 +19,7 @@ export const MARKET_WATCH_STORAGE = new InjectionToken<Storage | null>('MARKET_W
   },
 });
 
-/** What a new market watch starts with: well-known stocks and two index-style funds. */
+/** What a first watchlist starts with when this browser kept nothing: well-known stocks and two funds. */
 export const DEFAULT_MARKET_WATCH: readonly string[] = [
   'RELIANCE.NS',
   'HDFCBANK.NS',
@@ -27,55 +33,186 @@ export const DEFAULT_MARKET_WATCH: readonly string[] = [
   '122639',
 ];
 
-/** The quotes route prices at most 50 symbols a request; one list is one request. */
+/** The watchlists module's caps: entries in one watchlist, and watchlists an account. */
 export const MARKET_WATCH_LIMIT = 50;
+export const WATCHLISTS_LIMIT = 5;
 
 /**
- * The instruments a customer keeps an eye on, in their order. Kept in this
- * browser, one list per account, until the Sprint 10 watchlists module keeps
- * it on the server; nothing here is sent anywhere.
+ * The market watch, kept on the server by the Sprint 10 watchlists module: up
+ * to five watchlists an account, one shown at a time. A change shows at once
+ * and is sent; if the server refuses it, it is put back and the reason kept
+ * in `error`.
  */
 @Injectable({ providedIn: 'root' })
 export class MarketWatchList {
+  private readonly api = inject(WatchlistsApi);
   private readonly storage = inject(MARKET_WATCH_STORAGE);
   private readonly accountId = inject(Session).accountId;
-  private readonly list = signal<readonly string[]>([]);
+  private readonly lists = signal<readonly Watchlist[]>([]);
+  private readonly selected = signal<number | null>(null);
 
-  readonly symbols = this.list.asReadonly();
+  readonly watchlists = this.lists.asReadonly();
+  /** Why the last read or change failed; null otherwise. */
+  readonly error = signal<unknown>(null);
+  /** The watchlist shown: the one picked, else the first. None until the server has answered, or if there are none. */
+  readonly active = computed<Watchlist | null>(
+    () => this.lists().find((list) => list.id === this.selected()) ?? this.lists().at(0) ?? null,
+  );
+  readonly symbols = computed(() => this.active()?.items.map((item) => item.symbol) ?? []);
 
   constructor() {
     effect(() => {
       const accountId = this.accountId();
-      untracked(() => this.list.set(accountId === null ? [] : this.read(accountId)));
+      untracked(() => {
+        this.lists.set([]);
+        this.selected.set(null);
+        if (accountId !== null) {
+          void this.load(accountId);
+        }
+      });
     });
   }
 
+  /** The entry for a symbol on the watchlist shown, with the stream's latest price for it. */
+  item(symbol: string): WatchlistItem | undefined {
+    return this.active()?.items.find((item) => item.symbol === symbol);
+  }
+
   has(symbol: string): boolean {
-    return this.list().includes(symbol);
+    return this.symbols().includes(symbol);
   }
 
   get full(): boolean {
-    return this.list().length >= MARKET_WATCH_LIMIT;
+    return this.symbols().length >= MARKET_WATCH_LIMIT;
   }
 
-  /** Adds to the end. False when it is already there or the list is full. */
+  get canCreate(): boolean {
+    return this.lists().length < WATCHLISTS_LIMIT;
+  }
+
+  select(watchlistId: number): void {
+    this.selected.set(watchlistId);
+  }
+
+  /** Reads the watchlists again, for the prices the stream has brought since. */
+  async refresh(): Promise<void> {
+    const accountId = this.accountId();
+    if (accountId === null) {
+      return;
+    }
+    try {
+      const lists = await this.api.list(accountId);
+      if (this.accountId() === accountId) {
+        this.lists.set(lists);
+        this.error.set(null);
+      }
+    } catch (failure) {
+      this.error.set(failure);
+    }
+  }
+
+  /** A new, empty watchlist, shown at once. */
+  async create(): Promise<void> {
+    const accountId = this.accountId();
+    if (accountId === null || !this.canCreate) {
+      return;
+    }
+    try {
+      const created = await this.api.create(accountId, `Watchlist ${this.lists().length + 1}`);
+      this.lists.update((lists) => [...lists, created]);
+      this.selected.set(created.id);
+      this.error.set(null);
+    } catch (failure) {
+      this.error.set(failure);
+    }
+  }
+
+  /** Adds to the end of the watchlist shown. False when it is already there or the watchlist is full. */
   add(symbol: string): boolean {
-    if (this.has(symbol) || this.full) {
+    const accountId = this.accountId();
+    const list = this.active();
+    if (accountId === null || list === null || this.has(symbol) || this.full) {
       return false;
     }
-    this.save([...this.list(), symbol]);
+    const position = (list.items.at(-1)?.position ?? 0) + 1;
+    this.change(list.id, (items) => [
+      ...items,
+      { symbol, position, lastPrice: null, changePercent: null, priceAsOf: null, stale: false },
+    ]);
+    this.api.addItem(accountId, list.id, symbol).then(
+      () => this.error.set(null),
+      (failure: unknown) => {
+        this.change(list.id, (items) => items.filter((item) => item.symbol !== symbol));
+        this.error.set(failure);
+      },
+    );
     return true;
   }
 
   remove(symbol: string): void {
-    this.save(this.list().filter((s) => s !== symbol));
+    const accountId = this.accountId();
+    const list = this.active();
+    if (accountId === null || list === null) {
+      return;
+    }
+    this.change(list.id, (items) => items.filter((item) => item.symbol !== symbol));
+    this.api.removeItem(accountId, list.id, symbol).then(
+      () => this.error.set(null),
+      (failure: unknown) => {
+        this.error.set(failure);
+        void this.refresh();
+      },
+    );
+  }
+
+  private change(watchlistId: number, update: (items: WatchlistItem[]) => WatchlistItem[]): void {
+    this.lists.update((lists) => lists.map((list) => (list.id === watchlistId ? { ...list, items: update(list.items) } : list)));
+  }
+
+  private async load(accountId: number): Promise<void> {
+    try {
+      let lists = await this.api.list(accountId);
+      if (lists.length === 0) {
+        lists = [await this.firstWatchlist(accountId)];
+      }
+      if (this.accountId() === accountId) {
+        this.lists.set(lists);
+        this.error.set(null);
+      }
+    } catch (failure) {
+      this.error.set(failure);
+    }
+  }
+
+  /**
+   * A customer's first visit since the market watch moved to the server:
+   * the first watchlist starts from what this browser kept, or the default.
+   * One the server no longer lists is left out.
+   */
+  private async firstWatchlist(accountId: number): Promise<Watchlist> {
+    const created = await this.api.create(accountId, 'Watchlist 1');
+    const items: WatchlistItem[] = [];
+    for (const symbol of this.kept(accountId)) {
+      try {
+        await this.api.addItem(accountId, created.id, symbol);
+        items.push({ symbol, position: items.length + 1, lastPrice: null, changePercent: null, priceAsOf: null, stale: false });
+      } catch {
+        // Not listed any more: left out of the new watchlist.
+      }
+    }
+    try {
+      this.storage?.removeItem(this.key(accountId));
+    } catch {
+      // Refused: it is never read again anyway, once a watchlist exists.
+    }
+    return { ...created, items };
   }
 
   private key(accountId: number): string {
     return `yellow.market-watch.${accountId}`;
   }
 
-  private read(accountId: number): readonly string[] {
+  private kept(accountId: number): readonly string[] {
     try {
       const stored = this.storage?.getItem(this.key(accountId));
       if (stored !== null && stored !== undefined) {
@@ -88,18 +225,5 @@ export class MarketWatchList {
       // Unreadable or refused: start from the default.
     }
     return DEFAULT_MARKET_WATCH;
-  }
-
-  private save(symbols: readonly string[]): void {
-    this.list.set(symbols);
-    const accountId = this.accountId();
-    if (accountId === null) {
-      return;
-    }
-    try {
-      this.storage?.setItem(this.key(accountId), JSON.stringify(symbols));
-    } catch {
-      // Storage full or refused: the list still lasts the visit.
-    }
   }
 }

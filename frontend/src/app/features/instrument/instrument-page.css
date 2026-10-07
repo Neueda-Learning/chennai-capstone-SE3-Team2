@@ -130,3 +130,17 @@
   margin: 0;
   font-variant-numeric: tabular-nums;
 }
+
+.alert-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.alert-form input {
+  width: 8rem;
+}

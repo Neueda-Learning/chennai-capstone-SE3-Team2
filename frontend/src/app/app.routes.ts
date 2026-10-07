@@ -77,6 +77,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/instrument/instrument-page').then((m) => m.InstrumentPage),
       },
       {
+        path: 'alerts',
+        title: 'Price alerts',
+        loadComponent: () => import('./features/alerts/alerts').then((m) => m.Alerts),
+      },
+      {
         path: 'notifications',
         title: 'Notifications',
         loadComponent: () => import('./features/notifications/notifications').then((m) => m.Notifications),
