@@ -1,5 +1,6 @@
 .notifications {
   max-width: 42rem;
+  margin-inline: auto;
 }
 
 .head {

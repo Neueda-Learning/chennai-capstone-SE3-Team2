@@ -106,6 +106,17 @@ describe('Notifications', () => {
     expect(page.querySelectorAll('.item.unread').length).toBe(0);
   });
 
+  it('shows the 20 newest, and the rest on request: a long history is not one endless page', async () => {
+    await render(Array.from({ length: 25 }, (_, i) => ({ ...FILLED, id: `n-${i}` })));
+
+    expect(page.querySelectorAll('[data-testid="notification"]').length).toBe(20);
+    expect(page.querySelector('[data-testid="notifications-more"]')?.textContent).toContain('Showing 20 of 25');
+    page.querySelector<HTMLButtonElement>('[data-testid="notifications-show-more"]')!.click();
+    await fixture.whenStable();
+
+    expect(page.querySelectorAll('[data-testid="notification"]').length).toBe(25);
+  });
+
   it('says what will land here when nothing has yet', async () => {
     await render([]);
 

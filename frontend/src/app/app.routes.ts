@@ -23,7 +23,7 @@ export const routes: Routes = [
   },
   {
     path: 'landing',
-    title: 'YELLOW Trading Platform',
+    title: 'Welcome',
     loadComponent: () => import('./features/landing/landing').then((m) => m.Landing),
   },
   {

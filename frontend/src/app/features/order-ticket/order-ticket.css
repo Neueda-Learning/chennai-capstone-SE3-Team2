@@ -1,5 +1,6 @@
 .ticket {
   max-width: 32rem;
+  margin-inline: auto;
 }
 
 .hint {

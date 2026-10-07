@@ -1,5 +1,6 @@
 .signals {
   max-width: 52rem;
+  margin-inline: auto;
 }
 
 .head {

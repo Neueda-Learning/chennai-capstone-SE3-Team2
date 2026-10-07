@@ -1,6 +1,6 @@
 <a class="skip-link" href="#main">Skip to content</a>
 <header class="app-header">
-  <a class="brand" [routerLink]="session.accessToken() ? '/dashboard' : '/landing'">YELLOW // TRADE</a>
+  <a class="brand" [routerLink]="session.accessToken() ? '/dashboard' : '/landing'">YELLOW<span class="brand-rest"> // TRADE</span></a>
   @if (session.accessToken()) {
     <nav aria-label="Main">
       <a routerLink="/market-watch" routerLinkActive="active" class="watch-link" data-testid="nav-market-watch">Watchlist</a>

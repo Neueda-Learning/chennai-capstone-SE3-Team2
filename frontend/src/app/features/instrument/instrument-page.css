@@ -141,6 +141,18 @@
   font-size: 0.9rem;
 }
 
+/* One line: the condition, the price, the button. */
+.alert-form label {
+  display: inline;
+  margin: 0;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.alert-form select {
+  width: auto;
+}
+
 .alert-form input {
   width: 8rem;
 }

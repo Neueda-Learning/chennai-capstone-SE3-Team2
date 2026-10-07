@@ -17,6 +17,15 @@
   letter-spacing: 0.08em;
   color: var(--text);
   text-decoration: none;
+  white-space: nowrap;
+}
+
+/* Never broken over two lines, however narrow the screen. */
+.settings-link,
+.sign-out,
+.account .holder,
+.account .ref {
+  white-space: nowrap;
 }
 
 nav {
@@ -180,5 +189,46 @@ nav a.watch-link {
   .app-main {
     margin: 1rem auto;
     padding: 0 1rem;
+  }
+}
+
+@media (max-width: 600px) {
+  /* A phone's header: the brand, the bell and the two actions on one line,
+     the brand giving way first if the screen is narrower still. */
+  .app-header {
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
+    grid-template-areas:
+      'brand bell settings signout'
+      'nav nav nav nav';
+    gap: 0.5rem 0.6rem;
+  }
+
+  .brand {
+    font-size: 0.9rem;
+    letter-spacing: 0.04em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* No room for whose account it is: the dashboard greets by name, and
+     Settings names the account. */
+  .account {
+    display: none;
+  }
+
+  .settings-link {
+    font-size: 0.82rem;
+  }
+
+  .sign-out {
+    padding: 0.35rem 0.7rem;
+    font-size: 0.82rem;
+  }
+}
+
+@media (max-width: 420px) {
+  /* The narrowest phones: the brand's first word, rather than a cut-off name. */
+  .brand-rest {
+    display: none;
   }
 }

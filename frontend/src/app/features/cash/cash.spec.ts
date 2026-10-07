@@ -135,6 +135,17 @@ describe('Cash', () => {
     expect(scheduled).toHaveLength(0);
   });
 
+  it('shows the 10 latest transfers, and the rest on request', async () => {
+    await open(Array.from({ length: 12 }, (_, i) => transfer(i + 1, 'SUCCESS')));
+
+    expect(rows().length).toBe(10);
+    expect(byTestId('cash-transfers-more')?.textContent).toContain('Showing 10 of 12');
+    (byTestId('cash-transfers-show-more') as HTMLButtonElement).click();
+    await fixture.whenStable();
+
+    expect(rows().length).toBe(12);
+  });
+
   it('withdraws to the bank account, shown as money out', async () => {
     await open();
     await type('1000');

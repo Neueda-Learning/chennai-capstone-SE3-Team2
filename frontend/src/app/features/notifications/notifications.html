@@ -13,7 +13,7 @@
       </p>
     } @else {
       <ul class="list" data-testid="notifications-list">
-        @for (notification of items; track notification.id) {
+        @for (notification of items.slice(0, shown()); track notification.id) {
           <li class="item" [class.unread]="!notification.readAt" data-testid="notification" [attr.data-id]="notification.id" [attr.data-kind]="notification.kind">
             <div class="top">
               <span class="kind" [attr.data-kind]="notification.kind">{{ kind(notification) }}</span>
@@ -34,6 +34,12 @@
           </li>
         }
       </ul>
+      @if (items.length > shown()) {
+        <div class="more" data-testid="notifications-more">
+          <span>Showing {{ shown() }} of {{ items.length }}</span>
+          <button type="button" class="secondary small" data-testid="notifications-show-more" (click)="showMore()">Show more</button>
+        </div>
+      }
     }
   } @else if (!error()) {
     <p>Loading your notifications…</p>

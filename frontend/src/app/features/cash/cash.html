@@ -1,5 +1,8 @@
 <h1>Funds</h1>
 
+<app-error-message [error]="error()" />
+
+<div class="top">
 <section class="card summary" aria-label="Cash and bank account">
   <div>
     <p class="label">Available cash</p>
@@ -23,11 +26,9 @@
   </div>
 </section>
 
-<app-error-message [error]="error()" />
-
 <section class="card move">
   <h2>Add funds or withdraw</h2>
-  <p class="hint">Money only moves to and from the bank account above.</p>
+  <p class="hint">Money only moves to and from your bank account, ending {{ bank()?.accountNumberLast4 ?? '…' }}.</p>
   <label for="amount">Amount (₹)</label>
   <input
     id="amount"
@@ -52,11 +53,12 @@
     </button>
   </div>
 </section>
+</div>
 
 <section class="transfers" aria-labelledby="transfers-title">
   <div class="heading">
     <h2 id="transfers-title">Transfers</h2>
-    <button type="button" class="secondary" data-testid="cash-refresh" (click)="refresh()">Refresh</button>
+    <button type="button" class="secondary small" data-testid="cash-refresh" (click)="refresh()">Refresh</button>
   </div>
   <p class="status-line" role="status" data-testid="cash-pending">
     @if (gaveUp()) {
@@ -82,7 +84,7 @@
           </tr>
         </thead>
         <tbody>
-          @for (transfer of transfers; track transfer.transferId) {
+          @for (transfer of transfers.slice(0, shown()); track transfer.transferId) {
             <tr data-testid="cash-transfer-row" [attr.data-status]="transfer.status">
               <td>{{ transfer.createdAt | date: 'd MMM y, HH:mm:ss' }}</td>
               <td>{{ transfer.direction === 'DEPOSIT' ? 'Added' : 'Withdrawn' }}</td>
@@ -101,6 +103,12 @@
         </tbody>
       </table>
       </div>
+      @if (transfers.length > shown()) {
+        <div class="more" data-testid="cash-transfers-more">
+          <span>Showing {{ shown() }} of {{ transfers.length }}</span>
+          <button type="button" class="secondary small" data-testid="cash-transfers-show-more" (click)="showMore()">Show more</button>
+        </div>
+      }
     }
   }
 </section>

@@ -38,6 +38,9 @@ export class Cash {
   protected readonly available = signal<number | null>(null);
   protected readonly bank = signal<BankAccountResponse | null>(null);
   protected readonly transfers = signal<readonly TransferResponse[] | null>(null);
+  /** How many transfers show at first; each "Show more" adds as many again. */
+  protected readonly pageSize = 10;
+  protected readonly shown = signal(this.pageSize);
   protected readonly error = signal<unknown>(null);
   protected readonly submitting = signal<Direction | null>(null);
   protected readonly overAvailable = signal(false);
@@ -143,5 +146,9 @@ export class Cash {
       this.rereads.update((n) => n + 1);
       void this.read(accountId);
     }, this.policy.intervalMs);
+  }
+
+  protected showMore(): void {
+    this.shown.update((shown) => shown + this.pageSize);
   }
 }

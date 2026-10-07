@@ -83,6 +83,14 @@ export class Blotter {
   /** Filled, rejected or cancelled: done with. */
   protected readonly executedRows = computed(() => this.inSegment().filter((order) => order.status !== OrderStatus.New));
 
+  /** How many of a long list show at first; each "Show more" adds as many again. */
+  protected readonly pageSize = 20;
+  protected readonly shown = signal(this.pageSize);
+
+  protected showMore(): void {
+    this.shown.update((shown) => shown + this.pageSize);
+  }
+
   protected readonly working = computed(() => this.inSegment().filter((order) => order.status === OrderStatus.New).length);
 
   protected readonly intervalSeconds = this.policy.intervalMs / 1000;

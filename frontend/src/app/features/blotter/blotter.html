@@ -2,7 +2,7 @@
   <div class="heading">
     <!-- On the Orders page the page's own title says it. -->
     <h2 id="blotter-title" [class.visually-hidden]="layout() === 'split'">Your orders</h2>
-    <button type="button" class="secondary" data-testid="blotter-refresh" [disabled]="loading()" (click)="refresh()">
+    <button type="button" class="secondary small" data-testid="blotter-refresh" [disabled]="loading()" (click)="refresh()">
       {{ loading() ? 'Refreshing…' : 'Refresh' }}
     </button>
   </div>
@@ -57,8 +57,9 @@
     } @else {
       <ng-container
         [ngTemplateOutlet]="table"
-        [ngTemplateOutletContext]="{ $implicit: executedRows(), caption: 'Orders filled, rejected or cancelled, newest first', testid: 'orders-executed' }"
+        [ngTemplateOutletContext]="{ $implicit: executedRows().slice(0, shown()), caption: 'Orders filled, rejected or cancelled, newest first', testid: 'orders-executed' }"
       />
+      <ng-container [ngTemplateOutlet]="more" [ngTemplateOutletContext]="{ $implicit: executedRows().length }" />
     }
   } @else if (rows().length === 0) {
     <p class="empty" data-testid="blotter-empty">
@@ -67,10 +68,20 @@
   } @else {
     <ng-container
       [ngTemplateOutlet]="table"
-      [ngTemplateOutletContext]="{ $implicit: rows(), caption: 'Every order on this account, newest first', testid: 'blotter-table' }"
+      [ngTemplateOutletContext]="{ $implicit: rows().slice(0, shown()), caption: 'Every order on this account, newest first', testid: 'blotter-table' }"
     />
+    <ng-container [ngTemplateOutlet]="more" [ngTemplateOutletContext]="{ $implicit: rows().length }" />
   }
 </section>
+
+<ng-template #more let-total>
+  @if (total > shown()) {
+    <div class="more" data-testid="blotter-more">
+      <span>Showing {{ shown() }} of {{ total }}</span>
+      <button type="button" class="secondary small" data-testid="blotter-show-more" (click)="showMore()">Show more</button>
+    </div>
+  }
+</ng-template>
 
 <ng-template #table let-rows let-caption="caption" let-testid="testid">
   <div class="table-wrap">

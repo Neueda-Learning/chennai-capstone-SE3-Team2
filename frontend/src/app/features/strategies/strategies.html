@@ -21,7 +21,7 @@
       }
     </div>
     <div class="field">
-      <label for="strategy-side">Do</label>
+      <label for="strategy-side">Side</label>
       <select id="strategy-side" formControlName="side" data-testid="strategy-side">
         <option value="BUY">Buy</option>
         <option value="SELL">Sell</option>
@@ -52,15 +52,15 @@
       </p>
     }
     <div class="field">
-      <label for="strategy-max-spend">A buy spends at most (₹)</label>
+      <label for="strategy-max-spend">Max spend (₹)</label>
       <input id="strategy-max-spend" type="number" inputmode="decimal" min="1" step="1" formControlName="maxSpend" data-testid="strategy-max-spend" />
     </div>
     <div class="field">
-      <label for="strategy-max-position">Hold at most</label>
+      <label for="strategy-max-position">Max holding</label>
       <input id="strategy-max-position" type="number" inputmode="numeric" min="1" step="1" formControlName="maxPosition" data-testid="strategy-max-position" />
     </div>
     <div class="submit">
-      <button type="submit" data-testid="strategy-submit" [disabled]="creating()">{{ creating() ? 'Creating…' : 'Create' }}</button>
+      <button type="submit" class="primary" data-testid="strategy-submit" [disabled]="creating()">{{ creating() ? 'Creating…' : 'Create' }}</button>
     </div>
   </form>
   @if (problems(); as problems) {

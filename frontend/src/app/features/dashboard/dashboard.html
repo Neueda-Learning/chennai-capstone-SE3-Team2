@@ -13,20 +13,15 @@
 
 <div class="cards">
   <section class="card" aria-labelledby="cash-title" data-testid="account-summary">
-    <h2 id="cash-title">Funds</h2>
+    <div class="card-head">
+      <h2 id="cash-title">Funds</h2>
+      @if (account(); as account) {
+        <span class="state" [class.active]="account.status === 'ACTIVE'" data-testid="account-status">{{ account.status }}</span>
+      }
+    </div>
     @if (account(); as account) {
       <p class="figure" data-testid="cash-balance">{{ account.cashBalance | currency: 'INR' : 'symbol' : '1.2-2' }}</p>
       <p class="label">Available cash</p>
-      <dl class="small">
-        <div>
-          <dt>Account</dt>
-          <dd data-testid="account-ref">{{ account.accountId }}</dd>
-        </div>
-        <div>
-          <dt>Status</dt>
-          <dd>{{ account.status }}</dd>
-        </div>
-      </dl>
       @if (user(); as user) {
         <p class="signed-in" data-testid="signed-in-as">Signed in as {{ user.username }}</p>
       }
@@ -40,7 +35,11 @@
 
   <section class="card" aria-labelledby="holdings-title" data-testid="dashboard-holdings">
     <h2 id="holdings-title">Holdings ({{ positions()?.length ?? 0 }})</h2>
-    @if (positions() !== null) {
+    @if (positions() === null) {
+      @if (!error()) {
+        <p class="label" data-testid="dashboard-holdings-loading">Loading your holdings…</p>
+      }
+    } @else {
       @let totals = holdings().totals;
       @if (positions()!.length === 0) {
         <p class="label">Nothing held yet. A filled buy shows here.</p>
