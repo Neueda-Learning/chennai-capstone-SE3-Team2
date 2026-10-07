@@ -83,6 +83,7 @@ services:
       - ./data/db/migrations/011_preferences.sql:/docker-entrypoint-initdb.d/06g-migration-011.sql:ro
       - ./data/db/migrations/012_notifications.sql:/docker-entrypoint-initdb.d/06h-migration-012.sql:ro
       - ./data/db/migrations/013_watchlists.sql:/docker-entrypoint-initdb.d/06i-migration-013.sql:ro
+      - ./data/db/migrations/014_portfolio.sql:/docker-entrypoint-initdb.d/06j-migration-014.sql:ro
       - ./data/db/indexes/001_performance_indexes.sql:/docker-entrypoint-initdb.d/07-indexes.sql:ro
       - ./data/db/seed/001_reference_data.sql:/docker-entrypoint-initdb.d/08-seed-reference.sql:ro
       - ./data/db/seed/002_clients.sql:/docker-entrypoint-initdb.d/09-seed-clients.sql:ro

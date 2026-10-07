@@ -1,4 +1,5 @@
 import { Quote } from '../../../generated/extensions';
+import { PricedPosition } from '../../../generated/portfolio';
 import { PositionResponse } from '../../../generated/trade';
 
 /** One holding at its live price. The priced figures are null while it has no price. */
@@ -32,34 +33,30 @@ export interface HoldingsTotals {
 }
 
 /**
- * Holdings priced on screen from live prices: value and unrealised P&L by
- * holding, and in total, as Kite's Holdings page shows them. The Sprint 10
- * portfolio module is to compute these on the server
- * (contracts/portfolio-api.yaml); until then the screen does, by the same
- * definitions: cost basis = quantity x average cost, market value = quantity
- * x last price, unrealised P&L = market value - cost basis.
+ * Holdings as the Sprint 10 portfolio module priced them
+ * (GET /api/v1/portfolio/{id}/positions, contracts/portfolio-api.yaml): cost
+ * basis, value and unrealised P&L by holding come from the server, by the
+ * contract's definitions, and are only summed here. The day's change is not in
+ * the contract; it comes from the quotes the screen already reads.
  */
-export function value(
-  positions: readonly PositionResponse[],
+export function fromPortfolio(
+  positions: readonly PricedPosition[],
   quotes: ReadonlyMap<string, Quote | undefined>,
 ): { rows: ValuedHolding[]; totals: HoldingsTotals } {
   const rows = positions.map((position): ValuedHolding => {
-    const quote = quotes.get(position.symbol);
-    const invested = position.quantity * position.averageCost;
-    const lastPrice = quote?.price ?? null;
-    const currentValue = lastPrice === null ? null : position.quantity * lastPrice;
-    const pnl = currentValue === null ? null : currentValue - invested;
+    const change = quotes.get(position.symbol)?.change;
+    const lastPrice = position.lastPrice ?? null;
     return {
       symbol: position.symbol,
       quantity: position.quantity,
       averageCost: position.averageCost,
-      invested,
+      invested: position.costBasis,
       lastPrice,
-      currentValue,
-      pnl,
-      pnlPercent: pnl === null || invested === 0 ? null : (pnl / invested) * 100,
-      dayChange: lastPrice === null || quote?.change === null || quote?.change === undefined ? null : position.quantity * quote.change,
-      stale: quote?.stale ?? false,
+      currentValue: position.marketValue ?? null,
+      pnl: position.unrealisedPnl ?? null,
+      pnlPercent: position.unrealisedPnlPercent ?? null,
+      dayChange: lastPrice === null || change === null || change === undefined ? null : position.quantity * change,
+      stale: position.stale,
     };
   });
 
@@ -77,4 +74,26 @@ export function value(
       partial: priced.length < rows.length,
     },
   };
+}
+
+/**
+ * Holdings with no price at all: what the screen shows when the portfolio
+ * routes answer MKT-503. The contract asks for exactly this degradation:
+ * positions and cost from the Trade REST API, never an empty portfolio.
+ */
+export function unpriced(positions: readonly PositionResponse[]): PricedPosition[] {
+  return positions.map((position) => ({
+    accountId: position.accountId,
+    symbol: position.symbol,
+    quantity: position.quantity,
+    averageCost: position.averageCost,
+    costBasis: position.quantity * position.averageCost,
+    lastPrice: null,
+    marketValue: null,
+    unrealisedPnl: null,
+    unrealisedPnlPercent: null,
+    currency: 'INR',
+    priceAsOf: null,
+    stale: true,
+  }));
 }

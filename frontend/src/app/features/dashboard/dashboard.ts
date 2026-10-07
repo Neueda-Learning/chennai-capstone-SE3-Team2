@@ -2,12 +2,14 @@ import { CurrencyPipe, DatePipe, DecimalPipe } from '@angular/common';
 import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { UserResponse } from '../../../generated/auth';
-import { AccountResponse, OrderHistoryEntry, OrderStatus, PositionResponse } from '../../../generated/trade';
+import { PortfolioSummary, PricedPosition } from '../../../generated/portfolio';
+import { AccountResponse, OrderHistoryEntry, OrderStatus } from '../../../generated/trade';
 import { AuthApi } from '../../core/api/auth-api';
 import { InstrumentCatalog } from '../../core/api/instrument-catalog';
+import { PortfolioApi, isPricingUnavailable } from '../../core/api/portfolio-api';
 import { TradeApi } from '../../core/api/trade-api';
 import { watchPrices } from '../../core/market/live-prices';
-import { value } from '../../core/portfolio/valuation';
+import { fromPortfolio, unpriced } from '../../core/portfolio/valuation';
 import { Session } from '../../core/session/session';
 import { ErrorMessage } from '../../shared/error-message/error-message';
 import { StatusBadge } from '../../shared/status-badge/status-badge';
@@ -28,20 +30,23 @@ const RECENT = 5;
 })
 export class Dashboard {
   private readonly tradeApi = inject(TradeApi);
+  private readonly portfolioApi = inject(PortfolioApi);
   private readonly authApi = inject(AuthApi);
   protected readonly catalog = inject(InstrumentCatalog);
   protected readonly accountId = inject(Session).accountId;
 
   protected readonly account = signal<AccountResponse | null>(null);
   protected readonly user = signal<UserResponse | null>(null);
-  protected readonly positions = signal<readonly PositionResponse[] | null>(null);
+  protected readonly positions = signal<readonly PricedPosition[] | null>(null);
+  /** The portfolio module's summary; null while unread, or when nothing could be priced. */
+  protected readonly summary = signal<PortfolioSummary | null>(null);
   protected readonly orders = signal<readonly OrderHistoryEntry[] | null>(null);
   protected readonly error = signal<unknown>(null);
 
   protected readonly live = watchPrices(() => (this.positions() ?? []).map((p) => p.symbol));
   protected readonly holdings = computed(() => {
     const positions = this.positions() ?? [];
-    return value(positions, new Map(positions.map((p) => [p.symbol, this.live.quote(p.symbol)])));
+    return fromPortfolio(positions, new Map(positions.map((p) => [p.symbol, this.live.quote(p.symbol)])));
   });
 
   /** The first name, as Kite greets: "Hi, Rohan". */
@@ -62,20 +67,43 @@ export class Dashboard {
 
   private async load(accountId: number): Promise<void> {
     try {
-      const [account, user, positions, orders] = await Promise.all([
+      const [account, user, orders] = await Promise.all([
         this.tradeApi.account(accountId),
         this.authApi.currentUser(),
-        this.tradeApi.positions(accountId),
         this.tradeApi.orderHistory(accountId),
       ]);
       this.account.set(account);
       this.user.set(user);
-      this.positions.set(positions);
       this.orders.set(orders);
-      void this.catalog.resolve([...positions.map((p) => p.symbol), ...orders.map((o) => o.symbol)]);
+      void this.catalog.resolve(orders.map((o) => o.symbol));
     } catch (failure) {
       this.error.set(failure);
     }
+    await this.loadHoldings(accountId);
+  }
+
+  /** From the Sprint 10 portfolio module; at cost, unpriced, when it answers MKT-503. */
+  private async loadHoldings(accountId: number): Promise<void> {
+    try {
+      const [positions, summary] = await Promise.all([
+        this.portfolioApi.positions(accountId),
+        this.portfolioApi.summary(accountId),
+      ]);
+      this.positions.set(positions);
+      this.summary.set(summary);
+    } catch (failure) {
+      if (!isPricingUnavailable(failure)) {
+        this.error.set(failure);
+        return;
+      }
+      try {
+        this.positions.set(unpriced(await this.tradeApi.positions(accountId)));
+      } catch (fallback) {
+        this.error.set(fallback);
+        return;
+      }
+    }
+    void this.catalog.resolve((this.positions() ?? []).map((p) => p.symbol));
   }
 
   protected sign(amount: number | null): 'up' | 'down' | '' {

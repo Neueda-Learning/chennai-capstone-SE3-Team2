@@ -59,6 +59,18 @@
             <dt>Investment</dt>
             <dd>{{ totals.invested | currency: 'INR' : 'symbol' : '1.2-2' }}</dd>
           </div>
+          @if (summary(); as summary) {
+            <div>
+              <dt>Realised P&amp;L</dt>
+              <dd data-testid="dashboard-realised" [class]="sign(summary.realisedPnl)">
+                {{ summary.realisedPnl > 0 ? '+' : '' }}{{ summary.realisedPnl | currency: 'INR' : 'symbol' : '1.2-2' }}
+              </dd>
+            </div>
+            <div>
+              <dt>Total value, with cash</dt>
+              <dd data-testid="dashboard-total">{{ summary.totalValue | currency: 'INR' : 'symbol' : '1.2-2' }}</dd>
+            </div>
+          }
           <div>
             <dt>Day's P&amp;L</dt>
             <dd [class]="sign(totals.dayChange)">

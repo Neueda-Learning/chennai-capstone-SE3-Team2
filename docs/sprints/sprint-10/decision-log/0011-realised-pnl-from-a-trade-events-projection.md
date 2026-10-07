@@ -29,3 +29,14 @@ events out of a customer's figures.
 
 `pf_realised.event_id` is unique. Sales before the module started are not in the projection;
 recorded as accepted, since the topic keeps thirty days.
+
+Built 2026-10-07 with the portfolio module. Two things the decision had not seen:
+
+- **A sale that closes a position carried no average cost.** The executor read the position
+  after settling, and a closed one is deleted, so `averageCostAfter` was null. It now sends
+  quantity 0 and the average cost the units were held at: a sale never changes average cost, so
+  that is the cost they were sold against. Without it, realised P&L at a full close would have
+  been a guess, and the module refuses to guess.
+- **A new `portfolio-service` group starts at the earliest offset**, unlike notifications'.
+  Booking sends nothing to anyone, a replay books nothing twice, and the orders check keeps a
+  stray event out, so the sales the topic still keeps (30 days) are booked.

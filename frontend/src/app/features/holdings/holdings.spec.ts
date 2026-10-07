@@ -20,9 +20,21 @@ const QUOTES: Quote[] = [
   { symbol: '122639', price: 88.762, currency: 'INR', stale: false },
   { symbol: 'MERSTL', price: null, currency: 'INR', stale: true },
 ];
+/** As GET /api/v1/portfolio/3/positions prices them: MERSTL could not be priced. */
+const PRICED = [
+  { accountId: 3, symbol: 'SBIN.NS', quantity: 10, averageCost: 900, costBasis: 9000, lastPrice: 950, marketValue: 9500,
+    unrealisedPnl: 500, unrealisedPnlPercent: 5.56, currency: 'INR', priceAsOf: '2026-10-07T04:00:00Z', stale: false },
+  { accountId: 3, symbol: '122639', quantity: 56, averageCost: 88, costBasis: 4928, lastPrice: 88.762, marketValue: 4970.67,
+    unrealisedPnl: 42.67, unrealisedPnlPercent: 0.87, currency: 'INR', priceAsOf: '2026-10-06T18:30:00Z', stale: false },
+  { accountId: 3, symbol: 'MERSTL', quantity: 500, averageCost: 84.3, costBasis: 42150, lastPrice: null, marketValue: null,
+    unrealisedPnl: null, unrealisedPnlPercent: null, currency: 'INR', priceAsOf: null, stale: true },
+];
+const SUMMARY = {
+  accountId: 3, baseCurrency: 'INR', cashBalance: 750000, marketValue: 14470.67, costBasis: 13928, unrealisedPnl: 542.67,
+  unrealisedPnlPercent: 3.9, realisedPnl: 1145.5, totalValue: 764470.67, positionCount: 3, partial: true, asOf: '2026-10-07T04:00:00Z',
+};
 const POSITIONS = [
   { accountId: 3, symbol: 'SBIN.NS', quantity: 10, averageCost: 900 },
-  { accountId: 3, symbol: '122639', quantity: 56, averageCost: 88 },
   { accountId: 3, symbol: 'MERSTL', quantity: 500, averageCost: 84.3 },
 ];
 
@@ -38,7 +50,7 @@ describe('Holdings', () => {
     await fixture.whenStable();
   }
 
-  async function render(positions: unknown[] = POSITIONS): Promise<void> {
+  async function render(priced: unknown[] | 'unavailable' = PRICED, summary: object = SUMMARY): Promise<void> {
     sessionStorage.clear();
     TestBed.configureTestingModule({
       providers: [
@@ -54,7 +66,16 @@ describe('Holdings', () => {
     fixture = TestBed.createComponent(Holdings);
     page = fixture.nativeElement as HTMLElement;
     await settle();
-    http.expectOne(`${TRADE}/api/v1/accounts/3/positions`).flush(positions);
+    if (priced === 'unavailable') {
+      const unavailable = { errorCode: 'MKT-503', message: 'Pricing unavailable' };
+      http.expectOne(`${TRADE}/api/v1/portfolio/3/positions`).flush(unavailable, { status: 503, statusText: 'Unavailable' });
+      http.expectOne(`${TRADE}/api/v1/portfolio/3`).flush(unavailable, { status: 503, statusText: 'Unavailable' });
+      await settle();
+      http.expectOne(`${TRADE}/api/v1/accounts/3/positions`).flush(POSITIONS);
+    } else {
+      http.expectOne(`${TRADE}/api/v1/portfolio/3/positions`).flush(priced);
+      http.expectOne(`${TRADE}/api/v1/portfolio/3`).flush(summary);
+    }
     await settle();
     for (const lookup of http.match((r) => r.url === `${TRADE}/api/v1/instruments`)) {
       const symbols = lookup.request.params.get('symbols')!.split(',');
@@ -73,7 +94,7 @@ describe('Holdings', () => {
   const row = (symbol: string) => page.querySelector<HTMLElement>(`[data-testid="holdings-row"][data-symbol="${symbol}"]`)!;
   const cells = (symbol: string) => [...row(symbol).querySelectorAll('td')].map((td) => td.textContent?.replace(/\s+/g, ' ').trim());
 
-  it('prices each holding live: LTP, value, P&L and the day change; a fund by name', async () => {
+  it('shows each holding as the portfolio module priced it: LTP, value, P&L; the day change from the quote; a fund by name', async () => {
     await render();
 
     const [name, quantity, cost, ltp, current, pnl, net, day] = cells('SBIN.NS');
@@ -126,8 +147,27 @@ describe('Holdings', () => {
     ]);
   });
 
+  it('shows the P&L already realised by sales, as the portfolio module booked it', async () => {
+    await render();
+
+    expect(text('holdings-realised')).toContain('+₹1,145.50');
+  });
+
+  it('when nothing can be priced (MKT-503), still shows every holding, at cost and unpriced, and says why', async () => {
+    await render('unavailable');
+
+    expect([...page.querySelectorAll<HTMLElement>('[data-testid="holdings-row"]')].map((r) => r.dataset['symbol'])).toEqual([
+      'SBIN.NS',
+      'MERSTL',
+    ]);
+    expect(text('holdings-invested')).toContain('51,150.00');
+    expect(cells('SBIN.NS')[3]).toBe('—');
+    expect(text('holdings-unpriced')).toContain("Prices can't be fetched right now");
+    expect(page.querySelector('[data-testid="holdings-partial"]')).toBeNull();
+  });
+
   it('says so when the account holds nothing', async () => {
-    await render([]);
+    await render([], { ...SUMMARY, marketValue: 0, costBasis: 0, unrealisedPnl: 0, positionCount: 0, partial: false });
 
     expect(page.querySelector('[data-testid="holdings-empty"]')).not.toBeNull();
   });

@@ -1,14 +1,27 @@
 import { Quote } from '../../../generated/extensions';
+import { PricedPosition } from '../../../generated/portfolio';
 import { PositionResponse } from '../../../generated/trade';
-import { value } from './valuation';
+import { fromPortfolio, unpriced } from './valuation';
 
-const position = (symbol: string, quantity: number, averageCost: number): PositionResponse => ({ accountId: 3, symbol, quantity, averageCost });
-const quote = (symbol: string, price: number | null, change: number | null = null): Quote =>
-  ({ symbol, price, change, currency: 'INR', stale: false });
+const priced = (symbol: string, quantity: number, averageCost: number, lastPrice: number | null): PricedPosition => ({
+  accountId: 3,
+  symbol,
+  quantity,
+  averageCost,
+  costBasis: quantity * averageCost,
+  lastPrice,
+  marketValue: lastPrice === null ? null : quantity * lastPrice,
+  unrealisedPnl: lastPrice === null ? null : quantity * (lastPrice - averageCost),
+  unrealisedPnlPercent: lastPrice === null ? null : ((lastPrice - averageCost) / averageCost) * 100,
+  currency: 'INR',
+  priceAsOf: lastPrice === null ? null : '2026-10-07T04:00:00Z',
+  stale: lastPrice === null,
+});
+const quote = (symbol: string, change: number | null): Quote => ({ symbol, price: 1, change, currency: 'INR', stale: false });
 
-describe('value', () => {
-  it('prices each holding at its live price: value, P&L against cost, and the day change', () => {
-    const valued = value([position('SBIN.NS', 10, 900)], new Map([['SBIN.NS', quote('SBIN.NS', 950, -5)]]));
+describe('fromPortfolio', () => {
+  it("takes each holding's figures from the portfolio routes, and the day change from the quote", () => {
+    const valued = fromPortfolio([priced('SBIN.NS', 10, 900, 950)], new Map([['SBIN.NS', quote('SBIN.NS', -5)]]));
     const sbin = valued.rows[0];
 
     expect(sbin.invested).toBe(9000);
@@ -19,37 +32,48 @@ describe('value', () => {
     expect(sbin.dayChange).toBe(-50);
   });
 
-  it('totals the holdings, and says when the totals leave some out', () => {
-    const valued = value(
-      [position('SBIN.NS', 10, 900), position('ITC.NS', 100, 250), position('GONE.NS', 5, 10)],
+  it('totals what was priced, and says when the totals leave some out', () => {
+    const valued = fromPortfolio(
+      [priced('SBIN.NS', 10, 900, 950), priced('ITC.NS', 100, 250, 260), priced('GONE.NS', 5, 10, null)],
       new Map([
-        ['SBIN.NS', quote('SBIN.NS', 950, -5)],
-        ['ITC.NS', quote('ITC.NS', 260, 2)],
-        ['GONE.NS', quote('GONE.NS', null)],
+        ['SBIN.NS', quote('SBIN.NS', -5)],
+        ['ITC.NS', quote('ITC.NS', 2)],
       ]),
     );
 
     expect(valued.totals.invested).toBe(9000 + 25000 + 50);
-    // The unpriced holding counts at cost in neither the value nor the P&L.
     expect(valued.totals.currentValue).toBe(9500 + 26000);
     expect(valued.totals.pnl).toBe(500 + 1000);
     expect(valued.totals.pnlPercent).toBeCloseTo((1500 / 34000) * 100, 6);
     expect(valued.totals.dayChange).toBe(-50 + 200);
     expect(valued.totals.partial).toBe(true);
     expect(valued.rows[2].currentValue).toBeNull();
+    expect(valued.rows[2].stale).toBe(true);
   });
 
   it('has no day change for a fund, whose NAV comes without one', () => {
-    const valued = value([position('122639', 56, 88)], new Map([['122639', quote('122639', 88.762)]]));
+    const valued = fromPortfolio([priced('122639', 56, 88, 88.762)], new Map([['122639', quote('122639', null)]]));
 
     expect(valued.rows[0].dayChange).toBeNull();
-    expect(valued.rows[0].currentValue).toBeCloseTo(4970.672, 6);
     expect(valued.totals.partial).toBe(false);
   });
 
   it('is empty and whole with no holdings', () => {
-    expect(value([], new Map()).totals).toEqual({
+    expect(fromPortfolio([], new Map()).totals).toEqual({
       invested: 0, currentValue: 0, pnl: 0, pnlPercent: null, dayChange: 0, partial: false,
     });
+  });
+});
+
+describe('unpriced', () => {
+  it('keeps every holding at its cost, with no price, and stale: the contract degradation for MKT-503', () => {
+    const held: PositionResponse[] = [{ accountId: 3, symbol: 'ITC.NS', quantity: 10, averageCost: 250 }];
+
+    const [itc] = unpriced(held);
+
+    expect(itc.costBasis).toBe(2500);
+    expect(itc.lastPrice).toBeNull();
+    expect(itc.stale).toBe(true);
+    expect(fromPortfolio(unpriced(held), new Map()).totals.partial).toBe(true);
   });
 });
