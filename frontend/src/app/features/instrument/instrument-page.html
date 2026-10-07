@@ -153,6 +153,8 @@
           <dd>{{ (yearRange()?.low | number: '1.2-2') ?? '—' }}</dd>
         </div>
       </dl>
+
+      <app-advice-signal [symbol]="symbol()" />
     }
   </section>
 }

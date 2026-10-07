@@ -1,4 +1,5 @@
 import { EnvironmentProviders, makeEnvironmentProviders } from '@angular/core';
+import { provideApi as provideAdviceApi } from '../../../generated/advice';
 import { provideApi as provideAuthApi } from '../../../generated/auth';
 import { provideApi as provideExtensionsApi } from '../../../generated/extensions';
 import { provideApi as provideNotificationsApi } from '../../../generated/notifications';
@@ -25,5 +26,7 @@ export function provideClients(config: ApiConfig): EnvironmentProviders {
     provideWatchlistsApi(config.tradeApiUrl),
     // The Sprint 10 portfolio module: contracts/portfolio-api.yaml, served by the Trade REST API.
     providePortfolioApi(config.tradeApiUrl),
+    // The Sprint 10 advice module: openapi/advice.yaml, served by the Trade REST API.
+    provideAdviceApi(config.tradeApiUrl),
   ]);
 }
