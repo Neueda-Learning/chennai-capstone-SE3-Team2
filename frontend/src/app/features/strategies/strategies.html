@@ -31,17 +31,26 @@
       <label for="strategy-quantity">Quantity</label>
       <input id="strategy-quantity" type="number" inputmode="numeric" min="1" step="1" formControlName="quantity" data-testid="strategy-quantity" />
     </div>
-    <div class="field">
-      <label for="strategy-trigger">When the price</label>
+    <div class="field trigger">
+      <label for="strategy-trigger">When</label>
       <select id="strategy-trigger" formControlName="trigger" data-testid="strategy-trigger">
-        <option value="FALLS_THROUGH">falls to</option>
-        <option value="RISES_THROUGH">rises to</option>
+        <option value="FALLS_THROUGH">the price falls to</option>
+        <option value="RISES_THROUGH">the price rises to</option>
+        <option value="MA_CROSSOVER">the 20-day average crosses the 50-day</option>
+        <option value="BOLLINGER">the price reaches its Bollinger band</option>
       </select>
     </div>
-    <div class="field">
-      <label for="strategy-price">Price (₹)</label>
-      <input id="strategy-price" type="number" inputmode="decimal" min="0.01" step="0.05" formControlName="triggerPrice" data-testid="strategy-price" />
-    </div>
+    @if (levelTrigger()) {
+      <div class="field">
+        <label for="strategy-price">Price (₹)</label>
+        <input id="strategy-price" type="number" inputmode="decimal" min="0.01" step="0.05" formControlName="triggerPrice" data-testid="strategy-price" />
+      </div>
+    } @else {
+      <p class="field indicator-hint" data-testid="strategy-indicator-hint">
+        {{ form.controls.side.value === 'BUY' ? 'A buy fires when the 20-day crosses above the 50-day, or at the lower band.' : 'A sell fires when the 20-day crosses below the 50-day, or at the upper band.' }}
+        Daily prices, with today's live price as today's close.
+      </p>
+    }
     <div class="field">
       <label for="strategy-max-spend">A buy spends at most (₹)</label>
       <input id="strategy-max-spend" type="number" inputmode="decimal" min="1" step="1" formControlName="maxSpend" data-testid="strategy-max-spend" />
@@ -75,8 +84,11 @@
             <div class="what">
               <a class="symbol" [routerLink]="['/instrument', strategy.symbol]">{{ strategy.symbol }}</a>
               <span class="rule" data-testid="strategy-rule"
-                >{{ rule(strategy) }} {{ strategy.triggerPrice | currency: 'INR' : 'symbol' : '1.2-2' }}</span
+                >{{ rule(strategy) }}@if (isLevel(strategy)) {&ngsp;{{ strategy.triggerPrice | currency: 'INR' : 'symbol' : '1.2-2' }}}</span
               >
+              @if (!isLevel(strategy)) {
+                <span class="figures" data-testid="strategy-indicator">{{ watching(strategy) }}</span>
+              }
               @if (strategy.side === 'BUY') {
                 <span class="bounds" data-testid="strategy-bounds"
                   >At most {{ strategy.maxSpend | currency: 'INR' : 'symbol' : '1.2-2' }} a firing, and {{ strategy.maxPosition }} held</span

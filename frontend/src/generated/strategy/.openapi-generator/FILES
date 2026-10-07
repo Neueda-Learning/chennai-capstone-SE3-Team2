@@ -12,6 +12,7 @@ index.ts
 model/enabled-request.ts
 model/error-response.ts
 model/models.ts
+model/strategy-indicator.ts
 model/strategy-request.ts
 model/strategy-run.ts
 model/strategy.ts

@@ -404,6 +404,9 @@ stub proves nothing about integration.
 A placed order passes on `NEW`, `FILLED` or `REJECTED`. Asserting `FILLED`
 would fail the week the executor is switched off, which is the wrong signal.
 
+`e2e/strategies.spec.ts` also creates a moving-average crossover strategy and checks that it
+shows the 20-day and 50-day averages it waits on, read from the live price.
+
 Every address and credential comes from the environment, under these names
 and no others:
 

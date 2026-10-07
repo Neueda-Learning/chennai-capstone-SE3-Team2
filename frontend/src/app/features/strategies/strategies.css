@@ -11,7 +11,9 @@ h2 {
 .empty,
 .picked,
 .rule,
-.bounds {
+.bounds,
+.figures,
+.indicator-hint {
   color: var(--muted);
   font-size: 0.9rem;
 }
@@ -155,5 +157,20 @@ button.small {
   .actions {
     grid-column: 1 / -1;
     justify-content: flex-start;
+  }
+}
+
+.field.trigger {
+  grid-column: span 2;
+}
+
+.indicator-hint {
+  margin: 0;
+  align-self: end;
+}
+
+@media (max-width: 40rem) {
+  .field.trigger {
+    grid-column: 1 / -1;
   }
 }

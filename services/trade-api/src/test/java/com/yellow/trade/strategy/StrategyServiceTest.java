@@ -21,6 +21,7 @@ import java.time.ZoneOffset;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.comparesEqualTo;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
@@ -38,9 +39,10 @@ class StrategyServiceTest {
     @Mock private StrategyMapper strategies;
     @Mock private InstrumentMapper instruments;
     @Mock private AccountAccess access;
+    @Mock private IndicatorReader indicators;
 
     private StrategyService service() {
-        return new StrategyService(strategies, instruments, access, Clock.fixed(NOW, ZoneOffset.UTC));
+        return new StrategyService(strategies, instruments, access, indicators, Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
     private static StrategyRequest request() {
@@ -93,6 +95,48 @@ class StrategyServiceTest {
         assertThat(row.getValue().getTriggerKind(), is("FALLS_THROUGH"));
         assertThat(created.enabled(), is(false));
         assertThat(created.status(), is(StrategyStatus.ARMED));
+    }
+
+    @Test
+    @DisplayName("a falls-to or rises-to trigger needs a price; an indicator trigger takes none: VAL-422 either way, nothing stored")
+    void triggerPrice() {
+        StrategyRequest noPrice = new StrategyRequest("ITC.NS", OrderSide.BUY, 2, Trigger.FALLS_THROUGH, null, new BigDecimal("1000"), 10);
+        StrategyRequest pricedCrossover = new StrategyRequest("ITC.NS", OrderSide.BUY, 2, Trigger.MA_CROSSOVER,
+                new BigDecimal("260.00"), new BigDecimal("1000"), 10);
+
+        assertThrows(StrategyExceptions.TriggerPriceException.class, () -> service().create(3L, noPrice));
+        assertThrows(StrategyExceptions.TriggerPriceException.class, () -> service().create(3L, pricedCrossover));
+        verify(strategies, never()).insert(any());
+    }
+
+    @Test
+    @DisplayName("a crossover strategy is stored with no price; listed, it shows the figures it is waiting on")
+    void crossover() {
+        listed("STOCK", true);
+        when(strategies.countForClient(3L)).thenReturn(0);
+        when(strategies.insert(any())).thenAnswer(call -> {
+            StrategyRow row = call.getArgument(0);
+            row.setStrategyId(6L);
+            return 1;
+        });
+        StrategyRow stored = stored();
+        stored.setStrategyId(6L);
+        stored.setTriggerKind("MA_CROSSOVER");
+        stored.setTriggerPrice(null);
+        when(strategies.findOwned(3L, 6L)).thenReturn(stored);
+        when(indicators.latest("ITC.NS")).thenReturn(java.util.Optional.of(
+                new Indicators.View(new BigDecimal("259.50"), NOW, 80, 255.0, 256.0, 255.5, 256.0, 240.0, 270.0)));
+
+        Strategy created = service().create(3L, new StrategyRequest("ITC.NS", OrderSide.BUY, 2, Trigger.MA_CROSSOVER, null,
+                new BigDecimal("1000"), 10));
+
+        ArgumentCaptor<StrategyRow> row = ArgumentCaptor.forClass(StrategyRow.class);
+        verify(strategies).insert(row.capture());
+        assertThat(row.getValue().getTriggerKind(), is("MA_CROSSOVER"));
+        assertThat(row.getValue().getTriggerPrice(), is(org.hamcrest.Matchers.nullValue()));
+        assertThat(created.indicator().shortAverage(), comparesEqualTo(new BigDecimal("255.50")));
+        assertThat(created.indicator().longAverage(), comparesEqualTo(new BigDecimal("256.00")));
+        assertThat(created.indicator().price(), comparesEqualTo(new BigDecimal("259.50")));
     }
 
     @Test

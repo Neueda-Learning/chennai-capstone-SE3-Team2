@@ -18,6 +18,11 @@ const OFF = { ...ARMED, id: 6, enabled: false };
 const FIRED = { ...ARMED, id: 5, symbol: 'SBIN.NS', side: 'SELL', quantity: 5, trigger: 'RISES_THROUGH', triggerPrice: 812.5,
   status: 'FIRED', lastFiredAt: '2026-10-07T04:35:00Z' };
 const STOPPED = { ...ARMED, id: 4, status: 'STOPPED', failures: 3 };
+/** The indicator triggers: figures from the last quote seen, or none yet. */
+const FIGURES = { price: 259.5, asOf: '2026-10-07T04:00:00Z', days: 80, shortAverage: 255.5, longAverage: 256, lowerBand: 240, upperBand: 270 };
+const CROSSOVER = { ...ARMED, id: 9, trigger: 'MA_CROSSOVER', triggerPrice: null, indicator: FIGURES };
+const BAND_SELL = { ...ARMED, id: 10, side: 'SELL', quantity: 5, trigger: 'BOLLINGER', triggerPrice: null, indicator: FIGURES };
+const BAND_WAITING = { ...ARMED, id: 11, trigger: 'BOLLINGER', triggerPrice: null, indicator: null };
 const ITC = { symbol: 'ITC.NS', name: 'ITC Ltd', type: 'STOCK', exchange: 'NSE' };
 
 describe('Strategies', () => {
@@ -87,6 +92,27 @@ describe('Strategies', () => {
     expect(texts('strategy-toggle')).toEqual(['Switch off', 'Switch on', 'Arm again', 'Arm again']);
   });
 
+  it('shows an indicator strategy as a rule in words, with the figures it waits on', async () => {
+    await render([CROSSOVER, BAND_SELL, BAND_WAITING]);
+
+    expect(texts('strategy-rule')).toEqual([
+      'Buy 2 when the 20-day average crosses above the 50-day',
+      'Sell 5 when the price reaches the upper Bollinger band',
+      'Buy 2 when the price reaches the lower Bollinger band',
+    ]);
+    expect(texts('strategy-indicator')).toEqual([
+      '20-day ₹255.50, 50-day ₹256.00; price ₹259.50',
+      'Band ₹240.00 to ₹270.00; price ₹259.50',
+      'Waiting for the next price',
+    ]);
+  });
+
+  it('a level strategy has no indicator figures', async () => {
+    await render([ARMED]);
+
+    expect(page.querySelector('[data-testid="strategy-indicator"]')).toBeNull();
+  });
+
   it('says there are none yet', async () => {
     await render([]);
 
@@ -134,6 +160,31 @@ describe('Strategies', () => {
 
     expect(texts('strategy-created')[0]).toContain('Created, switched off');
     expect(texts('strategy-status')).toEqual(['Off']);
+  });
+
+  it('creates a crossover with no price: an indicator fires on the averages, so no price is asked for', async () => {
+    await render([]);
+
+    pick(ITC);
+    type('strategy-trigger', 'MA_CROSSOVER');
+    await settle();
+    expect(page.querySelector('[data-testid="strategy-price"]')).toBeNull();
+    type('strategy-quantity', '2');
+    type('strategy-max-spend', '600');
+    type('strategy-max-position', '20');
+    page.querySelector<HTMLButtonElement>('[data-testid="strategy-submit"]')!.click();
+    await settle();
+
+    const post = http.expectOne(STRATEGIES);
+    expect(post.request.body).toEqual({
+      symbol: 'ITC.NS', side: 'BUY', quantity: 2, trigger: 'MA_CROSSOVER', maxSpend: 600, maxPosition: 20,
+    });
+    post.flush({ ...CROSSOVER, enabled: false, indicator: null });
+    await settle();
+    http.expectOne(STRATEGIES).flush([{ ...CROSSOVER, enabled: false, indicator: null }]);
+    await settle();
+
+    expect(texts('strategy-created')[0]).toContain('Created, switched off');
   });
 
   it('sends nothing for a form that is not complete, and says what to fix', async () => {

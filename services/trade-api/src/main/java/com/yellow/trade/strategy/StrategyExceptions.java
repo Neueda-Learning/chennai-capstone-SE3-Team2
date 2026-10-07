@@ -33,6 +33,13 @@ public final class StrategyExceptions {
         }
     }
 
+    /** 422 VAL-422: a level trigger with no price, or an indicator trigger with one. */
+    public static final class TriggerPriceException extends TradeException {
+        public TriggerPriceException(String message) {
+            super("VAL-422", message);
+        }
+    }
+
     /** A message that can never be read. Dead-lettered on the first attempt. */
     public static final class UnreadableEventException extends RuntimeException {
         public UnreadableEventException(String message) {

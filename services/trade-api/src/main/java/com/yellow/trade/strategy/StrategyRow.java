@@ -54,8 +54,13 @@ public class StrategyRow {
     public void setLastFiredAt(Instant lastFiredAt) { this.lastFiredAt = lastFiredAt; }
 
     Strategy toStrategy() {
+        return toStrategy(null);
+    }
+
+    /** With what an indicator strategy waits on, or null. */
+    Strategy toStrategy(StrategyIndicator indicator) {
         return new Strategy(strategyId, symbol, com.yellow.enums.OrderSide.valueOf(side), quantity,
                 Trigger.valueOf(triggerKind), triggerPrice, maxSpend, maxPosition, enabled,
-                StrategyStatus.valueOf(status), failures, createdAt, lastFiredAt);
+                StrategyStatus.valueOf(status), failures, createdAt, lastFiredAt, indicator);
     }
 }

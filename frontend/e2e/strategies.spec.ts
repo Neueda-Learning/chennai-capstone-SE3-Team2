@@ -75,4 +75,37 @@ test.describe('strategies', () => {
     await page.getByTestId('nav-strategies').click();
     await deleteLeftOvers(page);
   });
+
+  test('a moving-average crossover strategy shows the averages it waits on, read from the live price', async ({ page }) => {
+    // The poller publishes about once a minute; the page reads every 15 seconds.
+    test.setTimeout(180_000);
+    await page.goto('/dashboard');
+    await signIn(page);
+    await expect(page.getByTestId('dashboard-greeting')).toContainText('Hi,');
+    await page.getByTestId('nav-strategies').click();
+    await deleteLeftOvers(page);
+
+    await page.getByLabel('Stock', { exact: true }).fill(env.symbol.replace(/\.NS$/, '').toLowerCase());
+    await page.getByRole('option', { name: new RegExp(env.symbol.replace('.', '\\.')) }).first().click();
+    await page.getByTestId('strategy-side').selectOption('BUY');
+    await page.getByTestId('strategy-quantity').fill('1');
+    await page.getByTestId('strategy-trigger').selectOption('MA_CROSSOVER');
+    // An indicator fires on the averages: no price is asked for.
+    await expect(page.getByTestId('strategy-price')).toHaveCount(0);
+    await page.getByTestId('strategy-max-spend').fill('100000');
+    await page.getByTestId('strategy-max-position').fill('100000');
+    await page.getByTestId('strategy-submit').click();
+    await expect(page.getByTestId('strategy-created')).toContainText('Created, switched off');
+
+    const strategy = mine(page).first();
+    await expect(strategy.getByTestId('strategy-rule')).toHaveText('Buy 1 when the 20-day average crosses above the 50-day');
+    await strategy.getByTestId('strategy-toggle').click();
+    await expect(strategy.getByTestId('strategy-status')).toHaveText(/Armed|Fired/);
+    // The next quote reads the stock's daily history and today's price into both averages.
+    await expect(strategy.getByTestId('strategy-indicator')).toContainText('20-day ₹', { timeout: 150_000 });
+    await expect(strategy.getByTestId('strategy-indicator')).toContainText('50-day ₹');
+
+    await deleteLeftOvers(page);
+  });
 });
+

@@ -32,12 +32,13 @@ class StrategyContractTest {
         assertThat(contract().properties("StrategyRequest"), is(ModuleContract.fields(StrategyRequest.class)));
         assertThat(contract().properties("EnabledRequest"), is(ModuleContract.fields(EnabledRequest.class)));
         assertThat(contract().properties("StrategyRun"), is(ModuleContract.fields(StrategyRun.class)));
+        assertThat(contract().properties("StrategyIndicator"), is(ModuleContract.fields(StrategyIndicator.class)));
     }
 
     @Test
     @DisplayName("the triggers, states and outcomes are the ones the code and the tables know")
     void enums() {
-        assertThat(names(Trigger.values()), is(Set.of("FALLS_THROUGH", "RISES_THROUGH")));
+        assertThat(names(Trigger.values()), is(Set.of("FALLS_THROUGH", "RISES_THROUGH", "MA_CROSSOVER", "BOLLINGER")));
         assertThat(names(StrategyStatus.values()), is(Set.of("ARMED", "FIRED", "STOPPED")));
         assertThat(names(RunOutcome.values()), is(Set.of("PLACED", "FILLED", "REJECTED", "REFUSED_LIMIT", "FAILED", "STOPPED")));
     }

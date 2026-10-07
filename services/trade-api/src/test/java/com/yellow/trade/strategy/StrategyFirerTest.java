@@ -20,6 +20,7 @@ import static org.hamcrest.Matchers.comparesEqualTo;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -61,6 +62,20 @@ class StrategyFirerTest {
         return row;
     }
 
+    /** The same strategy on an indicator trigger: no price of its own. */
+    private static StrategyRow onIndicator(String kind, String side) {
+        StrategyRow row = buy();
+        row.setTriggerKind(kind);
+        row.setTriggerPrice(null);
+        row.setSide(side);
+        return row;
+    }
+
+    private static Indicators.View view(double shortBefore, double longBefore, double shortNow, double longNow,
+                                        double lower, double upper, String price) {
+        return new Indicators.View(new BigDecimal(price), NOW, 80, shortBefore, longBefore, shortNow, longNow, lower, upper);
+    }
+
     private static StrategyQuote quote(String price, String bid, String ask) {
         return new StrategyQuote(QUOTE, "ITC.NS", new BigDecimal(price), new BigDecimal(bid), new BigDecimal(ask), NOW);
     }
@@ -92,6 +107,65 @@ class StrategyFirerTest {
         assertThat(run.getOrderId(), is(ORDER));
         assertThat(run.getSourceEventId(), is(QUOTE));
         verify(strategies).markFired(5L, NOW);
+    }
+
+    @Test
+    @DisplayName("strategy triggers on a crossover condition: the 20-day over the 50-day, an order through the Trade API, and the run says why")
+    void crossover() {
+        when(strategies.lockFireable(5L)).thenReturn(onIndicator("MA_CROSSOVER", "BUY"));
+        when(strategies.insertRun(any())).thenReturn(1);
+        when(placer.place(eq(3L), eq("ITC.NS"), eq("BUY"), eq(2), any(), anyString()))
+                .thenReturn(OrderPlacer.Result.placed(ORDER));
+
+        firer().fire(5L, quote("259.50", "259.45", "259.55"), view(255.0, 256.0, 256.2, 256.1, 240, 270, "259.50"));
+
+        verify(placer).place(eq(3L), eq("ITC.NS"), eq("BUY"), eq(2), any(), eq("strategy-5-" + QUOTE));
+        assertThat(recordedRun().getReason(), is("The 20-day average (256.20) crossed above the 50-day (256.10)."));
+        verify(strategies).markFired(5L, NOW);
+    }
+
+    @Test
+    @DisplayName("no action when the condition is not met: the 20-day still under the 50-day, nothing placed and nothing recorded")
+    void noCrossover() {
+        when(strategies.lockFireable(5L)).thenReturn(onIndicator("MA_CROSSOVER", "BUY"));
+
+        firer().fire(5L, quote("259.50", "259.45", "259.55"), view(255.0, 256.0, 255.8, 256.1, 240, 270, "259.50"));
+
+        verify(placer, never()).place(anyLong(), anyString(), anyString(), anyInt(), any(), anyString());
+        verify(strategies, never()).insertRun(any());
+    }
+
+    @Test
+    @DisplayName("a crossover sell fires on the cross down, never on the cross up")
+    void crossoverSell() {
+        when(strategies.lockFireable(5L)).thenReturn(onIndicator("MA_CROSSOVER", "SELL"));
+
+        firer().fire(5L, quote("259.50", "259.45", "259.55"), view(255.0, 256.0, 256.2, 256.1, 240, 270, "259.50"));
+
+        verify(placer, never()).place(anyLong(), anyString(), anyString(), anyInt(), any(), anyString());
+    }
+
+    @Test
+    @DisplayName("a Bollinger buy fires when the price reaches the lower band, and says so")
+    void bollinger() {
+        when(strategies.lockFireable(5L)).thenReturn(onIndicator("BOLLINGER", "BUY"));
+        when(strategies.insertRun(any())).thenReturn(1);
+        when(placer.place(eq(3L), eq("ITC.NS"), eq("BUY"), eq(2), any(), anyString()))
+                .thenReturn(OrderPlacer.Result.placed(ORDER));
+
+        firer().fire(5L, quote("239.50", "239.45", "239.55"), view(255.0, 256.0, 255.0, 256.0, 240, 270, "239.50"));
+
+        assertThat(recordedRun().getReason(), is("The price (239.50) reached the lower Bollinger band (240.00)."));
+    }
+
+    @Test
+    @DisplayName("an indicator strategy with nothing to read it from (no candles) does not fire")
+    void noView() {
+        when(strategies.lockFireable(5L)).thenReturn(onIndicator("BOLLINGER", "BUY"));
+
+        firer().fire(5L, quote("239.50", "239.45", "239.55"), null);
+
+        verify(placer, never()).place(anyLong(), anyString(), anyString(), anyInt(), any(), anyString());
     }
 
     @Test

@@ -1,6 +1,9 @@
 package com.yellow.trade.strategy;
 
 import com.yellow.trade.integration.PostgresSupport;
+import com.yellow.trade.marketdata.ChartRange;
+import com.yellow.trade.marketdata.CandleService;
+import com.yellow.trade.marketdata.Candle;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,6 +20,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.math.BigDecimal;
+import java.util.stream.IntStream;
+import java.time.ZoneId;
+import java.time.LocalDate;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -27,6 +33,7 @@ import static org.hamcrest.Matchers.comparesEqualTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 /**
@@ -52,6 +59,8 @@ class StrategyIntegrationTest extends PostgresSupport {
     @Autowired private StrategyTrigger trigger;
     @Autowired private StrategyOutcomes outcomes;
     @MockitoBean private StrategyTokenClient tokens;
+    /** The daily history an indicator trigger reads; the order route and everything else are real. */
+    @MockitoBean private CandleService candles;
 
     @BeforeEach
     void rebuildDatabase() {
@@ -158,6 +167,43 @@ class StrategyIntegrationTest extends PostgresSupport {
         trigger.onQuote(crossing);
         assertThat(strategyOrders(), is(1));
         assertThat(runs(id).size(), is(1));
+    }
+
+    @Test
+    @DisplayName("a moving-average crossover places its order through the Trade API when today's price crosses, and not before")
+    void crossoverThroughTheRoute() {
+        // To yesterday: 30 days at 100, then 20 at 99; the 20-day (99) under the 50-day (99.6).
+        LocalDate yesterday = LocalDate.now(ZoneId.of("Asia/Kolkata")).minusDays(1);
+        List<Candle> history = IntStream.range(0, 50).mapToObj(i -> {
+            BigDecimal close = BigDecimal.valueOf(i < 30 ? 100 : 99);
+            return new Candle(yesterday.minusDays(49 - i), close, close, close, close, 1000L);
+        }).toList();
+        when(candles.candles(eq("ITC.NS"), eq(ChartRange.SIX_MONTHS))).thenReturn(history);
+        long id = create("""
+                {"symbol":"ITC.NS","side":"BUY","quantity":2,"trigger":"MA_CROSSOVER",
+                 "maxSpend":600,"maxPosition":20}""");
+        assertThat(strategy(id).get("triggerPrice"), is(org.hamcrest.Matchers.nullValue()));
+        enable(id);
+
+        // 110 moves the 20-day to 99.55, still under the 50-day's 99.8: no action.
+        trigger.onQuote(quote("110.00"));
+        assertThat(strategyOrders(), is(0));
+        assertThat(runs(id).size(), is(0));
+
+        // 120 lifts it to 100.05, over the 50-day's 100.00: the order goes through the route.
+        StrategyQuote crossing = quote("120.00");
+        trigger.onQuote(crossing);
+
+        Map<String, Object> order = jdbc.queryForMap(
+                "SELECT side, quantity, price, idempotency_key FROM orders WHERE idempotency_key LIKE 'strategy-%'");
+        assertThat(order.get("side"), is("BUY"));
+        // The ask, 120.10, and half a per cent of room, rounded up to the paisa.
+        assertThat((BigDecimal) order.get("price"), comparesEqualTo(new BigDecimal("120.71")));
+        assertThat(order.get("idempotency_key"), is("strategy-" + id + "-" + crossing.eventId()));
+        assertThat(strategy(id).get("status"), is("FIRED"));
+        assertThat(runs(id).get(0).get("reason"), is("The 20-day average (100.05) crossed above the 50-day (100.00)."));
+        Map<?, ?> indicator = (Map<?, ?>) strategy(id).get("indicator");
+        assertThat(new BigDecimal(indicator.get("shortAverage").toString()), comparesEqualTo(new BigDecimal("100.05")));
     }
 
     @Test

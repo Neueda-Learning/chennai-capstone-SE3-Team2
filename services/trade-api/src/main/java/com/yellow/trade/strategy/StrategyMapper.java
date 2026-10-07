@@ -77,6 +77,15 @@ public interface StrategyMapper {
             """)
     List<Long> findCrossed(@Param("instrumentId") long instrumentId, @Param("price") BigDecimal price);
 
+    /** The enabled, armed indicator strategies on an instrument: each quote reads them their view. */
+    @Select("""
+            SELECT strategy_id FROM strat_strategy
+            WHERE instrument_id = #{instrumentId} AND enabled AND status = 'ARMED'
+              AND trigger_kind IN ('MA_CROSSOVER', 'BOLLINGER')
+            ORDER BY strategy_id
+            """)
+    List<Long> findArmedIndicators(@Param("instrumentId") long instrumentId);
+
     /**
      * The strategy, locked, only if it may still fire: enabled and armed. The
      * check that disabling stops it at once is this, in the firing transaction.
