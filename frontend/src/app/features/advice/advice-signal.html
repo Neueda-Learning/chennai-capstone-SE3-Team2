@@ -10,30 +10,32 @@
 
   @if (reading(); as reading) {
     <div class="verdict">
-      <span class="direction" [attr.data-direction]="reading.direction" data-testid="advice-direction">{{ reading.direction }}</span>
-      @if (reading.direction !== 'HOLD') {
+      <span class="direction" [attr.data-direction]="reading.direction ?? 'NONE'" data-testid="advice-direction">{{ reading.direction ?? 'No signal' }}</span>
+      @if (reading.strength !== null && reading.direction !== 'HOLD') {
         <span class="strength" data-testid="advice-strength">strength {{ reading.strength }} of 100</span>
       }
     </div>
     <p class="reason" data-testid="advice-reason">{{ reading.reason }}</p>
-    <dl class="figures">
-      <div>
-        <dt>20-day average</dt>
-        <dd>{{ (reading.figures.sma20 | number: '1.2-2') ?? '—' }}</dd>
-      </div>
-      <div>
-        <dt>50-day average</dt>
-        <dd>{{ (reading.figures.sma50 | number: '1.2-2') ?? '—' }}</dd>
-      </div>
-      <div>
-        <dt>RSI (14)</dt>
-        <dd>{{ (reading.figures.rsi14 | number: '1.0-0') ?? '—' }}</dd>
-      </div>
-      <div>
-        <dt>Days of prices</dt>
-        <dd>{{ reading.figures.days }}</dd>
-      </div>
-    </dl>
+    @if (reading.figures; as figures) {
+      <dl class="figures">
+        <div>
+          <dt>20-day average</dt>
+          <dd>{{ (figures.sma20 | number: '1.2-2') ?? '—' }}</dd>
+        </div>
+        <div>
+          <dt>50-day average</dt>
+          <dd>{{ (figures.sma50 | number: '1.2-2') ?? '—' }}</dd>
+        </div>
+        <div>
+          <dt>RSI (14)</dt>
+          <dd>{{ (figures.rsi14 | number: '1.0-0') ?? '—' }}</dd>
+        </div>
+        <div>
+          <dt>Days of prices</dt>
+          <dd>{{ figures.days }}</dd>
+        </div>
+      </dl>
+    }
     <p class="how">{{ reading.methodology }} · worked out {{ reading.computedAt | date: 'd MMM, HH:mm' : '+0530' }}</p>
   } @else {
     <p class="how">A view from the daily prices: the 20-day against the 50-day average, confirmed by RSI(14).</p>

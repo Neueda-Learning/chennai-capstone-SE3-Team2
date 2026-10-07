@@ -16,6 +16,7 @@ export interface ErrorResponse {
 export namespace ErrorResponse {
     export const ErrorCodeEnum = {
         Auth401: 'AUTH-401',
+        Acc403: 'ACC-403',
         Val422: 'VAL-422',
         Ins404: 'INS-404',
         Mkt503: 'MKT-503',

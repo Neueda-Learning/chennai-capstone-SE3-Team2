@@ -72,6 +72,21 @@ describe('AdviceSignal', () => {
     expect(page.querySelector('[data-testid="advice-strength"]')).toBeNull();
   });
 
+  it('with too little data, says there is no signal and why: no direction, no strength', async () => {
+    page.querySelector<HTMLButtonElement>('[data-testid="advice-read"]')!.click();
+    await settle();
+    http.expectOne(ADVICE).flush({
+      ...BUY, direction: null, strength: null,
+      reason: 'Only 32 days of prices: a 50-day average needs 50, so there is no signal yet.',
+      figures: { ...BUY.figures, sma50: null, days: 32 },
+    });
+    await settle();
+
+    expect(text('advice-direction')).toBe('No signal');
+    expect(page.querySelector('[data-testid="advice-strength"]')).toBeNull();
+    expect(text('advice-reason')).toContain('so there is no signal yet');
+  });
+
   it('says why when there is no signal to be had', async () => {
     page.querySelector<HTMLButtonElement>('[data-testid="advice-read"]')!.click();
     await settle();

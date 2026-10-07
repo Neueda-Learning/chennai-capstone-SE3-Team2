@@ -22,7 +22,7 @@ class AdviceContractTest {
     @Test
     @DisplayName("describes exactly the route the controller serves")
     void routes() throws IOException {
-        assertThat(contract().describedRoutes(), is(ModuleContract.servedRoutes(AdviceController.class)));
+        assertThat(contract().describedRoutes(), is(ModuleContract.servedRoutes(AdviceController.class, AccountAdviceController.class)));
     }
 
     @Test
@@ -30,6 +30,8 @@ class AdviceContractTest {
     void schemas() throws IOException {
         assertThat(contract().properties("Signal"), is(ModuleContract.fields(Signal.class)));
         assertThat(contract().properties("SignalFigures"), is(ModuleContract.fields(SignalFigures.class)));
+        assertThat(contract().properties("AccountAdvice"), is(ModuleContract.fields(AccountAdvice.class)));
+        assertThat(contract().properties("AdviceItem"), is(ModuleContract.fields(AdviceItem.class)));
     }
 
     @Test

@@ -9,6 +9,8 @@ configuration.ts
 encoder.ts
 git_push.sh
 index.ts
+model/account-advice.ts
+model/advice-item.ts
 model/error-response.ts
 model/models.ts
 model/signal-figures.ts

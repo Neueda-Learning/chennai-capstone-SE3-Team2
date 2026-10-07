@@ -17,6 +17,8 @@ import { Observable }                                        from 'rxjs';
 import { OpenApiHttpParams, QueryParamStyle } from '../query.params';
 
 // @ts-ignore
+import { AccountAdvice } from '../model/account-advice';
+// @ts-ignore
 import { ErrorResponse } from '../model/error-response';
 // @ts-ignore
 import { Signal } from '../model/signal';
@@ -38,8 +40,68 @@ export class AdviceService extends BaseService {
     }
 
     /**
+     * A signal for every stock the account holds or watches
+     * Holdings first, then watchlist entries, each symbol once, at most 30 (&#x60;truncated&#x60; says when there were more). A stock with no view to give is listed with no signal and the reason: a fund, too little history, prices not readable just now, or no longer traded. One stock\&#39;s trouble never fails the list. 
+     * @endpoint get /api/v1/accounts/{id}/advice
+     * @param id The numeric account key; must be the token\&#39;s own account (else &#x60;ACC-403&#x60;).
+     * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
+     * @param reportProgress flag to report request and response progress.
+     * @param options additional options
+     */
+    public getAccountAdvice(id: number, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<AccountAdvice>;
+    public getAccountAdvice(id: number, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<AccountAdvice>>;
+    public getAccountAdvice(id: number, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<AccountAdvice>>;
+    public getAccountAdvice(id: number, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+        if (id === null || id === undefined) {
+            throw new Error('Required parameter id was null or undefined when calling getAccountAdvice.');
+        }
+
+        let localVarHeaders = this.defaultHeaders;
+
+        // authentication (bearerAuth) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('bearerAuth', 'Authorization', localVarHeaders, 'Bearer ');
+
+        const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
+            'application/json'
+        ]);
+        if (localVarHttpHeaderAcceptSelected !== undefined) {
+            localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
+        }
+
+        const localVarHttpContext: HttpContext = options?.context ?? new HttpContext();
+
+        const localVarTransferCache: boolean = options?.transferCache ?? true;
+
+
+        let responseType_: 'text' | 'json' | 'blob' = 'json';
+        if (localVarHttpHeaderAcceptSelected) {
+            if (localVarHttpHeaderAcceptSelected.startsWith('text')) {
+                responseType_ = 'text';
+            } else if (this.configuration.isJsonMime(localVarHttpHeaderAcceptSelected)) {
+                responseType_ = 'json';
+            } else {
+                responseType_ = 'blob';
+            }
+        }
+
+        let localVarPath = `/api/v1/accounts/${this.configuration.encodeParam({name: "id", value: id, in: "path", style: "simple", explode: false, dataType: "number", dataFormat: "int64"})}/advice`;
+        const { basePath, withCredentials } = this.configuration;
+        return this.httpClient.request<AccountAdvice>('get', `${basePath}${localVarPath}`,
+            {
+                context: localVarHttpContext,
+                responseType: <any>responseType_,
+                ...(withCredentials ? { withCredentials } : {}),
+                headers: localVarHeaders,
+                observe: observe,
+                ...(localVarTransferCache !== undefined ? { transferCache: localVarTransferCache } : {}),
+                reportProgress: reportProgress
+            }
+        );
+    }
+
+    /**
      * The signal for one stock
-     * A fund has no daily candles here, so no signal: &#x60;VAL-422&#x60;. Too little history for a 50-day average is a HOLD saying so. No candles to be had at all is &#x60;MKT-503&#x60;. 
+     * A fund has no daily candles here, so no signal: &#x60;VAL-422&#x60;. Too little history for a 50-day average is no signal: &#x60;direction&#x60; null, and the reason says so. No candles to be had at all is &#x60;MKT-503&#x60;. 
      * @endpoint get /api/v1/advice/{symbol}
      * @param symbol 
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
