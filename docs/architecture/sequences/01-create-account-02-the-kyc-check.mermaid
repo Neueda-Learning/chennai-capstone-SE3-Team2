@@ -1,0 +1,66 @@
+%% 01-create-account.md: B. The KYC check
+sequenceDiagram
+    autonumber
+    box Trade REST API
+        participant J as KycVerificationJob
+        participant KD as KycDecider
+        participant KR as KycRules
+        participant SP as StubKycProvider
+        participant KM as KycMapper
+        participant OB as OutboxMapper
+        participant RJ as OutboxRelayJob
+        participant RE as OutboxRelay
+    end
+    participant DB as trading DB
+    participant K as Kafka kyc-events
+
+    loop every 10 s
+        J->>J: run()
+        J->>KM: findDue(cutoff = now - 30 s, maxAttempts 5, batch)
+        KM->>DB: SELECT client_id FROM kyc_verification WHERE status = PENDING AND attempts < 5
+        loop each clientId
+            J->>KD: decide(clientId) - @Transactional
+            KD->>KM: findApplicant(clientId)
+            KM->>DB: SELECT client_account JOIN client_profile JOIN bank_account
+            KD->>KR: isAdult(dob, today in IST)
+            alt under 18
+                KD->>KD: Verdict.fail(UNDER_AGE) - not sent to provider
+            else adult
+                KD->>SP: verify(Applicant pan, name, dob, bank, ifsc)
+                SP-->>KD: Verdict passed or reason
+            end
+            KD->>KM: decide(clientId, VERIFIED or REJECTED, reason, checks json)
+            KM->>DB: UPDATE kyc_verification SET status, decided_at WHERE status = PENDING
+            alt 0 rows
+                KD-->>J: Optional.empty (another run decided first)
+            end
+            KD->>KM: setAccountKycStatus(clientId, status)
+            KM->>DB: UPDATE client_account SET kyc_status WHERE kyc_status = PENDING
+            opt status = VERIFIED
+                KD->>KD: queueVerifiedEvent(clientId) - EventEnvelope KYC_VERIFIED
+                KD->>OB: insert(eventId, kyc-events, clientId, envelope)
+                OB->>DB: INSERT outbox_event
+            end
+            KD-->>J: status (commit: decision and event together)
+            opt exception
+                J->>J: failed(clientId, e)
+                J->>KM: recordFailure(clientId, exception class only)
+                KM->>DB: UPDATE kyc_verification SET attempts + 1, last_error
+            end
+        end
+    end
+
+    loop every 2 s
+        RJ->>RE: relayOnce() - @Transactional
+        RE->>OB: lockBatch(20)
+        OB->>DB: SELECT ... FROM outbox_event WHERE published_at IS NULL FOR UPDATE SKIP LOCKED
+        RE->>K: KafkaTemplate.send(kyc-events, key clientId).get(timeout)
+        alt broker ack
+            RE->>OB: markPublished(eventId)
+            OB->>DB: UPDATE outbox_event SET published_at = now()
+        else error
+            RE->>OB: recordFailure(eventId, error)
+            OB->>DB: UPDATE outbox_event SET attempts + 1, last_error
+            Note over RE: log OUTBOX_PUBLISH_FAILED, stop batch, retry next tick
+        end
+    end

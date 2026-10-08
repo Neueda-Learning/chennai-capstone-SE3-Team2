@@ -1,0 +1,49 @@
+%% 01-create-account.md: A. The customer gives the information
+sequenceDiagram
+    autonumber
+    actor C as Customer
+    box Angular UI
+        participant AP as Apply component
+        participant OA as OnboardingApi
+    end
+    box Trade REST API
+        participant OC as OnboardingController
+        participant RL as ApplicationRateLimiter
+        participant OS as OnboardingService
+        participant OM as OnboardingMapper
+        participant KS as KycVerificationService
+        participant KM as KycMapper
+    end
+    participant DB as trading DB
+
+    C->>AP: fill in name, dob, email, mobile, PAN, bank, IFSC
+    AP->>AP: submit() - form validators, trim, upper-case PAN and IFSC
+    AP->>OA: apply(ApplicationRequest)
+    OA->>OC: POST /onboarding/applications (no token)
+    OC->>OC: @Valid ApplicationRequest (else 422 VAL-422)
+    OC->>RL: tryAcquire(remoteAddr)
+    alt more than 5 in one hour from this IP
+        RL-->>OC: false
+        OC-->>AP: 429 RATE-429
+    end
+    OC->>OS: apply(request) - @Transactional
+    OS->>OS: dateOfBirth(dob)
+    OS->>OM: nextClientId()
+    OM->>DB: SELECT nextval(client_account sequence)
+    OS->>OM: insertAccount(clientId, ACC-000013, pan, dematId)
+    OM->>DB: INSERT client_account ON CONFLICT DO NOTHING (status ACTIVE, kyc_status PENDING)
+    OS->>OM: insertProfile(clientId, name, dob, email, phone, address)
+    OM->>DB: INSERT client_profile ON CONFLICT DO NOTHING
+    alt 0 rows (PAN or email already used)
+        OS-->>OC: throw DuplicateApplicationException (transaction rolls back)
+        OC-->>AP: 202 Accepted (same answer, no leak)
+    end
+    OS->>OM: insertBankAccount(clientId, accountNumber, ifsc, name)
+    OM->>DB: INSERT bank_account
+    OS->>KS: submit(clientId) - Propagation.MANDATORY
+    KS->>KM: insertPending(clientId)
+    KM->>DB: INSERT kyc_verification (status PENDING)
+    OS-->>OC: clientId (commit)
+    OC-->>OA: 202 Accepted {ApplicationReceived}
+    OA-->>AP: resolve
+    AP->>C: "Application received. Check your email."

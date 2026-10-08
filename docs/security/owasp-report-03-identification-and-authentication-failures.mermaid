@@ -1,0 +1,8 @@
+%% owasp-report.md: 11. A07:2021 Identification and authentication failures
+stateDiagram-v2
+    [*] --> Live : issued at login or refresh, 7 days
+    Live --> Exchanged : presented one time, new pair issued
+    Live --> Expired : 7 days pass
+    Exchanged --> AllRevoked : presented again = theft alarm SECURITY_REFRESH_REPLAY
+    AllRevoked --> [*] : user must sign in again
+    Expired --> [*]

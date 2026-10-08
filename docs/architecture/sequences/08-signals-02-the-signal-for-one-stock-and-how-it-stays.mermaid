@@ -1,0 +1,28 @@
+%% 08-signals.md: B. The signal for one stock, and how it stays fresh
+sequenceDiagram
+    autonumber
+    participant ASG as AdviceSignal component
+    participant ADC as AdviceController
+    participant AS as AdviceService
+    participant J as AdviceRefreshJob (own thread)
+    participant K as Kafka market-data
+    participant ML as AdviceMarketDataListener
+    participant LP as LatestPrices
+
+    ASG->>ASG: read() on the instrument page
+    ASG->>ADC: AdviceApi.signal(symbol) - GET /api/v1/advice/{symbol}
+    ADC->>AS: signal(symbol)
+    alt fund
+        AS-->>ASG: 422 VAL-422 (no daily candles for a fund)
+    end
+    AS-->>ASG: Signal {direction, strength, reason, figures, methodology, disclaimer}
+
+    K->>ML: QUOTE (group advice-service)
+    ML->>LP: onQuote(value) -> offer(message, json)
+    LP->>LP: keep only if newer than the price held
+
+    loop every 5 minutes
+        J->>AS: refreshAll()
+        AS->>AS: forget symbols not asked for in 1 day
+        AS->>AS: compute() again for each kept symbol
+    end

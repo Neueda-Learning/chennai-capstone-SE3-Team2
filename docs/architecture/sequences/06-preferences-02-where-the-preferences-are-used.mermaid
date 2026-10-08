@@ -1,0 +1,29 @@
+%% 06-preferences.md: B. Where the preferences are used
+sequenceDiagram
+    autonumber
+    participant SI as SignIn.submit()
+    participant PA as PreferencesApi.landingUrl()
+    participant API as PreferenceService.get()
+    participant ND as NotificationDispatcher.send()
+    participant CR as ProfileChannelResolver.resolve()
+    participant DB as trading DB
+
+    Note over SI,API: 1. Landing screen at sign-in
+    SI->>PA: landingUrl(accountId)
+    PA->>API: GET .../preferences
+    API-->>PA: landingScreen = holdings
+    PA-->>SI: "/holdings" (on any error: home, sign-in never fails)
+
+    Note over ND,CR: 2. Alert channel at send time
+    ND->>CR: resolve(accountId)
+    CR->>DB: PreferenceMapper.findByClient()
+    alt IN_APP
+        CR-->>ND: ResolvedChannel(IN_APP, null)
+    else EMAIL
+        CR->>DB: ProfileMapper.findEmail()
+        alt no address on profile
+            CR-->>ND: ResolvedChannel(IN_APP, null) - inbox rather than nowhere
+        else
+            CR-->>ND: ResolvedChannel(EMAIL, address)
+        end
+    end

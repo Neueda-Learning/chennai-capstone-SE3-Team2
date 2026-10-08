@@ -1,0 +1,8 @@
+%% owasp-report.md: 12. A08:2021 Software and data integrity failures
+flowchart LR
+    F["Forged message on Kafka<br/>(broker has no auth)"] --> T1["KYC_VERIFIED"]
+    F --> T2["ORDER_FILLED"]
+    F --> T3["QUOTE"]
+    T1 --> R1["Auth provisions a login<br/>BUT order rule 3 reads<br/>client_account.kyc_status: no trade"]
+    T2 --> R2["RealisedBook.book() checks orders:<br/>no FILLED SELL = nothing booked"]
+    T3 --> R3["Alert may fire: one message<br/>Strategy may fire: one order,<br/>inside maxSpend + all order checks.<br/>Executor uses its own quote"]

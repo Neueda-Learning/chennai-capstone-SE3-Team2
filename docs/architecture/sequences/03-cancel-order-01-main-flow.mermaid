@@ -1,0 +1,58 @@
+%% 03-cancel-order.md: main flow
+sequenceDiagram
+    autonumber
+    actor C as Customer
+    box Angular UI
+        participant B as Blotter component
+        participant TA as TradeApi
+    end
+    box Trade REST API
+        participant F as JwtAuthenticationFilter
+        participant OC as OrderController
+        participant OS as OrderService
+        participant OM as OrderMapper
+        participant AM as AccountMapper
+        participant AN as OrderCancelledAnnouncer
+        participant OB as OutboxMapper
+        participant RE as OutboxRelay
+    end
+    participant DB as trading DB
+    participant T as Kafka trade-events
+
+    C->>B: click Cancel on a NEW order
+    B->>B: cancel(orderId) - cancelling.set(orderId)
+    B->>TA: cancelOrder(orderId) - strips ORD- prefix
+    TA->>F: DELETE /api/v1/orders/{uuid} + Bearer
+    F->>OC: verified, CallerAccount set
+    OC->>OS: cancelOrder(id) - @Transactional
+    OS->>OM: findById(orderId)
+    OM->>DB: SELECT FROM orders WHERE order_id = ?
+    alt no row
+        OS-->>B: 404 ORD-409 (no ORD-404 in the contract)
+    end
+    OS->>OS: caller.canReach(order.clientId)? else 403 ACC-403 (logged)
+    OS->>OM: cancelIfNew(orderId, cancelledAt)
+    OM->>DB: UPDATE orders SET status = CANCELLED, resolved_at WHERE order_id = ? AND status = NEW
+    alt 0 rows (executor won the race, or already resolved)
+        OS-->>B: 409 ORD-409 not cancellable
+    end
+    opt side = BUY
+        OS->>AM: findById(clientId)
+        OS->>OS: releaseFunds(account, qty x price)
+        OS->>AM: releaseFunds(clientId, amount, version)
+        AM->>DB: UPDATE client_account SET blocked_funds - amount, version + 1 WHERE version = ?
+    end
+    OS->>AN: publishEvent(OrderCancelledDomainEvent) - @EventListener, same transaction
+    AN->>AN: on(cancelled) - TradeEventPayload status CANCELLED, cashDelta 0
+    AN->>OB: insert(eventId, trade-events, clientId, envelope)
+    OB->>DB: INSERT outbox_event ORDER_CANCELLED
+    OS-->>OC: OrderResponse status CANCELLED
+    Note over OS,DB: commit: cancel, funds and event together
+    OC-->>TA: 200 OK
+    B->>B: refresh() - orderHistory() re-read
+    loop every 2 s
+        RE->>OB: relayOnce() -> lockBatch(20) FOR UPDATE SKIP LOCKED
+        RE->>T: KafkaTemplate.send(trade-events, key accountId).get()
+        RE->>OB: markPublished(eventId)
+    end
+    Note over T: notification-service and strategy-service consume it

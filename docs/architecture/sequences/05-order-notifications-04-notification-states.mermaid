@@ -1,0 +1,9 @@
+%% 05-order-notifications.md: Notification states
+stateDiagram-v2
+    [*] --> QUEUED : NotificationLedger.record() or deliver()
+    QUEUED --> SENT : email accepted, or IN_APP
+    QUEUED --> QUEUED : mail refused, attempts + 1, wait 30 s x attempts
+    QUEUED --> QUEUED : resolver did not answer
+    QUEUED --> FAILED : 5th refusal, or account gone
+    SENT --> [*]
+    FAILED --> [*]

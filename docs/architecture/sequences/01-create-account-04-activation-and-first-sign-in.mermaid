@@ -1,0 +1,60 @@
+%% 01-create-account.md: D. Activation and first sign-in
+sequenceDiagram
+    autonumber
+    actor C as Customer
+    box Auth service
+        participant PC as ActivationPageController
+        participant AU as AuthService
+        participant PH as PasswordHasher
+        participant CR as CredentialRepository
+        participant LG as LoginThrottleGuard
+        participant AT as AccessTokenService
+        participant RT as RefreshTokenService
+    end
+    participant ADB as auth DB
+    participant R as Redis
+    box Angular UI
+        participant SI as SignIn component
+        participant AA as AuthApi
+        participant SE as Session
+        participant PA as PreferencesApi
+    end
+
+    C->>PC: GET /activate?token=... (link in email)
+    PC->>PC: show() - ActivationTokenService.isUsable(token)
+    PC-->>C: form: username, password (CSP default-src none)
+    C->>PC: POST /activate {token, username, password}
+    PC->>PC: submit() - plainToInstance(RegisterDto) + validate()
+    PC->>AU: register(dto)
+    AU->>PH: hash(password) - argon2id 64 MiB, t=4, p=1
+    AU->>CR: registerWithActivationToken(username, hash, sha256(token))
+    CR->>ADB: BEGIN
+    CR->>ADB: UPDATE activation_token SET used_at = now() WHERE hash = ? AND live
+    CR->>ADB: UPDATE provisioned_account SET claimed_by WHERE claimed_by IS NULL
+    CR->>ADB: INSERT credential (id, username, password_hash, account_id, roles CUSTOMER)
+    CR->>ADB: COMMIT
+    alt token bad, used, expired or claimed
+        AU-->>PC: AUTH-401 - "This link is not valid"
+    end
+    PC-->>C: 303 See Other to /activate/done
+
+    C->>SI: username + password
+    SI->>SI: submit()
+    SI->>AA: signIn(username, password)
+    AA->>LG: POST /auth/login
+    LG->>R: GET login-attempts:ip (blocked at 5)
+    LG->>AU: login(dto)
+    AU->>CR: findByUsername(username)
+    CR->>ADB: SELECT FROM credential
+    AU->>PH: verify(hash, password) (dummy hash if user unknown)
+    alt wrong
+        AU->>R: Lua INCR + PEXPIRE 60 s
+        AU-->>SI: 401 AUTH-401 Unauthorised
+    end
+    AU->>AT: issue(credential) - HS256 JWT, 900 s, claims sub accountId roles iss
+    AU->>RT: issue - INSERT refresh_token (sha256, 7 days)
+    AU-->>AA: {accessToken, refreshToken, expiresIn 900}
+    SI->>SE: start(accessToken, refreshToken) - sessionStorage
+    SI->>PA: landingUrl(accountId)
+    PA-->>SI: /dashboard (or the stored landing screen)
+    SI->>C: navigateByUrl(target)

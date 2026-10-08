@@ -1,0 +1,42 @@
+%% 09-automated-strategy.md: A. Create and switch on a strategy
+sequenceDiagram
+    autonumber
+    actor C as Customer
+    box Angular UI
+        participant SU as Strategies component
+        participant SA as StrategiesApi
+    end
+    box Trade REST API - strategy module
+        participant SC as StrategyController
+        participant SS as StrategyService
+        participant IM as InstrumentMapper
+        participant SM as StrategyMapper
+    end
+    participant DB as trading DB
+
+    C->>SU: TCS.NS, BUY 5, FALLS_THROUGH 3900, maxSpend 20000, maxPosition 50
+    SU->>SU: create() -> request() builds StrategyRequest
+    SU->>SA: create(accountId, request)
+    SA->>SC: POST /api/v1/accounts/{id}/strategies + Bearer
+    SC->>SC: @Valid StrategyRequest
+    SC->>SS: create(accountId, request) - @Transactional
+    SS->>SS: AccountAccess.requireOwn()
+    SS->>SS: level trigger needs a price, indicator trigger takes none (else 422)
+    SS->>IM: findBySymbol(symbol) - unknown 404, fund 422, not tradable 404
+    SS->>SM: lockAccount(accountId)
+    SM->>DB: pg_advisory_xact_lock(1015, clientId)
+    SS->>SM: countForClient(accountId)
+    alt 10 or more
+        SS-->>SU: 409 LIM-409
+    end
+    SS->>SM: insert(StrategyRow)
+    SM->>DB: INSERT strat_strategy (enabled false, status ARMED, failures 0)
+    SS-->>SU: 201 Strategy (switched off)
+
+    C->>SU: click Switch on
+    SU->>SU: toggle(strategy) -> act()
+    SU->>SA: setEnabled(accountId, strategyId, true)
+    SA->>SC: PUT .../strategies/{sid}/enabled {enabled true}
+    SC->>SS: setEnabled(accountId, sid, true)
+    SS->>SM: enable(sid) - UPDATE strat_strategy SET enabled true, status ARMED, failures reset
+    Note over DB: the view strat_polled_symbols now lists TCS.NS,<br/>so the executor's poller prices it

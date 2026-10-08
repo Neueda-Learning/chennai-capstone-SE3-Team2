@@ -1,0 +1,55 @@
+%% 05-order-notifications.md: B. Dispatch on the customer's channel
+sequenceDiagram
+    autonumber
+    box Trade REST API - notifications module
+        participant J as NotificationDispatchJob (own thread)
+        participant D as NotificationDispatcher
+        participant MP as NotificationMapper
+        participant MS as SmtpNotificationMailSender
+    end
+    box preferences module
+        participant CR as ProfileChannelResolver (api.ChannelResolver)
+        participant PM as PreferenceMapper
+        participant PF as ProfileMapper
+    end
+    participant DB as trading DB
+    participant G as Gmail SMTP
+
+    loop every 2 s
+        J->>D: runOnce() -> dispatchOnce() - @Transactional
+        D->>MP: lockDue(now, batchSize)
+        MP->>DB: SELECT FROM notif_notification WHERE status = QUEUED AND next_attempt_at <= now FOR UPDATE SKIP LOCKED
+        loop each due row
+            D->>D: send(row, now)
+            D->>CR: resolve(clientId) - Java seam
+            CR->>PM: findByClient(accountId)
+            PM->>DB: SELECT FROM pref_preference
+            opt channel EMAIL (or no row: default EMAIL)
+                CR->>PF: findEmail(accountId)
+                PF->>DB: SELECT email FROM client_profile
+            end
+            CR-->>D: ResolvedChannel(channel, destination, fromDefault)
+            alt UnknownAccountException
+                D->>MP: markFailed(id, "no such account")
+            else resolver threw
+                D->>D: failedAttempt() - stays QUEUED, never sent on a guess
+            else IN_APP
+                D->>MP: markSent(id, IN_APP, null, now)
+                MP->>DB: UPDATE notif_notification SET status SENT, channel IN_APP
+            else EMAIL
+                D->>MS: send(to, subject, body)
+                MS->>G: JavaMailSender.send()
+                alt MailDeliveryException
+                    D->>D: failedAttempt(row, EMAIL, masked, error)
+                    alt attempts >= 5
+                        D->>MP: markFailed() - status FAILED
+                    else
+                        D->>MP: retryLater(id, reason, now + 30 s x attempts)
+                    end
+                else accepted
+                    D->>MP: markSent(id, EMAIL, Masking.email(address), now)
+                    MP->>DB: UPDATE SET status SENT, destination masked
+                end
+            end
+        end
+    end

@@ -1,0 +1,13 @@
+%% 03-cancel-order.md: The race with the executor
+sequenceDiagram
+    participant API as OrderService.cancelOrder()
+    participant DB as orders row (status NEW)
+    participant EX as FullSettlement.settle()
+    par customer cancels
+        API->>DB: UPDATE ... SET CANCELLED WHERE status = NEW
+    and executor fills
+        EX->>DB: UPDATE ... SET FILLED WHERE status = NEW
+    end
+    Note over DB: Postgres serialises the two updates on the row lock.<br/>The first gets 1 row. The second gets 0 rows.
+    DB-->>API: 1 row: CANCELLED, release funds
+    DB-->>EX: 0 rows: ALREADY_SETTLED, publish nothing

@@ -1,0 +1,41 @@
+%% 07-price-alerts.md: A. Set an alert
+sequenceDiagram
+    autonumber
+    actor C as Customer
+    box Angular UI
+        participant IP as InstrumentPage
+        participant WA as WatchlistsApi
+    end
+    box Trade REST API - watchlists module
+        participant AC as AlertsController
+        participant AS as AlertService
+        participant AA as AccountAccess
+        participant IM as InstrumentMapper
+        participant WM as WatchlistMapper
+        participant AM as AlertMapper
+    end
+    participant DB as trading DB
+
+    C->>IP: ABOVE 4000 on TCS.NS, click Set alert
+    IP->>WA: setAlert(accountId, {symbol, direction ABOVE, threshold 4000})
+    WA->>AC: POST /api/v1/accounts/{id}/alerts + Bearer
+    AC->>AC: @Valid AlertRequest (threshold > 0)
+    AC->>AS: create(accountId, request) - @Transactional
+    AS->>AA: requireOwn(accountId)
+    AS->>IM: findBySymbol(symbol)
+    alt unknown or not tradable
+        AS-->>IP: 404 INS-404
+    else mutual fund
+        AS-->>IP: 422 VAL-422 (no live quote for a fund)
+    end
+    AS->>WM: lockAccount(accountId)
+    WM->>DB: pg_advisory_xact_lock(1013, clientId)
+    AS->>AS: requireRoomForAnother(accountId)
+    AS->>AM: countActive(accountId)
+    AM->>DB: SELECT count(*) FROM watch_alert WHERE client_id = ? AND status = ACTIVE
+    alt 20 or more
+        AS-->>IP: 409 LIM-409
+    end
+    AS->>AM: insert(AlertRow)
+    AM->>DB: INSERT watch_alert (status ACTIVE)
+    AS-->>IP: 201 PriceAlert

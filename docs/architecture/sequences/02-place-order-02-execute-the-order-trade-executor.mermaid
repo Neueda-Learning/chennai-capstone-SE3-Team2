@@ -1,0 +1,64 @@
+%% 02-place-order.md: B. Execute the order (Trade Executor)
+sequenceDiagram
+    autonumber
+    participant K as Kafka orders
+    box Trade Executor
+        participant PC as OrderPlacedConsumer
+        participant X as OrderExecutionService
+        participant PT as PreTradeChecks
+        participant Q as FauxnanceQuoteClient / MfNavClient
+        participant FR as EquityFillRule / MutualFundFillRule
+        participant S as FullSettlement
+        participant EM as ExecutionMapper
+    end
+    participant DB as trading DB
+    participant T as Kafka trade-events
+
+    K->>PC: ORDER_PLACED (group trade-executor)
+    PC->>X: onOrderPlaced() -> execute(orderId)
+    X->>EM: findOrder(orderId)
+    EM->>DB: SELECT orders JOIN instrument
+    alt no row
+        X-->>PC: UnknownOrderException (poison, to orders.DLT)
+    end
+    X->>X: order.isWorking()? status not NEW = stop
+    X->>EM: findAccount(accountId)
+    EM->>DB: SELECT FROM client_account
+    X->>PT: beforePricing(instrument, account)
+    alt not tradable or account not ACTIVE
+        X->>S: settleAndPublish(Reject reason)
+    end
+    alt stock
+        X->>Q: quote(symbol) - 3 attempts, Retry-After
+    else mutual fund
+        X->>Q: nav(symbol) - one NAV both ways
+    end
+    alt QuoteUnavailableException
+        X->>S: settleAndPublish(Reject NO_PRICE)
+    end
+    X->>FR: decide(order, quote)
+    FR->>FR: BUY marketable if limit >= ask, SELL if limit <= bid (round first)
+    opt Fill
+        X->>EM: findPosition(accountId, instrumentId)
+        X->>PT: atExecution(order, account, held, executedPrice)
+        Note over PT: funds and holdings checked again at the real price
+    end
+    X->>S: settle(decision, order) - @Transactional
+    S->>EM: settleIfNew(orderId, status, fillPrice, now, reason)
+    EM->>DB: UPDATE orders SET status, fill_price, resolved_at WHERE order_id = ? AND status = NEW
+    alt 0 rows
+        S-->>X: ALREADY_SETTLED (duplicate delivery, nothing moves)
+    else 1 row
+        S->>S: updateAccountWithRetry() - max 5 attempts
+        S->>EM: updateAccount(accountId, balanceDelta, blockedDelta, version)
+        EM->>DB: UPDATE client_account SET balance, blocked_funds, version + 1 WHERE version = ?
+        opt FILLED
+            S->>S: writePosition(order, executedPrice)
+            S->>EM: insertPosition / updatePosition / deletePosition
+            EM->>DB: INSERT, UPDATE or DELETE position
+        end
+        S-->>X: SETTLED (commit)
+        X->>X: publishTradeEvent(decision, order, heldBefore)
+        X->>T: send(trade-events, key accountId, ORDER_FILLED or ORDER_REJECTED)
+    end
+    PC->>K: acknowledge offset (AckMode.RECORD)

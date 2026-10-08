@@ -1,0 +1,19 @@
+%% 04-watchlist.md: C. Read the watchlists
+sequenceDiagram
+    autonumber
+    participant WL as MarketWatchList (store)
+    participant WA as WatchlistsApi
+    participant WS as WatchlistService
+    participant WM as WatchlistMapper
+    participant DB as trading DB
+    participant LP as LivePrices (UI)
+
+    WL->>WL: refresh()
+    WL->>WA: list(accountId)
+    WA->>WS: GET /api/v1/accounts/{id}/watchlists -> list(accountId)
+    WS->>WM: findForClient(accountId), findItemsForClient(accountId)
+    WM->>DB: SELECT watch_list, watch_item LEFT JOIN watch_latest_quote
+    WS-->>WL: Watchlist[] with lastPrice, changePercent, stale
+    loop every 15 s while the tab is visible
+        LP->>LP: tick() - MarketDataApi.quotes() GET /api/v1/quotes
+    end

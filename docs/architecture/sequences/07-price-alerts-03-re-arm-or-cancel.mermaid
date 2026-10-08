@@ -1,0 +1,23 @@
+%% 07-price-alerts.md: C. Re-arm or cancel
+sequenceDiagram
+    autonumber
+    actor C as Customer
+    participant AL as Alerts component
+    participant WA as WatchlistsApi
+    participant AS as AlertService
+    participant AM as AlertMapper
+    participant DB as trading DB
+
+    C->>AL: click Re-arm on a TRIGGERED alert
+    AL->>AL: rearm(alert) -> act()
+    AL->>WA: rearmAlert(accountId, alertId)
+    WA->>AS: POST .../alerts/{aid}/rearm -> rearm(accountId, alertId)
+    AS->>AM: findOwned(accountId, alertId) (else 404 WCH-404)
+    AS->>AS: lockAccount, requireRoomForAnother (cap 20)
+    AS->>AM: rearm(accountId, alertId)
+    AM->>DB: UPDATE watch_alert SET status ACTIVE, triggered_at NULL
+    C->>AL: click Cancel
+    AL->>WA: cancelAlert(accountId, alertId)
+    WA->>AS: DELETE .../alerts/{aid} -> cancel()
+    AS->>AM: cancel(accountId, alertId)
+    AM->>DB: UPDATE watch_alert SET status CANCELLED WHERE client_id = ?

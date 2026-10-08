@@ -1,0 +1,26 @@
+%% 09-automated-strategy.md: C. The order result comes back
+sequenceDiagram
+    autonumber
+    participant T as Kafka trade-events
+    participant SL as StrategyListener
+    participant SO as StrategyOutcomes
+    participant SM as StrategyMapper
+    participant DB as trading DB
+
+    T->>SL: ORDER_FILLED / ORDER_REJECTED / ORDER_CANCELLED
+    SL->>SO: on(value, topic trade-events) -> apply(value) - @Transactional
+    SO->>SM: findByPlacedOrder(orderId)
+    alt null (not a strategy order)
+        SO-->>SL: return - ignore
+    end
+    alt ORDER_FILLED
+        SO->>SM: insertRun(FILLED, executedPrice, source_event_id = eventId)
+    else ORDER_REJECTED
+        SO->>SM: insertRun(REJECTED, reason), recordFailure(strategyId)
+        opt failures >= 3
+            SO->>SM: insertRun(STOPPED)
+        end
+    else ORDER_CANCELLED
+        SO->>SM: insertRun(REJECTED, "The order was cancelled.")
+    end
+    SM->>DB: INSERT strat_run ON CONFLICT DO NOTHING (replay safe)

@@ -1,0 +1,69 @@
+%% 01-create-account.md: C. Account provisioning and the activation email
+sequenceDiagram
+    autonumber
+    participant K1 as Kafka kyc-events
+    box Auth service
+        participant KC as KycEventsConsumer
+        participant PS as ProvisioningService
+        participant AO as auth OutboxRelay
+        participant IG as InternalSecretGuard
+        participant IC as InternalController
+        participant TS as ActivationTokenService
+        participant TR as ActivationTokenRepository
+    end
+    participant ADB as auth DB
+    participant K2 as Kafka account-provisioning
+    box Trade REST API
+        participant AL as AccountProvisionedListener
+        participant AS as ActivationService
+        participant AM as ActivationMapper
+        participant TC as AuthTokenClient
+        participant MS as SmtpActivationMailSender
+    end
+    participant DB as trading DB
+    participant G as Gmail SMTP
+
+    K1->>KC: KYC_VERIFIED (group auth-provisioning)
+    KC->>KC: handle() - interpretKycMessage(value)
+    alt poison message
+        KC->>K1: sendRaw(kyc-events.DLT, x-failure-* headers)
+    end
+    KC->>PS: provision(clientId)
+    PS->>ADB: BEGIN
+    PS->>ADB: INSERT provisioned_account (account_id) ON CONFLICT DO NOTHING
+    alt rowCount = 0 (already provisioned)
+        PS->>ADB: ROLLBACK - nothing published
+    end
+    PS->>ADB: OutboxRepository.add() INSERT outbox_event ACCOUNT_PROVISIONED
+    PS->>ADB: COMMIT
+    AO->>ADB: relayOnce() - lockBatch FOR UPDATE SKIP LOCKED
+    AO->>K2: KafkaPublisher.send(account-provisioning, key clientId)
+    AO->>ADB: markPublished(eventId)
+
+    K2->>AL: ACCOUNT_PROVISIONED (group activation-mailer)
+    AL->>AL: onAccountProvisioned(value) - AccountProvisionedEvent.parse()
+    AL->>AS: handle(event)
+    AS->>AM: countSent(eventId)
+    AM->>DB: SELECT count(*) FROM activation_email WHERE event_id = ?
+    alt already sent
+        AS-->>AL: return (idempotent)
+    end
+    AS->>AM: findEmail(clientId)
+    AM->>DB: SELECT email FROM client_profile
+    AS->>TC: mintToken(clientId)
+    TC->>IG: POST /internal/activation-tokens, header x-internal-secret
+    IG->>IG: canActivate() - SHA-256 both sides, timingSafeEqual
+    IG->>IC: mint(MintActivationTokenDto)
+    IC->>TS: mint(clientId)
+    TS->>TS: randomBytes(32).toString(hex), expires in 24 h
+    TS->>TR: replaceFor(clientId, sha256(token), expiresAt)
+    TR->>ADB: SELECT claimed_by FROM provisioned_account WHERE account_id = ? FOR UPDATE
+    TR->>ADB: UPDATE activation_token SET revoked_at = now() (older live tokens)
+    TR->>ADB: INSERT activation_token (token_hash, client_id, expires_at)
+    IC-->>TC: 201 {activationToken, expiresAt} (plaintext only here)
+    TC-->>AS: token
+    AS->>AS: link(token) = ACTIVATION_LINK_BASE_URL?token=...
+    AS->>MS: send(ActivationEmail(email, link))
+    MS->>G: JavaMailSender.send()
+    AS->>AM: recordSent(eventId, clientId)
+    AM->>DB: INSERT activation_email (event_id PK)

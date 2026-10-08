@@ -1,0 +1,33 @@
+%% 04-watchlist.md: B. How the prices reach the watchlist
+sequenceDiagram
+    autonumber
+    box Trade Executor
+        participant MP as MarketDataPoller
+        participant EM as ExecutionMapper
+        participant FQ as FauxnanceQuoteClient
+    end
+    participant DB as trading DB
+    participant FX as Fauxnance API
+    participant K as Kafka market-data
+    box Trade REST API
+        participant ML as MarketDataListener
+        participant QE as QuoteEvaluator
+        participant LQ as LatestQuoteMapper
+    end
+
+    loop each poll interval (60 s or more)
+        MP->>MP: pollOnce() -> runCycle()
+        MP->>EM: findSymbolsWorthPolling()
+        EM->>DB: held + working orders + watch_polled_symbols + strat_polled_symbols
+        MP->>MP: schedule.callsPerCycle(n) = ceil(n / 25), quota.canAfford()?
+        MP->>FQ: quotes(batch of 25)
+        FQ->>FX: GET quotes
+        loop each symbol
+            MP->>K: publish(symbol, quote) - QUOTE, key symbol
+        end
+    end
+    K->>ML: QUOTE (group watchlist-service)
+    ML->>QE: onQuote(value) -> evaluate(MarketQuote.parse())
+    QE->>LQ: hold(instrumentId, price, change, stale, quoteAsOf, eventId)
+    LQ->>DB: INSERT watch_latest_quote ON CONFLICT DO UPDATE WHERE old.quote_as_of <= new
+    Note over QE: then alerts are checked (see flow 7)

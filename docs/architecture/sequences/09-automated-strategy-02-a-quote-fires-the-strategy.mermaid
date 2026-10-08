@@ -1,0 +1,69 @@
+%% 09-automated-strategy.md: B. A quote fires the strategy
+sequenceDiagram
+    autonumber
+    participant K as Kafka market-data
+    box Trade REST API - strategy module
+        participant SL as StrategyListener
+        participant ST as StrategyTrigger
+        participant IR as IndicatorReader
+        participant SF as StrategyFirer
+        participant SM as StrategyMapper
+        participant OP as HttpOrderPlacer
+        participant TC as StrategyTokenClient
+    end
+    participant DB as trading DB
+    box Auth service
+        participant IG as InternalSecretGuard
+        participant SK as StrategyTokenController
+        participant AT as AccessTokenService
+    end
+    participant OR as POST /api/v1/orders (flow 2)
+
+    K->>SL: QUOTE TCS.NS 3895 (group strategy-service, starts at latest)
+    SL->>SL: on(value, topic) - topic is market-data
+    SL->>ST: onQuote(StrategyQuote.parse(value))
+    ST->>SM: findCrossed(instrumentId, price)
+    SM->>DB: SELECT strategy_id FROM strat_strategy WHERE enabled AND ARMED AND level crossed
+    opt indicator strategies exist
+        ST->>SM: findArmedIndicators(instrumentId)
+        ST->>IR: view(symbol, quote) - CandleService.candles(SIX_MONTHS) -> Indicators.read()
+    end
+    loop each strategyId
+        ST->>SF: fire(strategyId, quote [, view]) - @Transactional, one per strategy
+        SF->>SM: lockFireable(strategyId)
+        SM->>DB: SELECT FROM strat_strategy WHERE id = ? AND enabled AND ARMED FOR UPDATE
+        SF->>SF: triggered(strategy, quote, view)? (read under the lock)
+        SF->>SF: limit = ask x 1.005 (BUY) or bid x 0.995 (SELL)
+        opt BUY
+            SF->>SF: refusal() - limit x qty > maxSpend? held + qty > maxPosition?
+            SF->>DB: PositionMapper.findOne() SELECT FROM position
+        end
+        alt over a bound
+            SF->>SM: insertRun(REFUSED_LIMIT), stop(strategyId)
+            SM->>DB: INSERT strat_run, UPDATE strat_strategy SET status STOPPED
+        else inside bounds
+            SF->>SM: insertRun(PLACED, source_event_id = quote eventId)
+            SM->>DB: INSERT strat_run ON CONFLICT (strategy_id, source_event_id) DO NOTHING
+            alt 0 rows (quote replayed)
+                SF-->>ST: return - nothing placed again
+            end
+            SF->>OP: place(accountId, symbol, side, qty, limit, "strategy-{id}-{eventId}")
+            OP->>TC: mint(accountId)
+            TC->>IG: POST /internal/strategy-tokens, x-internal-secret
+            IG->>SK: mint({accountId}) - credentials.findByAccountId()
+            SK->>AT: issueForStrategy(credential) - 300 s, roles CUSTOMER + STRATEGY
+            SK-->>TC: {accessToken, expiresIn 300} (never logged)
+            OP->>OR: POST /api/v1/orders + Bearer strategy token
+            Note over OR: JWT filter, canReach, domain rules 1 to 8,<br/>blockFunds, ORDER_PLACED to Kafka
+            alt 200 NEW
+                OR-->>OP: {orderId ORD-uuid}
+                SF->>SM: markPlaced(runId, orderId), markFired(strategyId)
+                SM->>DB: UPDATE strat_run SET order_id, UPDATE strat_strategy SET status FIRED
+            else error envelope
+                SF->>SM: markFailed(runId, reason), recordFailure(strategyId)
+                opt failures >= 3
+                    SF->>SM: insertRun(STOPPED)
+                end
+            end
+        end
+    end

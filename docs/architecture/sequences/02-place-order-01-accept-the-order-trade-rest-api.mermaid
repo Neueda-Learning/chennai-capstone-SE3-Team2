@@ -1,0 +1,74 @@
+%% 02-place-order.md: A. Accept the order (Trade REST API)
+sequenceDiagram
+    autonumber
+    actor C as Customer
+    box Angular UI
+        participant OT as OrderTicket component
+        participant TA as TradeApi
+        participant AI as authInterceptor
+    end
+    box Trade REST API
+        participant F as JwtAuthenticationFilter
+        participant V as JwtTokenVerifier
+        participant OC as OrderController
+        participant OS as OrderService (trade-api)
+        participant D as OrderService (libs/domain)
+        participant AM as AccountMapper
+        participant OM as OrderMapper
+        participant P as OrderEventPublisher
+    end
+    participant DB as trading DB
+    participant K as Kafka orders
+
+    C->>OT: symbol, BUY or SELL, quantity, market or limit
+    OT->>OT: submit() - checks units, price, shortfall()
+    OT->>OT: idempotencyKey = crypto.randomUUID() (same key on a retry)
+    OT->>TA: placeOrder({accountId, symbol, side, quantity, price, idempotencyKey})
+    TA->>AI: OrdersService.placeOrder() (generated client)
+    AI->>AI: carriesToken(url) - allow list match
+    AI->>F: POST /api/v1/orders + Authorization Bearer
+    F->>F: doFilterInternal() - bearerTokenFrom(request)
+    F->>V: verifyAndExtractAccountId(token)
+    V->>V: signature HS256, exp, iss = auth-service, alg from verified header
+    alt any check fails
+        F-->>OT: 401 AUTH-401 Unauthorised
+    end
+    F->>OC: request with CallerAccount set
+    OC->>OC: @Valid PlaceOrderRequest (else 422 VAL-422)
+    OC->>OS: placeOrder(request) - @Transactional
+    OS->>AM: findById(accountId)
+    AM->>DB: SELECT FROM client_account
+    OS->>OS: caller.canReach(accountId)? else 403 ACC-403 (logged)
+    OS->>D: placeOrder(request)
+    D->>D: rule 1 account exists (404 ACC-404)
+    D->>D: rule 2 ACTIVE, rule 3 KYC VERIFIED (403 ACC-403)
+    D->>D: rule 4 instrumentRepo.findBySymbol() + isTradable (404 INS-404)
+    D->>D: rule 5 quantity > 0, price > 0 (422 VAL-422)
+    alt side = BUY
+        D->>D: rule 6 account.canAfford(qty x price) (400 ORD-400)
+    else side = SELL
+        D->>DB: positionRepo.find() SELECT FROM position
+        D->>D: rule 7 position.canSell(qty) (409 ORD-409)
+    end
+    D->>DB: orderRepo.existsByAccountAndKey() SELECT FROM orders
+    D->>D: rule 8 key unused (409 ORD-409)
+    D->>D: Order.place() - UUID made in the domain, status NEW
+    D->>OM: orderRepo.save() -> OrderMapper.insert
+    OM->>DB: INSERT orders (status NEW)
+    D-->>OS: Order
+    opt side = BUY
+        OS->>OS: blockFunds(account, qty x limit)
+        OS->>AM: blockFunds(clientId, amount, version)
+        AM->>DB: UPDATE client_account SET blocked_funds + amount, version + 1 WHERE version = ?
+        alt 0 rows (lost optimistic lock)
+            OS-->>OT: 409 ORD-409 (transaction rolls back)
+        end
+    end
+    OS->>OS: applicationEventPublisher.publishEvent(OrderPlacedDomainEvent)
+    OS-->>OC: OrderResponse {orderId ORD-uuid, status NEW, "Order accepted"}
+    Note over OS,DB: transaction commits
+    P->>P: publishOrderPlaced() - @TransactionalEventListener(AFTER_COMMIT)
+    P->>K: KafkaTemplate.send(orders, key accountId, ORDER_PLACED envelope)
+    OC-->>TA: 200 OK
+    TA-->>OT: OrderResponse
+    OT->>OT: current.refresh(), readPositions()

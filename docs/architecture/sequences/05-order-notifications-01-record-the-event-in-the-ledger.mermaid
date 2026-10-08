@@ -1,0 +1,30 @@
+%% 05-order-notifications.md: A. Record the event in the ledger
+sequenceDiagram
+    autonumber
+    participant EX as Executor / OutboxRelay
+    participant T as Kafka trade-events
+    box Trade REST API - notifications module
+        participant L as TradeEventsListener
+        participant TE as TradeEvent
+        participant NL as NotificationLedger
+        participant NM as NotificationMessages
+        participant MP as NotificationMapper
+    end
+    participant DB as trading DB
+
+    EX->>T: ORDER_FILLED / ORDER_REJECTED / ORDER_CANCELLED, key accountId
+    T->>L: message (group notification-service, starts at latest)
+    L->>TE: onTradeEvent(value) -> TradeEvent.parse(value, json)
+    alt not JSON, unknown eventType
+        TE-->>L: exception (poison, to trade-events.DLT)
+    end
+    L->>NL: record(event) - @Transactional
+    NL->>NM: forTrade(event) - subject + body ("Bought 10 TCS at 3,950.00")
+    NL->>NL: row(eventId, alertId null, accountId, kind, message)
+    NL->>MP: insertQueued(row)
+    MP->>DB: INSERT notif_notification (status QUEUED) ON CONFLICT ON CONSTRAINT uq_notif_source DO NOTHING
+    alt 0 rows (same eventId seen before)
+        NL-->>L: false - replay, nothing queued twice
+    end
+    NL-->>L: true (commit)
+    L->>T: acknowledge offset

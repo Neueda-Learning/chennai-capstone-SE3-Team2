@@ -1,0 +1,25 @@
+%% owasp-report.md: 3. Where the controls are
+flowchart LR
+    U([Customer browser]) -->|"A07 login, A01 activation"| AUTH
+    U -->|"A01 A03 A05 Bearer JWT"| API
+    subgraph Z1["Trust zone: browser (not trusted)"]
+        U
+        UI_C["A02 tokens in sessionStorage<br/>A01 authInterceptor allow list<br/>check-bundle-secrets.mjs"]
+    end
+    subgraph Z2["Trust zone: our services"]
+        API["Trade REST API<br/>A01 JwtAuthenticationFilter + AccountAccess<br/>A03 MyBatis bind<br/>A04 caps and limits<br/>A09 ACC-403 log"]
+        AUTH["Auth service<br/>A02 argon2id, SHA-256<br/>A07 throttle, rotation<br/>A09 RedactingLogger"]
+        EXE["Trade Executor<br/>A04 guarded settle"]
+    end
+    subgraph Z3["Trust zone: data"]
+        PG[("Postgres<br/>A05 role per service<br/>A04 CHECK + UNIQUE")]
+        K{{"Kafka<br/>A08 no auth: accepted"}}
+    end
+    API -->|"A07 A02 x-internal-secret<br/>timingSafeEqual"| AUTH
+    API --> PG
+    AUTH --> PG
+    EXE --> PG
+    API <--> K
+    EXE <--> K
+    AUTH <--> K
+    API -->|"A10 profile address only"| SMTP["Gmail"]

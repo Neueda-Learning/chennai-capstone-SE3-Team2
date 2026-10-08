@@ -1,0 +1,44 @@
+%% 07-price-alerts.md: B. A quote crosses the level
+sequenceDiagram
+    autonumber
+    participant K as Kafka market-data
+    box Trade REST API - watchlists module
+        participant ML as MarketDataListener
+        participant QE as QuoteEvaluator
+        participant IM as InstrumentMapper
+        participant LQ as LatestQuoteMapper
+        participant AM as AlertMapper
+    end
+    box notifications module
+        participant NL as NotificationLedger (api.AlertDelivery)
+        participant NM as NotificationMapper
+    end
+    participant DB as trading DB
+
+    K->>ML: QUOTE TCS.NS 4012.50 (group watchlist-service)
+    ML->>QE: onQuote(value) -> evaluate(MarketQuote.parse(value))
+    Note over QE: one @Transactional method
+    QE->>IM: findBySymbol(symbol)
+    QE->>LQ: hold(instrumentId, price, change, stale, quoteAsOf, eventId, now)
+    LQ->>DB: upsert watch_latest_quote WHERE old.quote_as_of <= new.quote_as_of
+    alt 0 rows (older quote arrived late)
+        QE-->>ML: return - nothing changes
+    end
+    QE->>AM: lockCrossed(instrumentId, price)
+    AM->>DB: SELECT ACTIVE alerts WHERE (ABOVE and price >= threshold) OR (BELOW and price <= threshold) FOR UPDATE SKIP LOCKED
+    loop each crossed alert
+        QE->>NL: deliver(AlertNotice(eventId, clientId, alertId, symbol, direction, threshold, price, asOf))
+        Note over NL: Propagation.MANDATORY - refuses a call with no transaction
+        NL->>NM: insertQueued(row kind PRICE_ALERT, alert_id set)
+        NM->>DB: INSERT notif_notification ON CONFLICT (event_id, alert_id) DO NOTHING
+        alt 0 rows (replay)
+            NL->>NM: findIdBySource(eventId, alertId)
+            NL-->>QE: DeliveryReceipt(firstId, duplicate true)
+        else new
+            NL-->>QE: DeliveryReceipt(notificationId, false)
+        end
+        QE->>AM: markTriggered(alertId, price, now, notificationId)
+        AM->>DB: UPDATE watch_alert SET status TRIGGERED, notification_id WHERE status = ACTIVE
+    end
+    Note over QE,DB: commit: alert TRIGGERED and notification QUEUED together
+    Note over NL: NotificationDispatcher sends it (flow 5, part B)

@@ -1,0 +1,39 @@
+%% 05-order-notifications.md: C. The bell and the inbox in the UI
+sequenceDiagram
+    autonumber
+    actor C as Customer
+    box Angular UI
+        participant NB as NotificationBell
+        participant IB as Inbox (store)
+        participant NP as Notifications page
+        participant NA as NotificationsApi
+    end
+    box Trade REST API
+        participant NC as NotificationsController
+        participant NS as NotificationService
+        participant MP as NotificationMapper
+    end
+    participant DB as trading DB
+
+    loop on sign-in, on each navigation, and every 30 s
+        NB->>IB: refresh()
+        IB->>NA: unread(accountId)
+        NA->>NC: GET /api/v1/accounts/{id}/notifications/unread
+        NC->>NS: unread(accountId) - AccountAccess.requireOwn()
+        NS->>MP: countUnread(accountId)
+        MP->>DB: SELECT count(*) WHERE client_id = ? AND read_at IS NULL
+        NS-->>NB: UnreadCount -> badge "3"
+    end
+    C->>NP: open the inbox
+    NP->>NA: history(accountId, 50)
+    NA->>NC: GET .../notifications?limit=50
+    NC->>NS: history() -> MP.findForClient()
+    C->>NP: click a message
+    NP->>NA: markRead(accountId, notificationId)
+    NA->>NC: POST .../notifications/{nid}/read
+    NC->>NS: markRead(accountId, nid)
+    NS->>MP: markRead(accountId, nid, now)
+    MP->>DB: UPDATE notif_notification SET read_at WHERE client_id = ? AND notification_id = ?
+    alt 0 rows (another customer's id)
+        NS-->>NP: 404 NTF-404
+    end

@@ -1,0 +1,7 @@
+%% 09-automated-strategy.md: Strategy states
+stateDiagram-v2
+    [*] --> ARMED : StrategyService.create() (enabled = false)
+    ARMED --> FIRED : StrategyFirer.fire(), order placed
+    ARMED --> STOPPED : bound refused, or 3 failures
+    FIRED --> ARMED : customer switches it on again
+    STOPPED --> ARMED : customer switches it on again

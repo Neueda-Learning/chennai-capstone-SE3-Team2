@@ -1,0 +1,57 @@
+%% 04-watchlist.md: A. Add an instrument to a watchlist
+sequenceDiagram
+    autonumber
+    actor C as Customer
+    box Angular UI
+        participant MW as MarketWatch component
+        participant IS as InstrumentSearch
+        participant WL as MarketWatchList (store)
+        participant WA as WatchlistsApi
+    end
+    box Trade REST API
+        participant WC as WatchlistsController
+        participant WS as WatchlistService
+        participant AA as AccountAccess
+        participant IM as InstrumentMapper
+        participant WM as WatchlistMapper
+    end
+    participant DB as trading DB
+
+    C->>IS: type "TCS"
+    IS->>IS: InstrumentsApi.search() GET /api/v1/instruments?q=
+    C->>MW: pick TCS.NS
+    MW->>MW: add(instrument)
+    MW->>WL: has(symbol)? then add(symbol)
+    WL->>WL: change() - show the row at once (optimistic UI)
+    WL->>WA: addItem(accountId, watchlistId, symbol)
+    WA->>WC: PUT /api/v1/accounts/{id}/watchlists/{wid}/items/{symbol} + Bearer
+    WC->>WS: addItem(accountId, watchlistId, symbol) - @Transactional
+    WS->>AA: requireOwn(accountId)
+    AA->>AA: caller.canReach()? else 403 ACC-403 (logged)
+    WS->>WS: owned(accountId, watchlistId)
+    WS->>WM: findOwned(accountId, watchlistId)
+    WM->>DB: SELECT FROM watch_list WHERE client_id = ? AND watchlist_id = ?
+    alt not this customer's list
+        WS-->>WA: 404 WCH-404 (same as a list that does not exist)
+    end
+    WS->>IM: findBySymbol(symbol)
+    IM->>DB: SELECT FROM instrument JOIN equity / mutual_fund
+    alt unknown symbol
+        WS-->>WA: 404 INS-404
+    end
+    WS->>WM: lockAccount(accountId)
+    WM->>DB: SELECT pg_advisory_xact_lock(1013, clientId) - one writer for this account
+    WS->>WM: hasItem(watchlistId, instrumentId)
+    alt already there
+        WS-->>WC: return (no change)
+    end
+    WS->>WM: countItems(watchlistId)
+    alt 50 or more
+        WS-->>WA: 409 LIM-409
+    end
+    WS->>WM: insertItem(watchlistId, instrumentId)
+    WM->>DB: INSERT watch_item (position = last + 1)
+    WC-->>WA: 204 No Content
+    alt request failed
+        WL->>WL: remove the optimistic row, show error
+    end

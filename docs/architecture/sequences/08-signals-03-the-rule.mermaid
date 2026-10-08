@@ -1,0 +1,14 @@
+%% 08-signals.md: The rule
+flowchart TD
+    A["Daily closes + today's live price"] --> B{"50 or more closes?"}
+    B -- no --> H1["HOLD: no 50-day average yet"]
+    B -- yes --> G["gap = (SMA20 - SMA50) / SMA50 x 100"]
+    G --> L{"abs(gap) under 0.25 %?"}
+    L -- yes --> H2["HOLD: averages level"]
+    L -- no --> U{"gap > 0?"}
+    U -- yes --> OB{"RSI >= 70?"}
+    OB -- yes --> H3["HOLD: overbought"]
+    OB -- no --> BUY["BUY"]
+    U -- no --> OS{"RSI <= 30?"}
+    OS -- yes --> H4["HOLD: oversold"]
+    OS -- no --> SELL["SELL"]

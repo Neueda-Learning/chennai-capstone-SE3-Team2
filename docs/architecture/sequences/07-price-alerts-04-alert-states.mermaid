@@ -1,0 +1,7 @@
+%% 07-price-alerts.md: Alert states
+stateDiagram-v2
+    [*] --> ACTIVE : AlertService.create() (max 20 active)
+    ACTIVE --> TRIGGERED : QuoteEvaluator.evaluate(), first quote at or past the level
+    TRIGGERED --> ACTIVE : AlertService.rearm()
+    ACTIVE --> CANCELLED : AlertService.cancel()
+    TRIGGERED --> CANCELLED : AlertService.cancel()

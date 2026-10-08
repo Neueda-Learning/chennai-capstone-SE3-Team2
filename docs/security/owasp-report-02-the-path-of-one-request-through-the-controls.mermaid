@@ -1,0 +1,20 @@
+%% owasp-report.md: 4. The path of one request through the controls
+flowchart TD
+    R["Browser request to /api/v1/..."] --> I{"authInterceptor.carriesToken()<br/>origin + path on allow list?"}
+    I -- no --> NT["No Authorization header (A01)"]
+    I -- yes --> CORS{"CorsConfig: origin in<br/>CORS_ALLOWED_ORIGINS? (A05)"}
+    CORS -- no --> X0["Browser blocks"]
+    CORS -- yes --> J{"JwtAuthenticationFilter<br/>Bearer present?"}
+    J -- no --> X401["401 AUTH-401 (A07)"]
+    J -- yes --> V["JwtTokenVerifier.verifyAndExtractAccountId()<br/>signature, exp, iss, alg = HS256 (A02 A07)"]
+    V -- fail --> X401
+    V -- ok --> VAL{"@Valid DTO (A03 A04)"}
+    VAL -- fail --> X422["422 VAL-422"]
+    VAL -- ok --> OWN{"AccountAccess.requireOwn()<br/>path account = token account? (A01)"}
+    OWN -- no --> X403["403 ACC-403 + log line (A09)"]
+    OWN -- yes --> CAP{"Caps and rules (A04)"}
+    CAP -- over --> X409["409 LIM-409 / ORD-409"]
+    CAP -- ok --> SQL["MyBatis #{} bind (A03)<br/>guarded UPDATE (A04)"]
+    SQL --> ERR{"Exception?"}
+    ERR -- yes --> X500["GlobalExceptionHandler<br/>500 SRV-500, no stack trace (A05)"]
+    ERR -- no --> OK["200 with DTO"]
