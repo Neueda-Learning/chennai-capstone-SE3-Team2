@@ -9,7 +9,8 @@ import {
   provideAppInitializer,
   provideBrowserGlobalErrorListeners,
 } from '@angular/core';
-import { provideRouter, withComponentInputBinding } from '@angular/router';
+import { TitleStrategy, provideRouter, withComponentInputBinding } from '@angular/router';
+import { BrandTitle } from './core/title/brand-title';
 
 import { environment } from '../environments/environment';
 import { routes } from './app.routes';
@@ -28,6 +29,7 @@ export const appConfig: ApplicationConfig = {
     { provide: DEFAULT_CURRENCY_CODE, useValue: 'INR' },
     // Route and query parameters arrive as signal inputs, not as observables.
     provideRouter(routes, withComponentInputBinding()),
+    { provide: TitleStrategy, useClass: BrandTitle },
     // The one interceptor, registered once: the only place an Authorization header is set.
     provideHttpClient(withFetch(), withInterceptors([authInterceptor])),
     provideClients(environment.api),

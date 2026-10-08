@@ -135,3 +135,30 @@
   gap: 0.5rem;
   margin-top: 0.25rem;
 }
+
+/* A card's title and its one piece of state, on one line. */
+.card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.card-head h2 {
+  margin-bottom: 0.75rem;
+}
+
+.state {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.state.active {
+  color: var(--success);
+  border-color: rgba(94, 226, 160, 0.45);
+  background: var(--success-bg);
+}

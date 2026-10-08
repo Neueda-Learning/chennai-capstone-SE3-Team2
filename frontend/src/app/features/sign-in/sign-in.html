@@ -34,7 +34,7 @@
       <p class="field-error" id="password-error">Enter your password.</p>
     }
 
-    <button type="submit" data-testid="sign-in-submit" [disabled]="submitting()">
+    <button type="submit" class="primary" data-testid="sign-in-submit" [disabled]="submitting()">
       {{ submitting() ? 'Signing in…' : 'Sign in' }}
     </button>
   </form>

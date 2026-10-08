@@ -87,6 +87,21 @@ describe('Blotter', () => {
 
   const rows = () => [...page.querySelectorAll('[data-testid="blotter-row"]')];
 
+  it('shows the 20 latest orders, and the rest on request: a long history is not one endless page', async () => {
+    const many = Array.from({ length: 25 }, (_, i) =>
+      order(`o${i}`, 'FILLED', new Date(Date.UTC(2026, 9, 1, 9, i)).toISOString()));
+    await respond(many);
+
+    expect(rows().length).toBe(20);
+    expect(page.querySelector('[data-testid="blotter-more"]')?.textContent?.replace(/\s+/g, ' ').trim())
+      .toContain('Showing 20 of 25');
+    page.querySelector<HTMLButtonElement>('[data-testid="blotter-show-more"]')!.click();
+    await fixture.whenStable();
+
+    expect(rows().length).toBe(25);
+    expect(page.querySelector('[data-testid="blotter-show-more"]')).toBeNull();
+  });
+
   it('renders order history newest first, rejections included', async () => {
     await respond([
       order('a', 'FILLED', '2026-10-02T09:00:00Z'),

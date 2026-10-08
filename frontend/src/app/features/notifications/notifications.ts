@@ -34,6 +34,9 @@ export class Notifications {
   private readonly accountId = inject(Session).accountId;
 
   protected readonly items = signal<Notification[] | null>(null);
+  /** How many show at first; each "Show more" adds as many again. */
+  protected readonly pageSize = 20;
+  protected readonly shown = signal(this.pageSize);
   protected readonly error = signal<unknown>(null);
 
   constructor() {
@@ -92,5 +95,9 @@ export class Notifications {
     } catch (failure) {
       this.error.set(failure);
     }
+  }
+
+  protected showMore(): void {
+    this.shown.update((shown) => shown + this.pageSize);
   }
 }

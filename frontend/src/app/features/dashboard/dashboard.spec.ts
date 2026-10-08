@@ -107,12 +107,14 @@ describe('Dashboard', () => {
     };
   };
 
-  it('greets the customer by first name, with the cash available and the account they know', async () => {
+  it('greets the customer by first name, with the cash available and the account\'s state; the number is the header\'s', async () => {
     await render([]);
 
     expect(text('dashboard-greeting')).toBe('Hi, Rohan');
     expect(text('cash-balance')).toContain('750,000.00');
-    expect(text('account-ref')).toBe('ACC-000003');
+    expect(text('account-status')).toBe('ACTIVE');
+    // The header already names the account: the card does not repeat its number.
+    expect(page.querySelector('[data-testid="account-ref"]')).toBeNull();
     expect(text('signed-in-as')).toContain('rohan.nair');
     expect(action('dashboard-cash')).toEqual({ href: '/funds', text: 'Add or withdraw funds', button: true });
   });

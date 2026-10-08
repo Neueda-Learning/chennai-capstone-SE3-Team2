@@ -87,3 +87,8 @@ td.action {
 .side.sell {
   color: var(--danger);
 }
+
+/* Refresh sits at the right, whether or not the title beside it is shown. */
+.heading button {
+  margin-left: auto;
+}

@@ -128,7 +128,8 @@ label {
 }
 
 input,
-select {
+select,
+textarea {
   font: inherit;
   width: 100%;
   padding: 0.5rem 0.6rem;
@@ -136,6 +137,27 @@ select {
   border-radius: var(--radius);
   background: #0f1623;
   color: var(--text);
+}
+
+/* One height for every single-line field, so a row of them lines up. */
+input:not([type='radio']):not([type='checkbox']),
+select {
+  min-height: 2.6rem;
+}
+
+textarea {
+  min-height: 4.5rem;
+  resize: vertical;
+}
+
+/* A radio or a checkbox keeps its own size: never stretched across its row. */
+input[type='radio'],
+input[type='checkbox'] {
+  width: auto;
+  flex: none;
+  margin: 0.2rem 0 0;
+  padding: 0;
+  accent-color: var(--accent);
 }
 
 input[readonly] {
@@ -243,12 +265,14 @@ a {
 }
 
 input,
-select {
+select,
+textarea {
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
 input:focus-visible,
-select:focus-visible {
+select:focus-visible,
+textarea:focus-visible {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(246, 199, 68, 0.22);
@@ -256,7 +280,39 @@ select:focus-visible {
 
 button.small,
 .button.small {
-  padding: 0.25rem 0.75rem;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.85rem;
+}
+
+/* A screen's own column: centred in the space beside the watchlist, never
+   pinned to its left edge with the rest of the width empty. */
+.page {
+  margin-inline: auto;
+}
+
+/* A page's heading and the action beside it, on one line. */
+.page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.page-head h1,
+.page-head h2 {
+  margin: 0;
+}
+
+/* The end of a long list: what is shown, and the way to the rest. */
+.more {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  color: var(--muted);
   font-size: 0.85rem;
 }
 
