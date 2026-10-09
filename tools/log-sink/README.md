@@ -12,7 +12,7 @@ to point this at a real provider.
 ## Running it
 
 ```bash
-cd services/auth
+cd Services/auth-service
 npm run start | node ../../tools/log-sink/watch-auth-alerts.mjs
 ```
 

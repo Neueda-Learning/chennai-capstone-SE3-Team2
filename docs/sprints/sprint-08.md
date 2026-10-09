@@ -6,7 +6,7 @@ signature with no network call and no shared database.
 Runs on port 3000, reserved for it in `infra/README.md`.
 
 ```bash
-cd services/auth
+cd Services/auth-service
 npm ci
 npm run build
 npm test
@@ -83,7 +83,7 @@ running process:
 curl -sS http://localhost:3000/docs/json | jq '.paths | keys'
 ```
 
-Four paths, OpenAPI 3.0. This does not replace `contracts/auth-api.yaml` — it
+Four paths, OpenAPI 3.0. This does not replace `Contracts/API Schemas/auth-api.yaml` — it
 is the evidence our code still matches it.
 
 ## Adopting the service in the Trade REST API

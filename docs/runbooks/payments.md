@@ -38,7 +38,7 @@ version + 1`, in place, so two moves at once cannot lose one another.
 
 All on the Trade REST API, behind the bearer token, for the token's own account
 only (`ACC-403` otherwise). Described in
-`services/trade-api/openapi/trade-api-extensions.yaml`; the UI's client is
+`Services/order-service/openapi/trade-api-extensions.yaml`; the UI's client is
 generated from it.
 
 | Route | Answers |
@@ -98,10 +98,10 @@ account.
 Find what is stuck, and retry a set-aside transfer once the cause is fixed:
 
 ```bash
-docker exec -i fauxnance-postgres psql -U postgres -d trading -c \
+docker exec -i fauxnance-postgres psql -U postgres -d trading_system_db -c \
   "SELECT transfer_id, client_id, direction, amount, attempts, last_error, created_at
      FROM fund_transfer WHERE status = 'PENDING' ORDER BY created_at"
-docker exec -i fauxnance-postgres psql -U postgres -d trading -c \
+docker exec -i fauxnance-postgres psql -U postgres -d trading_system_db -c \
   "UPDATE fund_transfer SET attempts = 0 WHERE transfer_id = <N>"
 ```
 
@@ -126,19 +126,19 @@ On the running stack, as a customer with a login (see
 
 ```bash
 H="Authorization: Bearer $T"; J='Content-Type: application/json'; ID=11
-curl -sS localhost:8085/api/v1/accounts/$ID/bank-account -H "$H"           # last four digits only
+curl -sS localhost:8081/api/v1/accounts/$ID/bank-account -H "$H"           # last four digits only
 K=$(cat /proc/sys/kernel/random/uuid)
-curl -sS -X POST localhost:8085/api/v1/accounts/$ID/deposits -H "$H" -H "$J" \
+curl -sS -X POST localhost:8081/api/v1/accounts/$ID/deposits -H "$H" -H "$J" \
   -d "{\"amount\":100000,\"idempotencyKey\":\"$K\"}"                         # 202, PENDING
-curl -sS -X POST localhost:8085/api/v1/accounts/$ID/deposits -H "$H" -H "$J" \
+curl -sS -X POST localhost:8081/api/v1/accounts/$ID/deposits -H "$H" -H "$J" \
   -d "{\"amount\":100000,\"idempotencyKey\":\"$K\"}"                         # the same transferId
-curl -sS -X POST localhost:8085/api/v1/accounts/$ID/deposits -H "$H" -H "$J" \
+curl -sS -X POST localhost:8081/api/v1/accounts/$ID/deposits -H "$H" -H "$J" \
   -d "{\"amount\":5,\"idempotencyKey\":\"$K\"}"                              # PAY-409
-sleep 6; curl -sS localhost:8085/api/v1/accounts/$ID/transfers -H "$H"      # SUCCESS
-curl -sS localhost:8085/api/v1/accounts/$ID/balance -H "$H"                 # 100000 more
-curl -sS -X POST localhost:8085/api/v1/accounts/$ID/withdrawals -H "$H" -H "$J" \
+sleep 6; curl -sS localhost:8081/api/v1/accounts/$ID/transfers -H "$H"      # SUCCESS
+curl -sS localhost:8081/api/v1/accounts/$ID/balance -H "$H"                 # 100000 more
+curl -sS -X POST localhost:8081/api/v1/accounts/$ID/withdrawals -H "$H" -H "$J" \
   -d "{\"amount\":250000,\"idempotencyKey\":\"$(cat /proc/sys/kernel/random/uuid)\"}"  # PAY-400: more than available
-curl -sS -X POST localhost:8085/api/v1/accounts/$ID/deposits -H "$H" -H "$J" \
+curl -sS -X POST localhost:8081/api/v1/accounts/$ID/deposits -H "$H" -H "$J" \
   -d "{\"amount\":250000,\"idempotencyKey\":\"$(cat /proc/sys/kernel/random/uuid)\"}"  # later FAILED, over the limit
 docker compose logs trade-api | grep -c '<the full account number>'         # 0
 ```

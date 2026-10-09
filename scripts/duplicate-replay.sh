@@ -25,7 +25,7 @@
 #     else has been through the topic. Run:
 #         docker compose --profile platform down -v
 #         docker compose --profile platform up -d --build
-#         scripts/create-topics.sh
+#         Infrastructure/Kafka/create-topics.sh
 #     before running this script.
 #   * .env is populated (JWT_SECRET, DB_PASSWORD, FAUXNANCE_API_KEY).
 #   * openssl and jq are available on the host.
@@ -35,7 +35,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 API_HOST="${API_HOST:-localhost}"
-API_PORT="${API_PORT:-8085}"
+API_PORT="${API_PORT:-8081}"
 API="http://${API_HOST}:${API_PORT}"
 
 ACCOUNT_ID="${ACCOUNT_ID:-3}"

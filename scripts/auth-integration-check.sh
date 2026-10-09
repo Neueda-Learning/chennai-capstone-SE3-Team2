@@ -9,7 +9,7 @@
 set -euo pipefail
 
 AUTH="http://localhost:${AUTH_PUBLISHED_PORT:-3000}"
-API="http://localhost:${API_PUBLISHED_PORT:-8085}"
+API="http://localhost:${API_PUBLISHED_PORT:-8081}"
 ACCOUNT="${ACCOUNT_ID:-3}"
 USERNAME="${USERNAME:-check.$(date +%s)}"
 PASSWORD="${PASSWORD:-correct horse battery staple}"
@@ -99,15 +99,15 @@ step "6. Sprint 8 adopted the auth service with no Java change"
 # diff covers exactly the Sprint 8 work and not the Sprint 7 restructure,
 # which moved every Java file and would otherwise swamp this. It ends at the
 # Sprint 8 merge, because the claim is about Sprint 8.
-FIRST_AUTH=$(git log --reverse --format=%H -- services/auth | head -1)
+FIRST_AUTH=$(git log --reverse --format=%H -- Services/auth-service | head -1)
 BASE=$(git rev-parse "${FIRST_AUTH}^")
 
 if git diff --name-only "$BASE"..."$SPRINT8_END" -- '*.java' | grep -q .; then
   fail "Java files changed in Sprint 8; the criterion is a configuration change only"
 else
   pass "no .java file changed between $(git rev-parse --short "$BASE") and $(git rev-parse --short "$SPRINT8_END")"
-  echo "     everything Sprint 8 touched outside services/auth:"
-  git diff --name-only "$BASE"..."$SPRINT8_END" | grep -v '^services/auth/' | sed 's/^/       /'
+  echo "     everything Sprint 8 touched outside Services/auth-service:"
+  git diff --name-only "$BASE"..."$SPRINT8_END" | grep -v '^Services/auth-service/' | sed 's/^/       /'
 fi
 
 printf '\n\033[1;32mAll checks passed.\033[0m\n'

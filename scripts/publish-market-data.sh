@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------
 # TESTING AND DEMONSTRATION. Publishes one QUOTE on market-data by hand,
-# in the envelope contracts/kafka-topics.md fixes, keyed by the symbol:
+# in the envelope Contracts/API Schemas/kafka-topics.md fixes, keyed by the symbol:
 # what the executor's poller publishes every interval. For the Sprint 10
 # harness's market-data probe, and for showing a price alert cross:
 # publish a price past an ACTIVE alert's threshold and the alert fires.

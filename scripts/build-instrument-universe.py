@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build data/db/seed/008_instrument_universe.sql from the two public lists.
+"""Build Databases/PostgreSQL/seed/008_instrument_universe.sql from the two public lists.
 
   NSE  every listed equity (EQUITY_L.csv)         -> instrument + equity, ticker SYMBOL.NS
   AMFI every open-ended Direct Plan Growth fund   -> amc + instrument + mutual_fund,
@@ -26,7 +26,7 @@ from pathlib import Path
 
 NSE_URL = "https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv"
 AMFI_URL = "https://portal.amfiindia.com/spages/NAVAll.txt"
-OUT = Path(__file__).resolve().parent.parent / "data/db/seed/008_instrument_universe.sql"
+OUT = Path(__file__).resolve().parent.parent / "Databases/PostgreSQL/seed/008_instrument_universe.sql"
 
 # The order contract caps a symbol at 20 characters.
 MAX_SYMBOL = 20

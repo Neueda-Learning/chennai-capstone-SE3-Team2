@@ -26,7 +26,7 @@ set -euo pipefail
 # ---------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../data/db" && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../Databases/PostgreSQL" && pwd)"
 
 export PGHOST="${PGHOST:-localhost}"
 export PGPORT="${PGPORT:-5432}"

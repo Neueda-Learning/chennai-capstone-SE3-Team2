@@ -11,7 +11,7 @@
 Two sources disagreed. Our Sprint 10 stories ask for each extension "on its own port, in its own
 folder under services/, with its own Dockerfile, compose entry and README", verifying the
 platform token itself. The programme's Sprint 10 brief says the opposite in as many words ("The
-extensions are not new services"), `contracts/portfolio-api.yaml` says its routes "are served by
+extensions are not new services"), `Contracts/API Schemas/portfolio-api.yaml` says its routes "are served by
 the Trade REST API on 8080, as a module", and the Sprint 11 brief says the Trade REST API "hosts
 your four extensions". Six extensions are in scope.
 

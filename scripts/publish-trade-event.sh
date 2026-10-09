@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------
 # TESTING AND DEMONSTRATION. Publishes one trade-events message by hand,
-# in the envelope contracts/kafka-topics.md fixes, keyed by the account:
+# in the envelope Contracts/API Schemas/kafka-topics.md fixes, keyed by the account:
 # what the executor publishes when it fills or rejects an order, and the
 # Trade REST API when one is cancelled. For the Sprint 10 harness's
 # trade-event probe, and for showing that a REPLAY sends nothing twice:

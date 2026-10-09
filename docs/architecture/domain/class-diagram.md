@@ -74,7 +74,7 @@ classDiagram
 
     %% =================================================================
     %% ENUMERATIONS
-    %% Contractual: these literals appear in contracts/trade-api.yaml,
+    %% Contractual: these literals appear in Contracts/API Schemas/trade-api.yaml,
     %% the database stores the same strings, and Sprint 9 generates
     %% Angular types from that file.
     %% =================================================================
@@ -115,7 +115,7 @@ classDiagram
     %% =================================================================
     %% REQUEST DTO
     %% Six fields, modelled on the PlaceOrderRequest schema in
-    %% contracts/trade-api.yaml, which is binding.
+    %% Contracts/API Schemas/trade-api.yaml, which is binding.
     %% =================================================================
     class PlaceOrderRequest {
         <<DTO>>

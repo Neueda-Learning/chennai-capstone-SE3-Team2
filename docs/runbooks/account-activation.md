@@ -88,7 +88,7 @@ registered. Only `VERIFIED` queues `KYC_VERIFIED`, in the same transaction, and
 trade-api's outbox relay publishes it every `OUTBOX_POLL_MS`.
 
 ```bash
-docker exec -i fauxnance-postgres psql -U postgres -d trading -c \
+docker exec -i fauxnance-postgres psql -U postgres -d trading_system_db -c \
   "SELECT kv.status, kv.reason, kv.checks, kv.attempts, kv.last_error, ca.kyc_status
      FROM kyc_verification kv JOIN client_account ca USING (client_id)
     WHERE client_id = <id>"
@@ -114,7 +114,7 @@ UPDATE kyc_verification SET attempts = 0 WHERE client_id = <id>;
 Why these numbers: keyed by client, so ordering per customer is what matters;
 3 partitions matches `orders` for low-volume traffic. Seven days covers a
 weekend outage of either consumer with room to spare, and onboarding volume is
-tiny. `scripts/create-topics.sh` creates all four with `--if-not-exists`, so it
+tiny. `Infrastructure/Kafka/create-topics.sh` creates all four with `--if-not-exists`, so it
 is safe to re-run.
 
 Both group ids are used nowhere else:
@@ -152,8 +152,8 @@ Scripts additionally read `SPRINT8_END` (check 6's pinned commit, default
 `fcd04df`), `KAFKA_CONTAINER`, `KAFKA_BROKER_INTERNAL`, `AUTH_DB_CONTAINER`,
 `AUTH_DB_USER` and `AUTH_DB_NAME`, all with defaults matching compose.
 
-Running auth outside compose (`npm run start` in `services/auth`) now also needs
-`KAFKA_BROKERS` and `ACTIVATION_INTERNAL_SECRET` in `services/auth/.env`.
+Running auth outside compose (`npm run start` in `Services/auth-service`) now also needs
+`KAFKA_BROKERS` and `ACTIVATION_INTERNAL_SECRET` in `Services/auth-service/.env`.
 
 ## The token
 
@@ -213,12 +213,12 @@ as many distinct addresses as a run needs.
 ```bash
 docker compose --profile platform down -v
 docker compose --profile platform up -d --build
-bash scripts/create-topics.sh
+bash Infrastructure/Kafka/create-topics.sh
 # no Kafka CLI on the host? run it inside the broker container instead:
 #   docker exec -i -e BROKER=localhost:29092 -e KAFKA_TOPICS_BIN=/opt/kafka/bin/kafka-topics.sh \
-#     fauxnance-kafka bash -s < scripts/create-topics.sh
+#     fauxnance-kafka bash -s < Infrastructure/Kafka/create-topics.sh
 
-curl -sS -X POST localhost:8085/onboarding/applications -H 'Content-Type: application/json' \
+curl -sS -X POST localhost:8081/onboarding/applications -H 'Content-Type: application/json' \
   -d '{"name":"Demo Customer","dob":"1995-06-15","email":"you+kyc1@gmail.com",
        "phoneNumber":"+919812345611","pan":"DEMPS1234K","address":"12 Anna Nagar, Chennai",
        "bankAccountNumber":"509876543210","ifsc":"DEMO0000001"}'
@@ -231,7 +231,7 @@ link → choose a username and password → "Your login is ready" → log in:
 ```bash
 curl -sS -X POST localhost:3000/auth/login -H 'Content-Type: application/json' \
   -d '{"username":"<chosen>","password":"<chosen>"}' | jq -r .accessToken
-curl -sS localhost:8085/api/v1/accounts/11 -H "Authorization: Bearer <token>"
+curl -sS localhost:8081/api/v1/accounts/11 -H "Authorization: Bearer <token>"
 ```
 
 Open the same link again: "This link is not valid".
@@ -242,13 +242,13 @@ account given on the application, and it is credited a few seconds later
 (`payments.md`):
 
 ```bash
-curl -sS -X POST localhost:8085/api/v1/accounts/11/deposits -H "Authorization: Bearer <token>" \
+curl -sS -X POST localhost:8081/api/v1/accounts/11/deposits -H "Authorization: Bearer <token>" \
   -H 'Content-Type: application/json' -d '{"amount":100000,"idempotencyKey":"first-deposit-11"}'
 ```
 
 ### The same, in the browser
 
-With the UI running (`cd frontend && npm start`), all of it is screens:
+With the UI running (`cd Frontend && npm start`), all of it is screens:
 
 1. `http://localhost:4200/sign-in` → **New customer? Open an account** → the
    application, bank account included → "Application received".
@@ -280,7 +280,7 @@ with no checks. The ten seeded accounts are already provisioned, so give one
 back first:
 
 ```bash
-docker exec -i fauxnance-postgres psql -U postgres -d trading \
+docker exec -i fauxnance-postgres psql -U postgres -d trading_system_db \
   -c "UPDATE client_profile SET email = 'you+activation@gmail.com' WHERE client_id = 5"
 docker exec -i fauxnance-postgres psql -U postgres -d auth \
   -c "DELETE FROM provisioned_account WHERE account_id = 5 AND claimed_by IS NULL"
@@ -297,7 +297,7 @@ These need the running stack, so they were not run when the code was written.
 Record each result in the security review's evidence table.
 
 **Stage 1 — auth publishes**
-1. `bash scripts/create-topics.sh` twice: second run changes nothing.
+1. `bash Infrastructure/Kafka/create-topics.sh` twice: second run changes nothing.
 2. `publish-kyc-verified.sh 5` (after the un-provision step in "Testing auth without KYC") → exactly one
    message on `account-provisioning`; key `5`; envelope fields
    `eventId, eventType, eventTime, source, schemaVersion, payload`; payload

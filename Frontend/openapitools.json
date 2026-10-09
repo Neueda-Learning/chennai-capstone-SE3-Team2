@@ -1,0 +1,111 @@
+{
+  "$schema": "./node_modules/@openapitools/openapi-generator-cli/config.schema.json",
+  "spaces": 2,
+  "generator-cli": {
+    "version": "7.25.0",
+    "generators": {
+      "trade": {
+        "generatorName": "typescript-angular",
+        "inputSpec": "../Contracts/API Schemas/trade-api.yaml",
+        "output": "src/generated/trade",
+        "skipValidateSpec": true,
+        "additionalProperties": {
+          "ngVersion": "21.0.0",
+          "providedIn": "root",
+          "fileNaming": "kebab-case",
+          "supportsES6": true
+        }
+      },
+      "auth": {
+        "generatorName": "typescript-angular",
+        "inputSpec": "../Contracts/API Schemas/auth-api.yaml",
+        "output": "src/generated/auth",
+        "skipValidateSpec": true,
+        "additionalProperties": {
+          "ngVersion": "21.0.0",
+          "providedIn": "root",
+          "fileNaming": "kebab-case",
+          "supportsES6": true
+        }
+      },
+      "extensions": {
+        "generatorName": "typescript-angular",
+        "inputSpec": "../Services/order-service/openapi/trade-api-extensions.yaml",
+        "output": "src/generated/extensions",
+        "additionalProperties": {
+          "ngVersion": "21.0.0",
+          "providedIn": "root",
+          "fileNaming": "kebab-case",
+          "supportsES6": true
+        }
+      },
+      "preferences": {
+        "generatorName": "typescript-angular",
+        "inputSpec": "../Services/order-service/openapi/preferences.yaml",
+        "output": "src/generated/preferences",
+        "additionalProperties": {
+          "ngVersion": "21.0.0",
+          "providedIn": "root",
+          "fileNaming": "kebab-case",
+          "supportsES6": true
+        }
+      },
+      "notifications": {
+        "generatorName": "typescript-angular",
+        "inputSpec": "../Services/order-service/openapi/notifications.yaml",
+        "output": "src/generated/notifications",
+        "additionalProperties": {
+          "ngVersion": "21.0.0",
+          "providedIn": "root",
+          "fileNaming": "kebab-case",
+          "supportsES6": true
+        }
+      },
+      "watchlists": {
+        "generatorName": "typescript-angular",
+        "inputSpec": "../Services/order-service/openapi/watchlists.yaml",
+        "output": "src/generated/watchlists",
+        "additionalProperties": {
+          "ngVersion": "21.0.0",
+          "providedIn": "root",
+          "fileNaming": "kebab-case",
+          "supportsES6": true
+        }
+      },
+      "portfolio": {
+        "generatorName": "typescript-angular",
+        "inputSpec": "../Contracts/API Schemas/portfolio-api.yaml",
+        "output": "src/generated/portfolio",
+        "skipValidateSpec": true,
+        "additionalProperties": {
+          "ngVersion": "21.0.0",
+          "providedIn": "root",
+          "fileNaming": "kebab-case",
+          "supportsES6": true
+        }
+      },
+      "advice": {
+        "generatorName": "typescript-angular",
+        "inputSpec": "../Services/order-service/openapi/advice.yaml",
+        "output": "src/generated/advice",
+        "additionalProperties": {
+          "ngVersion": "21.0.0",
+          "providedIn": "root",
+          "fileNaming": "kebab-case",
+          "supportsES6": true
+        }
+      },
+      "strategy": {
+        "generatorName": "typescript-angular",
+        "inputSpec": "../Services/order-service/openapi/strategy.yaml",
+        "output": "src/generated/strategy",
+        "additionalProperties": {
+          "ngVersion": "21.0.0",
+          "providedIn": "root",
+          "fileNaming": "kebab-case",
+          "supportsES6": true
+        }
+      }
+    }
+  }
+}

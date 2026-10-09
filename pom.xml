@@ -6,7 +6,7 @@
   fresh clone without anything pre-installed in ~/.m2.
 
   This pom aggregates but does not parent: the services keep
-  spring-boot-starter-parent, and libs/domain keeps no parent at all so
+  spring-boot-starter-parent, and Services/domain-library keeps no parent at all so
   nothing Spring-shaped can arrive by inheritance.
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
@@ -25,13 +25,13 @@
     <description>Trading platform reactor.</description>
 
     <modules>
-        <module>libs/domain</module>
-        <module>services/trade-api</module>
-        <module>services/trade-executor</module>
+        <module>Services/domain-library</module>
+        <module>Services/order-service</module>
+        <module>Services/executor-service</module>
     </modules>
 
     <!--
-      The executor depends on libs/domain for the two rules it re-checks at
+      The executor depends on Services/domain-library for the two rules it re-checks at
       execution time, so it builds from here rather than standalone.
     -->
 

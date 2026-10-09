@@ -8,7 +8,7 @@
 
 ## Context
 
-`contracts/portfolio-api.yaml` prices from Fauxnance batch quotes. Our universe is every NSE
+`Contracts/API Schemas/portfolio-api.yaml` prices from Fauxnance batch quotes. Our universe is every NSE
 equity and every Direct Growth mutual fund; Fauxnance does not price funds, the MF NAV service
 does. Every instrument is in INR. The contract: a team that cannot convert currencies "must
 restrict its instrument universe to one currency and say so".

@@ -21,7 +21,7 @@ in one process, and Kafka shares a topic's partitions within a group.
 
 ## Decision
 
-A group per module, using the names `contracts/kafka-topics.md` already reserves.
+A group per module, using the names `Contracts/API Schemas/kafka-topics.md` already reserves.
 
 ## Consequences
 

@@ -8,19 +8,19 @@ brief is `sprint-10-extensions/` in the programme repository; the stories are in
 Not new services: one package per extension under `com.yellow.trade`, each with its own
 controllers, services, mappers and tables, its own routes under `/api/v1/` (so the existing
 token filter authenticates them), and its own consumer group where it reads Kafka. The brief,
-`contracts/portfolio-api.yaml` and the Sprint 11 brief all place them there; our stories said
+`Contracts/API Schemas/portfolio-api.yaml` and the Sprint 11 brief all place them there; our stories said
 separate services, and we followed the brief ([0001](decision-log/0001-modules-inside-trade-api.md)).
 
 | # | Package | Kind | Reads | Consumer group | API |
 |---|---|---|---|---|---|
-| 1 | `com.yellow.trade.preferences` | mandatory | its own table, the customer's profile | none | `services/trade-api/openapi/preferences.yaml` |
-| 2 | `com.yellow.trade.notifications` | mandatory | `trade-events` | `notification-service` | `services/trade-api/openapi/notifications.yaml` |
-| 3 | `com.yellow.trade.watchlists` | mandatory | `market-data` | `watchlist-service` | `services/trade-api/openapi/watchlists.yaml` |
-| 4 | `com.yellow.trade.portfolio` | mandatory | positions, `trade-events` | `portfolio-service` | `contracts/portfolio-api.yaml` (binding) |
-| 5 | `com.yellow.trade.advice` | stretch | daily candles, `market-data` | `advice-service` | `services/trade-api/openapi/advice.yaml` |
-| 6 | `com.yellow.trade.strategy` | stretch | `market-data`, `trade-events` | `strategy-service` | `services/trade-api/openapi/strategy.yaml` |
+| 1 | `com.yellow.trade.preferences` | mandatory | its own table, the customer's profile | none | `Services/order-service/openapi/preferences.yaml` |
+| 2 | `com.yellow.trade.notifications` | mandatory | `trade-events` | `notification-service` | `Services/order-service/openapi/notifications.yaml` |
+| 3 | `com.yellow.trade.watchlists` | mandatory | `market-data` | `watchlist-service` | `Services/order-service/openapi/watchlists.yaml` |
+| 4 | `com.yellow.trade.portfolio` | mandatory | positions, `trade-events` | `portfolio-service` | `Contracts/API Schemas/portfolio-api.yaml` (binding) |
+| 5 | `com.yellow.trade.advice` | stretch | daily candles, `market-data` | `advice-service` | `Services/order-service/openapi/advice.yaml` |
+| 6 | `com.yellow.trade.strategy` | stretch | `market-data`, `trade-events` | `strategy-service` | `Services/order-service/openapi/strategy.yaml` |
 
-The group ids are the ones `contracts/kafka-topics.md` reserves, and no two consumers share one
+The group ids are the ones `Contracts/API Schemas/kafka-topics.md` reserves, and no two consumers share one
 ([0013](decision-log/0013-one-consumer-group-per-module.md)).
 
 ### The chain, and the build order
@@ -31,7 +31,7 @@ portfolio   (independent)          advice (independent)     strategy (auth + the
 ```
 
 Built and merged in this order, one feature branch each: preferences, notifications,
-watchlists, portfolio, advice, strategy. Shared files (`docker-compose.yml`, `data/db/local/setup.sql`,
+watchlists, portfolio, advice, strategy. Shared files (`docker-compose.yml`, `Databases/PostgreSQL/local/setup.sql`,
 the test schema lists) grow by one entry per module, so the order is also the merge order.
 
 ### The two seams
@@ -89,12 +89,12 @@ not store.
 
 ## Deviations to confirm on day one
 
-- The Trade REST API runs on **8085**, not 8080 ([0014](decision-log/0014-trade-api-on-8085.md)).
+- The Trade REST API runs on **8081**, not 8080 ([0014](decision-log/0014-trade-api-on-8081.md)).
 - Portfolio prices funds from the **MF NAV service**, not Fauxnance, and the universe is **INR
   only**, which the contract allows when said ([0010](decision-log/0010-portfolio-prices-funds-at-nav-inr-only.md)).
 - One login has one account, so **"default account"** is paired with a default landing screen to
   make the preference visible ([0005](decision-log/0005-default-account-and-landing-screen.md)).
-- `PricedPosition.quantity` in `contracts/portfolio-api.yaml` is an integer; a fund holds
+- `PricedPosition.quantity` in `Contracts/API Schemas/portfolio-api.yaml` is an integer; a fund holds
   fractional units, so the portfolio module answers it as a number (`12.345678`). A stock's is
   still whole.
 

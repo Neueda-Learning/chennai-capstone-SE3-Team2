@@ -17,7 +17,7 @@ demonstrations the sprint is assessed on: the duplicate replay
 | `executor/` | Trade Executor. Consumes `orders`, prices against Fauxnance, settles, publishes to `trade-events`. Hosts the market-data poller. |
 | `etl/` | Python 3.12 analytics pipeline. Reads Postgres, writes DuckDB. Story 615. |
 | `design/kafka.md` | Topic partition counts, key choices, DLT decisions. What we defend at the review. |
-| `scripts/create-topics.sh` | Creates the six topics (three + DLTs). Run against a healthy broker. |
+| `Infrastructure/Kafka/create-topics.sh` | Creates the six topics (three + DLTs). Run against a healthy broker. |
 | `scripts/duplicate-replay.sh` | Story 612 demonstration, runnable end to end. |
 | `scripts/mint-demo-token.sh` | HS256 JWT for the demonstration; reads `JWT_SECRET` from `.env`. |
 
@@ -29,7 +29,7 @@ profile so `docker compose up` in isolation starts nothing.
 ```bash
 cp .env.example .env               # set JWT_SECRET, DB_PASSWORD, FAUXNANCE_API_KEY
 docker compose --profile platform up -d --build
-scripts/create-topics.sh
+Infrastructure/Kafka/create-topics.sh
 ```
 
 Auto-creation is off on the broker on purpose (`docker-compose.yml:29`):
@@ -61,7 +61,7 @@ The demonstration proves it by fabricating the duplicate on demand.
   ```bash
   docker compose --profile platform down -v          # -v destroys volumes
   docker compose --profile platform up -d --build
-  scripts/create-topics.sh
+  Infrastructure/Kafka/create-topics.sh
   ```
 
 - `.env` populated with `JWT_SECRET`, `DB_PASSWORD`, `FAUXNANCE_API_KEY`.

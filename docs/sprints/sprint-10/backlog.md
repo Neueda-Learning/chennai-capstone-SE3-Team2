@@ -9,7 +9,7 @@ we decided something the stories leave open, the decision log entry is named.
 - Every member has read all the briefs, and the scope is confirmed with an instructor on day one.
 - This backlog covers all six modules before code is written.
 - The APIs of the five modules without a contract are written as OpenAPI and brought to the
-  instructor: `services/trade-api/openapi/{preferences,notifications,watchlists,advice,strategy}.yaml`.
+  instructor: `Services/order-service/openapi/{preferences,notifications,watchlists,advice,strategy}.yaml`.
 - Work is planned by the chain, not one person per module.
 
 ## S10-1 The two integration seams
@@ -77,7 +77,7 @@ we decided something the stories leave open, the decision log entry is named.
 
 ## S10-5 Portfolio and P&L (`com.yellow.trade.portfolio`)
 
-- Implements `contracts/portfolio-api.yaml` exactly: the summary, positions and P&L routes and
+- Implements `Contracts/API Schemas/portfolio-api.yaml` exactly: the summary, positions and P&L routes and
   `/health`, the field names, and the error catalogue including `MKT-503`.
 - Prices from live quotes, batched 25 to a call and cached; funds at their NAV; every priced
   figure carries `priceAsOf` and `stale` ([0010](decision-log/0010-portfolio-prices-funds-at-nav-inr-only.md)).
