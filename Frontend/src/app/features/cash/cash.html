@@ -1,0 +1,114 @@
+<h1>Funds</h1>
+
+<app-error-message [error]="error()" />
+
+<div class="top">
+<section class="card summary" aria-label="Cash and bank account">
+  <div>
+    <p class="label">Available cash</p>
+    <p class="figure" data-testid="cash-available">
+      @if (available() !== null) {
+        {{ available() | currency: 'INR' : 'symbol' : '1.2-2' }}
+      } @else {
+        …
+      }
+    </p>
+    <p class="hint">What is not held for open orders or withdrawals.</p>
+  </div>
+  <div>
+    <p class="label">Bank account</p>
+    @if (bank(); as bank) {
+      <p class="figure" data-testid="cash-bank">••••{{ bank.accountNumberLast4 }}</p>
+      <p class="hint">{{ bank.ifsc }} · {{ bank.holderName }}</p>
+    } @else {
+      <p class="figure">…</p>
+    }
+  </div>
+</section>
+
+<section class="card move">
+  <h2>Add funds or withdraw</h2>
+  <p class="hint">Money only moves to and from your bank account, ending {{ bank()?.accountNumberLast4 ?? '…' }}.</p>
+  <label for="amount">Amount (₹)</label>
+  <input
+    id="amount"
+    [formControl]="amount"
+    inputmode="decimal"
+    data-testid="cash-amount"
+    [attr.aria-invalid]="amount.touched && amount.invalid"
+    aria-describedby="amount-error"
+  />
+  @if (amount.touched && amount.invalid) {
+    <p class="field-error" id="amount-error">Enter an amount above zero, with at most two decimal places.</p>
+  }
+  @if (overAvailable()) {
+    <p class="field-error" data-testid="cash-over-available">That is more than your available cash.</p>
+  }
+  <div class="actions">
+    <button type="button" class="primary" data-testid="cash-deposit" [disabled]="submitting() !== null" (click)="submit('DEPOSIT')">
+      {{ submitting() === 'DEPOSIT' ? 'Adding…' : 'Add cash' }}
+    </button>
+    <button type="button" class="secondary" data-testid="cash-withdraw" [disabled]="submitting() !== null" (click)="submit('WITHDRAWAL')">
+      {{ submitting() === 'WITHDRAWAL' ? 'Withdrawing…' : 'Withdraw' }}
+    </button>
+  </div>
+</section>
+</div>
+
+<section class="transfers" aria-labelledby="transfers-title">
+  <div class="heading">
+    <h2 id="transfers-title">Transfers</h2>
+    <button type="button" class="secondary small" data-testid="cash-refresh" (click)="refresh()">Refresh</button>
+  </div>
+  <p class="status-line" role="status" data-testid="cash-pending">
+    @if (gaveUp()) {
+      Still processing after 30 seconds. Press Refresh to check again.
+    } @else if (pending() > 0) {
+      {{ pending() }} {{ pending() === 1 ? 'transfer is' : 'transfers are' }} processing with the bank. Checking again every 3 seconds.
+    }
+  </p>
+
+  @if (transfers(); as transfers) {
+    @if (transfers.length === 0) {
+      <p class="empty">No transfers yet.</p>
+    } @else {
+      <div class="table-wrap">
+      <table>
+        <caption class="visually-hidden">Every deposit and withdrawal, newest first</caption>
+        <thead>
+          <tr>
+            <th scope="col">Requested</th>
+            <th scope="col">Type</th>
+            <th scope="col" class="number">Amount (₹)</th>
+            <th scope="col">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (transfer of transfers.slice(0, shown()); track transfer.transferId) {
+            <tr data-testid="cash-transfer-row" [attr.data-status]="transfer.status">
+              <td>{{ transfer.createdAt | date: 'd MMM y, HH:mm:ss' }}</td>
+              <td>{{ transfer.direction === 'DEPOSIT' ? 'Added' : 'Withdrawn' }}</td>
+              <td class="number">{{ transfer.direction === 'DEPOSIT' ? '+' : '−' }}{{ transfer.amount | number: '1.2-2' }}</td>
+              <td>
+                <span [class]="'badge ' + transfer.status.toLowerCase()">
+                  <span aria-hidden="true">{{ transfer.status === 'PENDING' ? '◷' : transfer.status === 'SUCCESS' ? '✓' : '✕' }}</span>
+                  {{ transfer.status === 'PENDING' ? 'PROCESSING' : transfer.status }}
+                </span>
+                @if (transfer.reason) {
+                  <span class="reason">{{ transfer.reason }}</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      </div>
+      @if (transfers.length > shown()) {
+        <div class="more" data-testid="cash-transfers-more">
+          <span>Showing {{ shown() }} of {{ transfers.length }}</span>
+          <button type="button" class="secondary small" data-testid="cash-transfers-show-more" (click)="showMore()">Show more</button>
+        </div>
+      }
+    }
+  }
+</section>

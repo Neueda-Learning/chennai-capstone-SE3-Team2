@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+  ======================================================================
+  Trade Executor. Sprint 7, stories 610 and 614.
+
+  Consumes ORDER_PLACED from `orders` in the consumer group
+  `trade-executor`, prices the order against a live Fauxnance quote,
+  applies the fill rule, settles, and publishes to `trade-events`.
+  The market-data poller (614) runs inside this same process, in its own
+  package, as a scheduled component.
+
+  ON THE DEPENDENCY ON sprint5-domain. The executor re-checks business
+  rules 6 and 7 at execution time, and those rules are Account.canAfford
+  and Position.canSell in the domain module. Depending on the jar keeps
+  one copy of each rule; the alternative was a second copy here that
+  would drift. See the root pom for the build consequence.
+
+  Note the enforcer in domainrules still bans Spring from the domain's
+  own classpath. Depending on the domain from a Spring application is
+  the direction that was always allowed: the arrow points inwards.
+  ======================================================================
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.5.5</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.yellow</groupId>
+    <artifactId>trade-executor</artifactId>
+    <version>1.0-SNAPSHOT</version>
+
+    <name>Trade Executor</name>
+    <description>
+        Consumes accepted orders, prices them, settles them, and publishes the
+        outcome. Hosts the market-data poller.
+    </description>
+
+    <properties>
+        <java.version>21</java.version>
+        <wiremock.version>3.9.2</wiremock.version>
+        <testcontainers.version>1.20.4</testcontainers.version>
+    </properties>
+
+    <dependencies>
+
+        <!--
+          Web is here for the actuator health endpoint, which is what the
+          compose health check reads. The executor exposes no API of its
+          own: its inputs are a Kafka topic and a schedule.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+
+        <!-- Same persistence stack as trade-api, so the mappers read alike. -->
+        <dependency>
+            <groupId>org.mybatis.spring.boot</groupId>
+            <artifactId>mybatis-spring-boot-starter</artifactId>
+            <version>3.0.4</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!--
+          The Sprint 5 domain. Used for the enums the contract fixes
+          (OrderSide, OrderStatus, AssetClass) and, more importantly, for
+          the rules the executor re-checks: Account.canAfford is rule 6
+          and Position.canSell is rule 7. One copy of each, tested once.
+        -->
+        <dependency>
+            <groupId>com.yellow</groupId>
+            <artifactId>sprint5-domain</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+
+        <!-- Tests -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!--
+          The mocked quote source the integration test runs against. A real
+          HTTP server rather than a mocked client, so the JSON mapping, the
+          status handling and the Retry-After parsing are all exercised.
+        -->
+        <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock-standalone</artifactId>
+            <version>${wiremock.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!--
+          A real PostgreSQL for the one claim no in-memory double can
+          support: that two deliveries racing on the same order are
+          serialised by the database, so the second UPDATE matches zero
+          rows. That is the entire duplicate-handling mechanism, and a
+          fake that returns 0 because it was written to return 0 proves
+          only that it was written that way.
+
+          The suite skips rather than fails when no Docker is available,
+          the same way trade-api's does.
+        -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>${testcontainers.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${testcontainers.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+        <plugins>
+
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.12</version>
+                <executions>
+                    <execution><goals><goal>prepare-agent</goal></goals></execution>
+                    <execution><id>report</id><phase>test</phase><goals><goal>report</goal></goals></execution>
+                </executions>
+                <configuration>
+                    <excludes>
+                        <!-- Generated row types and mapper interfaces carry no logic. -->
+                        <exclude>com/yellow/executor/persistence/**</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+
+        </plugins>
+    </build>
+
+</project>

@@ -1,0 +1,55 @@
+.settings {
+  max-width: 34rem;
+  margin-inline: auto;
+}
+
+.label {
+  margin: 1rem 0 0.25rem;
+  font-weight: 600;
+}
+
+.value {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.hint {
+  display: block;
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0.25rem 0 0;
+}
+
+.channel {
+  margin: 1.25rem 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.channel legend {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.choice {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.choice:has(input:checked) {
+  border-color: var(--accent);
+}
+
+.choice input {
+  margin-top: 0.2rem;
+}
+
+button[type='submit'] {
+  margin-top: 1.25rem;
+}

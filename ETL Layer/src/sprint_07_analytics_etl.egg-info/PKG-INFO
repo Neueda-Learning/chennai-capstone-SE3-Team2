@@ -1,0 +1,12 @@
+Metadata-Version: 2.4
+Name: sprint-07-analytics-etl
+Version: 0.1.0
+Summary: Incremental analytics ETL: Postgres to DuckDB star schema
+Requires-Python: >=3.12
+Requires-Dist: psycopg2-binary
+Requires-Dist: duckdb>=0.10.0
+Requires-Dist: pandas
+Requires-Dist: python-dotenv
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: pytest-mock; extra == "dev"

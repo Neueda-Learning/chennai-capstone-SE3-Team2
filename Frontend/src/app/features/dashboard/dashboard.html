@@ -1,0 +1,120 @@
+<div class="title">
+  <h1 data-testid="dashboard-greeting">
+    @if (firstName(); as name) {
+      Hi, {{ name }}
+    } @else {
+      Dashboard
+    }
+  </h1>
+  <a class="button primary" routerLink="/trade" data-testid="dashboard-trade">Place an order</a>
+</div>
+
+<app-error-message [error]="error()" />
+
+<div class="cards">
+  <section class="card" aria-labelledby="cash-title" data-testid="account-summary">
+    <div class="card-head">
+      <h2 id="cash-title">Funds</h2>
+      @if (account(); as account) {
+        <span class="state" [class.active]="account.status === 'ACTIVE'" data-testid="account-status">{{ account.status }}</span>
+      }
+    </div>
+    @if (account(); as account) {
+      <p class="figure" data-testid="cash-balance">{{ account.cashBalance | currency: 'INR' : 'symbol' : '1.2-2' }}</p>
+      <p class="label">Available cash</p>
+      @if (user(); as user) {
+        <p class="signed-in" data-testid="signed-in-as">Signed in as {{ user.username }}</p>
+      }
+      <div class="actions">
+        <a class="button secondary small" routerLink="/funds" data-testid="dashboard-cash">Add or withdraw funds</a>
+      </div>
+    } @else if (!error()) {
+      <p>Loading your account…</p>
+    }
+  </section>
+
+  <section class="card" aria-labelledby="holdings-title" data-testid="dashboard-holdings">
+    <h2 id="holdings-title">Holdings ({{ positions()?.length ?? 0 }})</h2>
+    @if (positions() === null) {
+      @if (!error()) {
+        <p class="label" data-testid="dashboard-holdings-loading">Loading your holdings…</p>
+      }
+    } @else {
+      @let totals = holdings().totals;
+      @if (positions()!.length === 0) {
+        <p class="label">Nothing held yet. A filled buy shows here.</p>
+      } @else {
+        <p class="figure" data-testid="dashboard-pnl" [class]="sign(totals.pnl)">
+          {{ totals.pnl > 0 ? '+' : '' }}{{ totals.pnl | currency: 'INR' : 'symbol' : '1.2-2' }}
+          @if (totals.pnlPercent !== null) {
+            <span class="percent">{{ totals.pnl > 0 ? '+' : '' }}{{ totals.pnlPercent | number: '1.2-2' }}%</span>
+          }
+        </p>
+        <p class="label">P&amp;L{{ totals.partial ? ', of what is priced' : '' }}</p>
+        <dl class="small">
+          <div>
+            <dt>Current value</dt>
+            <dd data-testid="dashboard-current">{{ totals.currentValue | currency: 'INR' : 'symbol' : '1.2-2' }}</dd>
+          </div>
+          <div>
+            <dt>Investment</dt>
+            <dd>{{ totals.invested | currency: 'INR' : 'symbol' : '1.2-2' }}</dd>
+          </div>
+          @if (summary(); as summary) {
+            <div>
+              <dt>Realised P&amp;L</dt>
+              <dd data-testid="dashboard-realised" [class]="sign(summary.realisedPnl)">
+                {{ summary.realisedPnl > 0 ? '+' : '' }}{{ summary.realisedPnl | currency: 'INR' : 'symbol' : '1.2-2' }}
+              </dd>
+            </div>
+            <div>
+              <dt>Total value, with cash</dt>
+              <dd data-testid="dashboard-total">{{ summary.totalValue | currency: 'INR' : 'symbol' : '1.2-2' }}</dd>
+            </div>
+          }
+          <div>
+            <dt>Day's P&amp;L</dt>
+            <dd [class]="sign(totals.dayChange)">
+              {{ totals.dayChange > 0 ? '+' : '' }}{{ totals.dayChange | currency: 'INR' : 'symbol' : '1.2-2' }}
+            </dd>
+          </div>
+        </dl>
+      }
+      <div class="actions">
+        <a class="button secondary small" routerLink="/holdings" data-testid="dashboard-view-holdings">View holdings</a>
+      </div>
+    }
+  </section>
+</div>
+
+<section class="card recent" aria-labelledby="recent-title" data-testid="dashboard-orders">
+  <div class="recent-head">
+    <h2 id="recent-title">Recent orders</h2>
+    @if (open() > 0) {
+      <span class="open" data-testid="dashboard-open">{{ open() }} open</span>
+    }
+  </div>
+  @if (orders(); as orders) {
+    @if (orders.length === 0) {
+      <p class="label">No orders yet.</p>
+    } @else {
+      <ul>
+        @for (order of recent(); track order.orderId) {
+          <li data-testid="dashboard-order">
+            <span class="side" [class.sell]="order.side === 'SELL'">{{ order.side }}</span>
+            <a [routerLink]="['/instrument', order.symbol]">{{ catalog.label(order.symbol) }}</a>
+            <span class="qty">{{ order.quantity | number: '1.0-6' }} @ {{ order.price | number: '1.2-2' }}</span>
+            <span class="when">{{ order.createdOn | date: 'd MMM, HH:mm' }}</span>
+            <app-status-badge [status]="order.status" />
+          </li>
+        }
+      </ul>
+    }
+    <div class="actions">
+      @if (orders.length === 0) {
+        <a class="button primary small" routerLink="/trade" data-testid="dashboard-first-order">Place your first order</a>
+      }
+      <a class="button secondary small" routerLink="/orders" data-testid="dashboard-view-orders">View all orders</a>
+    </div>
+  }
+</section>

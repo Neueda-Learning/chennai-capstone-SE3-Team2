@@ -1,0 +1,147 @@
+<section class="holdings" aria-labelledby="holdings-title">
+  <div class="heading">
+    <h1 id="holdings-title">Holdings</h1>
+    <div class="filter-chips" role="group" aria-label="Show">
+      @for (option of filters; track option.value) {
+        <button
+          type="button"
+          class="filter-chip"
+          [class.active]="filter() === option.value"
+          [attr.aria-pressed]="filter() === option.value"
+          [attr.data-testid]="'holdings-filter-' + option.value"
+          (click)="filter.set(option.value)"
+        >
+          {{ option.label }}
+        </button>
+      }
+    </div>
+  </div>
+
+  <app-error-message [error]="error()" />
+
+  @if (positions(); as positions) {
+    @if (valued().rows.length === 0) {
+      <p class="empty" data-testid="holdings-empty">
+        Nothing here yet. A filled buy shows here. <a routerLink="/trade">Place an order.</a>
+      </p>
+    } @else {
+      @let totals = valued().totals;
+      <dl class="totals card" data-testid="holdings-totals">
+        <div>
+          <dt>Total investment</dt>
+          <dd data-testid="holdings-invested">{{ totals.invested | currency: 'INR' : 'symbol' : '1.2-2' }}</dd>
+        </div>
+        <div>
+          <dt>Current value</dt>
+          <dd data-testid="holdings-current">{{ totals.currentValue | currency: 'INR' : 'symbol' : '1.2-2' }}</dd>
+        </div>
+        <div>
+          <dt>Day's P&amp;L</dt>
+          <dd data-testid="holdings-day" [class]="sign(totals.dayChange)">
+            {{ totals.dayChange > 0 ? '+' : '' }}{{ totals.dayChange | currency: 'INR' : 'symbol' : '1.2-2' }}
+          </dd>
+        </div>
+        <div>
+          <dt>Realised P&amp;L</dt>
+          <dd data-testid="holdings-realised" [class]="sign(summary()?.realisedPnl ?? null)">
+            @if (summary(); as summary) {
+              {{ summary.realisedPnl > 0 ? '+' : '' }}{{ summary.realisedPnl | currency: 'INR' : 'symbol' : '1.2-2' }}
+            } @else {
+              —
+            }
+          </dd>
+        </div>
+        <div>
+          <dt>Unrealised P&amp;L</dt>
+          <dd data-testid="holdings-pnl" [class]="sign(totals.pnl)">
+            {{ totals.pnl > 0 ? '+' : '' }}{{ totals.pnl | currency: 'INR' : 'symbol' : '1.2-2' }}
+            @if (totals.pnlPercent !== null) {
+              <span class="percent">{{ totals.pnl > 0 ? '+' : '' }}{{ totals.pnlPercent | number: '1.2-2' }}%</span>
+            }
+          </dd>
+        </div>
+      </dl>
+      @if (pricingUnavailable()) {
+        <p class="note" data-testid="holdings-unpriced">
+          Prices can't be fetched right now, so your holdings show at what they cost. They are still yours.
+        </p>
+      } @else if (totals.partial) {
+        <p class="note" data-testid="holdings-partial">
+          Some holdings have no price right now; the value and P&amp;L above leave them out.
+        </p>
+      }
+
+      <div class="table-wrap">
+        <table data-testid="holdings-table">
+          <caption class="visually-hidden">Every instrument this account holds, at its live price</caption>
+          <thead>
+            <tr>
+              <th scope="col">Instrument</th>
+              <th scope="col" class="number">Qty.</th>
+              <th scope="col" class="number">Avg. cost</th>
+              <th scope="col" class="number">LTP</th>
+              <th scope="col" class="number">Cur. val</th>
+              <th scope="col" class="number">P&amp;L</th>
+              <th scope="col" class="number">Net chg.</th>
+              <th scope="col" class="number">Day chg.</th>
+              <th scope="col"><span class="visually-hidden">Action</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of valued().rows; track row.symbol) {
+              <tr data-testid="holdings-row" [attr.data-symbol]="row.symbol">
+                <td class="instrument">
+                  <a [routerLink]="['/instrument', row.symbol]">{{ catalog.label(row.symbol) }}</a>
+                  @if (row.stale && row.lastPrice !== null) {
+                    <span class="stale" title="Delayed: the last price known"><span class="visually-hidden">Delayed</span></span>
+                  }
+                </td>
+                <td class="number">{{ row.quantity | number: '1.0-6' }}</td>
+                <td class="number">{{ row.averageCost | number: '1.2-4' }}</td>
+                <td class="number" data-testid="holdings-ltp">
+                  {{ (row.lastPrice | number: (isFund(row.symbol) ? '1.4-4' : '1.2-2')) ?? '—' }}
+                </td>
+                <td class="number">{{ (row.currentValue | number: '1.2-2') ?? '—' }}</td>
+                <td class="number" data-testid="holdings-row-pnl" [class]="sign(row.pnl)">
+                  {{ row.pnl !== null && row.pnl > 0 ? '+' : '' }}{{ (row.pnl | number: '1.2-2') ?? '—' }}
+                </td>
+                <td class="number" [class]="sign(row.pnl)">
+                  @if (row.pnlPercent !== null) {
+                    {{ row.pnlPercent > 0 ? '+' : '' }}{{ row.pnlPercent | number: '1.2-2' }}%
+                  } @else {
+                    —
+                  }
+                </td>
+                <td class="number" [class]="sign(row.dayChange)">
+                  {{ row.dayChange !== null && row.dayChange > 0 ? '+' : '' }}{{ (row.dayChange | number: '1.2-2') ?? '—' }}
+                </td>
+                <td class="action">
+                  @if (catalog.isTradable(row.symbol)) {
+                    <a
+                      class="button secondary small"
+                      routerLink="/trade"
+                      [queryParams]="{ symbol: row.symbol, side: 'BUY' }"
+                      data-testid="holdings-buy"
+                      [attr.aria-label]="'Buy more ' + catalog.label(row.symbol)"
+                      >Buy</a
+                    >
+                    <a
+                      class="button secondary small"
+                      routerLink="/trade"
+                      [queryParams]="{ symbol: row.symbol, side: 'SELL' }"
+                      data-testid="holdings-sell"
+                      [attr.aria-label]="'Sell ' + catalog.label(row.symbol)"
+                      >Sell</a
+                    >
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  } @else if (!error()) {
+    <p>Loading your holdings…</p>
+  }
+</section>

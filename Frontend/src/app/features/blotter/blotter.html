@@ -1,0 +1,145 @@
+<section class="blotter" aria-labelledby="blotter-title">
+  <div class="heading">
+    <!-- On the Orders page the page's own title says it. -->
+    <h2 id="blotter-title" [class.visually-hidden]="layout() === 'split'">Your orders</h2>
+    <button type="button" class="secondary small" data-testid="blotter-refresh" [disabled]="loading()" (click)="refresh()">
+      {{ loading() ? 'Refreshing…' : 'Refresh' }}
+    </button>
+  </div>
+
+  <app-error-message [error]="error()" />
+  <app-error-message [error]="cancelError()" [overrides]="cancelMessages" />
+
+  <p class="status-line" role="status" data-testid="blotter-working">
+    @if (gaveUp()) {
+      Still working after {{ limitSeconds }} seconds. Press Refresh to check again.
+    } @else if (working() > 0) {
+      {{ working() }} {{ working() === 1 ? 'order is' : 'orders are' }} still working. Checking again every
+      {{ intervalSeconds }} seconds.
+    }
+  </p>
+
+  @if (layout() === 'list') {
+    <div class="filter-chips" role="group" aria-label="Filter orders by status">
+      @for (option of filterOptions; track option) {
+        <button
+          type="button"
+          class="filter-chip"
+          [class.active]="statusFilter() === option"
+          [attr.aria-pressed]="statusFilter() === option"
+          (click)="setStatusFilter(option)"
+        >
+          {{ option }}
+        </button>
+      }
+    </div>
+  }
+
+  @if (orders() === null) {
+    @if (!error()) {
+      <p>Loading your orders…</p>
+    }
+  } @else if (layout() === 'split') {
+    <h3 class="part" data-testid="orders-open-title">Open orders ({{ openRows().length }})</h3>
+    @if (openRows().length === 0) {
+      <p class="empty" data-testid="orders-open-empty">No open orders. An order waiting to be executed shows here.</p>
+    } @else {
+      <ng-container
+        [ngTemplateOutlet]="table"
+        [ngTemplateOutletContext]="{ $implicit: openRows(), caption: 'Orders still working, newest first', testid: 'orders-open' }"
+      />
+    }
+    <h3 class="part" data-testid="orders-executed-title">Executed orders ({{ executedRows().length }})</h3>
+    @if (executedRows().length === 0) {
+      <p class="empty" data-testid="orders-executed-empty">
+        Nothing executed yet. <a routerLink="/trade">Place an order.</a>
+      </p>
+    } @else {
+      <ng-container
+        [ngTemplateOutlet]="table"
+        [ngTemplateOutletContext]="{ $implicit: executedRows().slice(0, shown()), caption: 'Orders filled, rejected or cancelled, newest first', testid: 'orders-executed' }"
+      />
+      <ng-container [ngTemplateOutlet]="more" [ngTemplateOutletContext]="{ $implicit: executedRows().length }" />
+    }
+  } @else if (rows().length === 0) {
+    <p class="empty" data-testid="blotter-empty">
+      No orders yet. <a routerLink="/trade">Place your first order.</a>
+    </p>
+  } @else {
+    <ng-container
+      [ngTemplateOutlet]="table"
+      [ngTemplateOutletContext]="{ $implicit: rows().slice(0, shown()), caption: 'Every order on this account, newest first', testid: 'blotter-table' }"
+    />
+    <ng-container [ngTemplateOutlet]="more" [ngTemplateOutletContext]="{ $implicit: rows().length }" />
+  }
+</section>
+
+<ng-template #more let-total>
+  @if (total > shown()) {
+    <div class="more" data-testid="blotter-more">
+      <span>Showing {{ shown() }} of {{ total }}</span>
+      <button type="button" class="secondary small" data-testid="blotter-show-more" (click)="showMore()">Show more</button>
+    </div>
+  }
+</ng-template>
+
+<ng-template #table let-rows let-caption="caption" let-testid="testid">
+  <div class="table-wrap">
+    <table [attr.data-testid]="testid">
+      <caption class="visually-hidden">{{ caption }}</caption>
+      <thead>
+        <tr>
+          <th scope="col">Placed</th>
+          <th scope="col">Instrument</th>
+          <th scope="col">Side</th>
+          <th scope="col" class="number">Quantity</th>
+          <th scope="col" class="number">Limit price</th>
+          <th scope="col" class="number">Fill price</th>
+          <th scope="col">Status</th>
+          <th scope="col"><span class="visually-hidden">Action</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (order of asOrders(rows); track order.orderId) {
+          <tr data-testid="blotter-row" [attr.data-status]="order.status">
+            <td>{{ order.createdOn | date: 'd MMM y, HH:mm:ss' }}</td>
+            <td class="instrument">
+              <a [routerLink]="['/instrument', order.symbol]">{{ catalog.label(order.symbol) }}</a>
+            </td>
+            <td><span class="side" [class.sell]="order.side === 'SELL'">{{ order.side }}</span></td>
+            <td class="number">{{ order.quantity | number: '1.0-6' }}</td>
+            <td class="number">
+              @if (order.price != null) {
+                {{ order.price | number: '1.2-2' }}
+              } @else {
+                <span class="muted">—</span>
+              }
+            </td>
+            <td class="number">
+              @if (order.executedPrice != null) {
+                {{ order.executedPrice | number: '1.2-4' }}
+              } @else {
+                <span class="muted">—</span>
+              }
+            </td>
+            <td><app-status-badge [status]="order.status" /></td>
+            <td class="action">
+              @if (order.status === 'NEW') {
+                <button
+                  type="button"
+                  class="secondary cancel"
+                  data-testid="blotter-cancel"
+                  [disabled]="cancelling() !== null"
+                  [attr.aria-label]="cancelLabel(order)"
+                  (click)="cancel(order.orderId)"
+                >
+                  {{ cancelling() === order.orderId ? 'Cancelling…' : 'Cancel' }}
+                </button>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</ng-template>

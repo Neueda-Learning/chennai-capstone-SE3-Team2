@@ -1,0 +1,199 @@
+openapi: 3.0.3
+info:
+  title: Customer notifications
+  version: 1.0.0
+  description: |
+    Sprint 10 module `com.yellow.trade.notifications`, inside the Trade REST API. Written before
+    the controller and brought to the instructor on day one.
+
+    Turns `trade-events` (consumer group `notification-service`) into messages: a fill, a
+    rejection and a cancellation each produce one. A price alert from the watchlists module
+    arrives through the Java interface `AlertDelivery`, never through a route here.
+
+    Every notification is recorded `QUEUED` before the Kafka offset is committed, then sent;
+    `SENT` and `FAILED` are tracked separately from the offset (decision log 0006). The record
+    is keyed on the event's `eventId`, so a replayed event records and sends nothing twice. The
+    channel is resolved from the preferences module on every send and recorded on the row.
+
+    These routes read the history: the in-app inbox. Each is the caller's own account only.
+
+    Same error envelope as the contracts: `{ "errorCode", "message" }`.
+
+servers:
+  - url: http://localhost:8081
+    description: Local stack
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Notifications
+    description: The customer's notification history, the in-app inbox.
+
+paths:
+  /api/v1/accounts/{id}/notifications:
+    parameters:
+      - $ref: '#/components/parameters/AccountId'
+    get:
+      tags: [Notifications]
+      operationId: getNotifications
+      summary: The account's notifications, newest first
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: Newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Notification'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+
+  /api/v1/accounts/{id}/notifications/unread:
+    parameters:
+      - $ref: '#/components/parameters/AccountId'
+    get:
+      tags: [Notifications]
+      operationId: getUnreadCount
+      summary: How many notifications are unread, for the bell in the header
+      responses:
+        '200':
+          description: The count
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnreadCount'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+
+  /api/v1/accounts/{id}/notifications/{notificationId}/read:
+    parameters:
+      - $ref: '#/components/parameters/AccountId'
+      - name: notificationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags: [Notifications]
+      operationId: markRead
+      summary: Mark one notification read
+      description: |
+        Marking one already read changes nothing. Another account's is `NTF-404`. An id that is
+        not a UUID is `VAL-422`.
+      responses:
+        '204':
+          description: Read
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    AccountId:
+      name: id
+      in: path
+      required: true
+      description: The numeric account key; must be the token's own account (else `ACC-403`).
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+
+  responses:
+    Error:
+      description: The platform's error envelope
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    Notification:
+      type: object
+      required: [id, kind, subject, body, channel, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [ORDER_FILLED, ORDER_REJECTED, ORDER_CANCELLED, PRICE_ALERT]
+        subject:
+          type: string
+          example: Bought 2 TATASTEEL.NS at ₹178.72
+        body:
+          type: string
+        channel:
+          type: string
+          enum: [EMAIL, IN_APP]
+          nullable: true
+          description: |
+            The channel resolved from preferences when it was sent; null while it is QUEUED, since
+            the channel is resolved at the moment of sending (decision log 0006).
+        destination:
+          type: string
+          nullable: true
+          description: Where it went, masked (`r•••@gmail.com`); null for IN_APP, and while QUEUED.
+        status:
+          type: string
+          enum: [QUEUED, SENT, FAILED]
+        createdAt:
+          type: string
+          format: date-time
+        sentAt:
+          type: string
+          format: date-time
+          nullable: true
+        readAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    UnreadCount:
+      type: object
+      required: [unread]
+      properties:
+        unread:
+          type: integer
+          minimum: 0
+
+    ErrorResponse:
+      type: object
+      required: [errorCode, message]
+      properties:
+        errorCode:
+          type: string
+          description: |
+            One code added to the catalogue: `NTF-404`, no such notification on this account.
+          enum: [ACC-403, AUTH-401, VAL-422, NTF-404]
+        message:
+          type: string

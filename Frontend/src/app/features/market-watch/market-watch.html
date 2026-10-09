@@ -1,0 +1,105 @@
+<section class="market-watch" aria-labelledby="watch-title">
+  <header class="watch-head">
+    <h2 id="watch-title" data-testid="watch-name">{{ list.active()?.name ?? 'Watchlist' }}</h2>
+    <span class="count" data-testid="watch-count">{{ rows().length }} / {{ limit }}</span>
+  </header>
+
+  <app-instrument-search
+    inputId="watch-search"
+    ariaLabel="Search for an instrument to add to this watchlist"
+    placeholder="Search and add: infy, tata, parag…"
+    (picked)="add($event)"
+  />
+  @if (notice(); as notice) {
+    <p class="notice" role="status" data-testid="watch-notice">{{ notice }}</p>
+  }
+
+  @if (rows().length === 0) {
+    <p class="empty">Nothing here yet. Search above to add an instrument.</p>
+  }
+  <ul class="rows">
+    @for (row of rows(); track row.symbol) {
+      <li
+        class="row"
+        data-testid="watch-row"
+        [attr.data-symbol]="row.symbol"
+        [attr.data-source]="row.source"
+        [class.up]="row.trend === 'up'"
+        [class.down]="row.trend === 'down'"
+      >
+        <a class="name" [routerLink]="['/instrument', row.symbol]" data-testid="watch-open">
+          <span class="label">{{ row.label }}</span>
+          <span class="detail">{{ row.detail }}</span>
+        </a>
+        <span class="quote">
+          @if (row.price !== null) {
+            <span class="price"
+              ><span data-testid="watch-price">{{ row.price | number: (row.fund ? '1.4-4' : '1.2-2') }}</span>
+              @if (row.stale) {
+                <span class="stale" title="Delayed: the last price known, which could not be refreshed" data-testid="watch-stale"
+                  ><span class="visually-hidden">Delayed</span></span
+                >
+              }
+            </span>
+            @if (row.changePercent !== null && row.changePercent !== undefined) {
+              <span class="change" data-testid="watch-change"
+                >{{ row.trend === 'up' ? '+' : '' }}{{ row.changePercent | number: '1.2-2' }}%</span
+              >
+            } @else {
+              <span class="change flat">NAV</span>
+            }
+          } @else {
+            <span class="price flat" aria-label="No price">—</span>
+          }
+        </span>
+        <span class="actions">
+          <a
+            class="act buy"
+            routerLink="/trade"
+            [queryParams]="{ symbol: row.symbol, side: 'BUY' }"
+            [attr.aria-label]="'Buy ' + row.label"
+            data-testid="watch-buy"
+            >B</a
+          >
+          <a
+            class="act sell"
+            routerLink="/trade"
+            [queryParams]="{ symbol: row.symbol, side: 'SELL' }"
+            [attr.aria-label]="'Sell ' + row.label"
+            data-testid="watch-sell"
+            >S</a
+          >
+          <button
+            type="button"
+            class="act remove"
+            [attr.aria-label]="'Remove ' + row.label + ' from this watchlist'"
+            data-testid="watch-remove"
+            (click)="remove(row.symbol)"
+          >
+            ×
+          </button>
+        </span>
+      </li>
+    }
+  </ul>
+  <div class="tabs" role="tablist" aria-label="Your watchlists">
+    @for (watchlist of list.watchlists(); track watchlist.id; let i = $index) {
+      <button
+        type="button"
+        role="tab"
+        class="tab"
+        [attr.aria-selected]="watchlist.id === list.active()?.id"
+        [attr.aria-label]="watchlist.name"
+        [title]="watchlist.name"
+        data-testid="watch-tab"
+        (click)="list.select(watchlist.id)"
+      >
+        {{ i + 1 }}
+      </button>
+    }
+    @if (list.canCreate && list.watchlists().length > 0) {
+      <button type="button" class="tab add" aria-label="New watchlist" data-testid="watch-tab-add" (click)="list.create()">+</button>
+    }
+  </div>
+  <app-error-message [error]="list.error() ?? live.error()" />
+</section>

@@ -1,0 +1,8 @@
+psycopg2-binary
+duckdb>=0.10.0
+pandas
+python-dotenv
+
+[dev]
+pytest
+pytest-mock

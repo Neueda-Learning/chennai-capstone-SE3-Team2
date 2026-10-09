@@ -1,0 +1,185 @@
+.strategies {
+  max-width: 52rem;
+  margin-inline: auto;
+}
+
+h2 {
+  margin-top: 1.5rem;
+  font-size: 1.05rem;
+}
+
+.hint,
+.empty,
+.picked,
+.rule,
+.bounds,
+.figures,
+.indicator-hint {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.new {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0 1rem;
+  align-items: end;
+  margin-top: 0.5rem;
+}
+
+.new label {
+  margin-top: 0.75rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.field.stock {
+  grid-column: 1 / -1;
+}
+
+.submit {
+  display: flex;
+  align-items: flex-end;
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+.list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-soft);
+}
+
+.what {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.symbol {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.state {
+  font-size: 0.85rem;
+}
+
+.badge {
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge.armed {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.badge.fired {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.badge.stopped {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.badge.off {
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+button.small {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.85rem;
+}
+
+.runs {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--border);
+  padding-top: 0.5rem;
+}
+
+.runs ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+}
+
+.runs li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.at {
+  color: var(--muted);
+  font-family: var(--mono);
+}
+
+.outcome {
+  font-weight: 600;
+}
+
+.reason {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 40rem) {
+  .item {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}
+
+.field.trigger {
+  grid-column: span 2;
+}
+
+.indicator-hint {
+  margin: 0;
+  align-self: end;
+}
+
+@media (max-width: 40rem) {
+  .field.trigger {
+    grid-column: 1 / -1;
+  }
+}

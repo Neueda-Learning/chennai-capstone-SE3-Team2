@@ -1,0 +1,216 @@
+# =====================================================================
+# Trade REST API configuration.
+#
+# Every value that differs between a laptop and a container comes from
+# the environment, with a local default after the colon so that a fresh
+# clone runs without a .env file. JWT_SECRET is the exception and has no
+# default on purpose: a default signing secret is a signing secret that
+# ships to production, and the application refuses to start without one
+# rather than silently accepting forged tokens.
+# =====================================================================
+
+spring:
+  application:
+    name: trade-api
+
+  # The shared Config/application.yml: hosts and ports for every service.
+  # Found from the repository root, from this module's folder, or mounted
+  # at /config in a container. An environment variable always wins over it.
+  config:
+    import:
+      - optional:file:./Config/application.yml
+      - optional:file:../../Config/application.yml
+      - optional:file:/config/application.yml
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:${database.host}}:${DB_PORT:${database.port}}/${DB_NAME:${database.name}}
+    username: ${DB_USER:${database.user}}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      # Room for the concurrent-order demonstration without letting a
+      # slow query exhaust the pool unnoticed.
+      maximum-pool-size: ${DB_POOL_MAX:10}
+      connection-timeout: 5000
+      pool-name: trade-api-pool
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:${kafka.host}:${kafka.port}}
+    producer:
+      acks: all
+      retries: 3
+      max-in-flight-requests-per-connection: 5
+      request-timeout-ms: 30000
+
+  # Outgoing mail for account activation. Credentials have no default:
+  # without them the service refuses to start rather than failing every
+  # send later. Gmail needs an app password and STARTTLS on 587.
+  mail:
+    host: ${SMTP_HOST:smtp.gmail.com}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME}
+    password: ${SMTP_PASSWORD}
+    properties:
+      "[mail.smtp.auth]": true
+      "[mail.smtp.starttls.enable]": true
+      "[mail.smtp.starttls.required]": true
+      "[mail.smtp.connectiontimeout]": 5000
+      "[mail.smtp.timeout]": 5000
+      "[mail.smtp.writetimeout]": 5000
+
+  # Three scheduled jobs -- the KYC checks, the outbox relay and the payment
+  # gateway's decisions: a thread each, so a slow broker never delays a KYC
+  # decision or a deposit. Boot's default is 1.
+  task:
+    scheduling:
+      pool:
+        size: 3
+
+  # Fail on an unknown JSON property rather than ignoring it: the
+  # contract declares additionalProperties false, and a client sending a
+  # field we do not know about has misread it.
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+    default-property-inclusion: always
+
+server:
+  port: ${TRADE_API_PORT:${services.order.port}}
+  error:
+    # No whitelabel page, ever. Every failure leaves through the
+    # @ControllerAdvice as the error envelope; these switches make sure
+    # nothing escapes around it carrying internals.
+    whitelabel:
+      enabled: false
+    include-stacktrace: never
+    include-message: never
+    include-binding-errors: never
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  # PostgreSQL's uuid is not a JDBC-spec type, so its handler is declared
+  # rather than inferred -- registered in MyBatisTypeHandlerConfig rather than
+  # by package scan, which finds nothing inside a fat jar.
+  configuration:
+    # order_id -> orderId without a per-column alias in every statement.
+    map-underscore-to-camel-case: true
+    # Surfaces a mapper method that silently matched no statement.
+    default-executor-type: simple
+    jdbc-type-for-null: 'NULL'
+
+security:
+  # Browser origins allowed to call this API: the trading UI (Frontend/).
+  # Exact origins, comma-separated. See CorsConfig.
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:${frontend.url}:${frontend.port}}
+  jwt:
+    # No default. Resolution fails at startup if the environment does
+    # not supply it, which is the intended behaviour.
+    secret: ${JWT_SECRET}
+    # Tokens asking for any other algorithm are refused before a claim
+    # is read. Listing it here rather than trusting the token's own
+    # header is what stops an alg:none forgery.
+    algorithm: HS256
+    # auth-api.yaml: "Consumers must validate the configured issuer."
+    # Without this, any service sharing the signing secret could mint a
+    # trading credential.
+    issuer: ${JWT_ISSUER:auth-service}
+    # The route prefix the token filter guards. Sprint 10 adds routes
+    # under the same prefix and inherits the protection.
+    protected-path-prefix: /api/v1/
+
+# The activation mailer: consumes account-provisioning, asks auth for a
+# one-time token over HTTP, and emails the link. Not Sprint 10's
+# notification module, which reads trade-events.
+activation:
+  topic: account-provisioning
+  # Names this consumer and is shared with nothing else.
+  consumer-group: activation-mailer
+  auth-base-url: ${AUTH_INTERNAL_URL:${services.auth.url}:${services.auth.port}}
+  # No default: the same secret auth checks on its internal route.
+  internal-secret: ${ACTIVATION_INTERNAL_SECRET}
+  link-base-url: ${ACTIVATION_LINK_BASE_URL:${services.auth.url}:${services.auth.port}/activate}
+  mail-from: ${ACTIVATION_MAIL_FROM}
+  consumer:
+    auto-startup: ${ACTIVATION_CONSUMER_ENABLED:true}
+
+# KYC: a scheduled job decides each customer's verification, through a
+# stub provider, once it is kyc.delay old. A pass queues KYC_VERIFIED in
+# outbox_event, which the auth service reads (via kyc-events) to provision
+# the login.
+kyc:
+  # Contracts/API Schemas/kafka-topics.md.
+  topic: kyc-events
+  # A real provider is not instant; neither is this one, on purpose.
+  delay: ${KYC_DELAY:30s}
+  batch-size: ${KYC_BATCH_SIZE:50}
+  # Failed checks before a customer is set aside (left PENDING, no longer
+  # picked up) so a check that always fails cannot block the queue.
+  max-attempts: ${KYC_MAX_ATTEMPTS:5}
+  job:
+    enabled: ${KYC_JOB_ENABLED:true}
+    interval-ms: ${KYC_JOB_INTERVAL_MS:10000}
+
+# Deposits and withdrawals: recorded PENDING, then decided by the (stub)
+# payment gateway once they are payments.delay old, as a real gateway's
+# confirmation would arrive.
+payments:
+  delay: ${PAYMENT_DELAY:3s}
+  batch-size: 50
+  max-attempts: 5
+  job:
+    enabled: ${PAYMENT_JOB_ENABLED:true}
+    interval-ms: ${PAYMENT_JOB_INTERVAL_MS:2000}
+
+# Prices and charts for the screens: stocks from Fauxnance, funds from the MF
+# NAV service, both batched and kept a while (see marketdata/). An empty key
+# leaves those instruments unpriced; the service still starts.
+market-data:
+  fauxnance-base-url: ${FAUXNANCE_BASE_URL:https://y4t9nq2bqf.execute-api.eu-west-2.amazonaws.com/v1}
+  fauxnance-api-key: ${FAUXNANCE_API_KEY:}
+  mf-nav-base-url: ${MF_NAV_BASE_URL:https://mf-fauxnance-api.onrender.com}
+  mf-nav-api-key: ${MF_NAV_API_KEY:}
+  timeout: 10s
+  # The NAV service sleeps when idle; the day's first answer is slow.
+  nav-timeout: 20s
+  quote-ttl: 60s
+  # A NAV is struck once a day.
+  nav-ttl: 30m
+  # A daily candle does not move inside a day.
+  candle-ttl: 6h
+  # The key's 2000 a day are shared with the executor, which prices orders
+  # and runs the poller. This service takes at most this many.
+  fauxnance-daily-budget: ${MARKET_DATA_DAILY_BUDGET:400}
+
+# Publishes outbox_event rows (KYC_VERIFIED, today) to Kafka once their
+# transaction has committed. The same design as the auth service's relay.
+outbox:
+  relay:
+    enabled: ${OUTBOX_RELAY_ENABLED:true}
+    interval-ms: ${OUTBOX_POLL_MS:2000}
+    batch-size: 20
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # Health only. The orchestrator needs to know the service is
+        # ready; nothing else belongs on an unauthenticated port.
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+  health:
+    db:
+      enabled: true
+
+logging:
+  level:
+    root: INFO
+    com.yellow: ${LOG_LEVEL:INFO}
+  pattern:
+    # A request id would come from a filter in a larger system; for now
+    # the thread name is what correlates the lines of one request.
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"

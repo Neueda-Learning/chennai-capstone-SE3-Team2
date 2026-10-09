@@ -1,0 +1,284 @@
+# Local stack:  docker compose --profile platform up -d --build
+# Values that differ per machine come from .env, which is not committed.
+
+name: fauxnance
+
+services:
+
+  kafka:
+    image: apache/kafka:3.8.0
+    container_name: fauxnance-kafka
+    profiles: [platform]
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      # Kafka defaults assume >= 3 brokers for its internal topics; on one
+      # broker that silently blocks __consumer_offsets and every consumer
+      # group hangs on FIND_COORDINATOR.
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      # No join delay: pointless on a single-node stack.
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+      CLUSTER_ID: "fauxnance-sprint7-kraft"
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks: [trading-net]
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:29092"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+
+  # One-shot: creates every topic, then exits. The broker does not create
+  # topics on its own (KAFKA_AUTO_CREATE_TOPICS_ENABLE=false), and every
+  # service below waits for this to finish, so a first `up` just works.
+  kafka-init:
+    image: apache/kafka:3.8.0
+    container_name: fauxnance-kafka-init
+    profiles: [platform]
+    environment:
+      BROKER: kafka:29092
+      KAFKA_TOPICS_BIN: /opt/kafka/bin/kafka-topics.sh
+    volumes:
+      - ./Infrastructure/Kafka/create-topics.sh:/create-topics.sh:ro
+    entrypoint: ["bash", "/create-topics.sh"]
+    networks: [trading-net]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: "no"
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: fauxnance-postgres
+    profiles: [platform]
+    environment:
+      # One instance, two databases: trading (POSTGRES_DB) and auth, which
+      # init/00-roles.sh creates. The superuser runs the init scripts and
+      # nothing else -- no service connects as it.
+      POSTGRES_DB: ${DB_NAME:-trading_system_db}
+      POSTGRES_USER: ${POSTGRES_SUPERUSER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?POSTGRES_SUPERUSER_PASSWORD must be set in .env}
+      # Read by init/00-roles.sh to create one role per service.
+      TRADING_APP_USER: ${DB_USER:-trading_app}
+      TRADING_APP_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
+      ANALYTICS_RO_USER: ${ANALYTICS_DB_USER:-analytics_ro}
+      ANALYTICS_RO_PASSWORD: ${ANALYTICS_DB_PASSWORD:?ANALYTICS_DB_PASSWORD must be set in .env}
+      AUTH_APP_USER: ${AUTH_DB_USER:-auth_app}
+      AUTH_APP_PASSWORD: ${AUTH_DB_PASSWORD:?AUTH_DB_PASSWORD must be set in .env}
+      AUTH_DB_NAME: ${AUTH_DB_NAME:-auth}
+    ports:
+      - "${DB_PUBLISHED_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Applied in filename order, and ONLY when the volume is empty.
+      # Roles, the auth database and default privileges come first, so every
+      # table below is granted to the right role as it is created.
+      - ./Databases/PostgreSQL/init/00-roles.sh:/docker-entrypoint-initdb.d/00-roles.sh:ro
+      # The whole trading_system_db schema, then its reference and demo data:
+      # the same two files a deployment applies by hand (see README.md).
+      # Rebuilt from base/, migrations/, indexes/ and seed/ by
+      # scripts/build-db-scripts.sh.
+      - ./Databases/PostgreSQL/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./Databases/PostgreSQL/seed_data.sql:/docker-entrypoint-initdb.d/02-seed-data.sql:ro
+      # Auth's schema, applied to the auth database by 13-auth-schema.sh. The
+      # files are mounted OUTSIDE the init folder: the image runs every .sql
+      # in there against trading, where auth's tables do not belong.
+      - ./Databases/PostgreSQL/init/13-auth-schema.sh:/docker-entrypoint-initdb.d/13-auth-schema.sh:ro
+      - ./Services/auth-service/migrations:/auth-migrations:ro
+      - ./Databases/PostgreSQL/init/healthcheck.sh:/usr/local/bin/fauxnance-healthcheck.sh:ro
+    networks: [trading-net]
+    healthcheck:
+      # Healthy only once init has run to the end -- see the script. A server
+      # whose init failed would otherwise restart empty and report healthy.
+      test: ["CMD", "fauxnance-healthcheck.sh"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  trade-api:
+    build:
+      # Repository root: the service depends on the sibling domain module.
+      context: .
+      dockerfile: Services/order-service/Dockerfile
+    container_name: fauxnance-trade-api
+    profiles: [platform]
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-trading_system_db}
+      # trading_app: read/write on trading, no connection to auth, not superuser.
+      DB_USER: ${DB_USER:-trading_app}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
+      # No default: the service refuses to start rather than accept
+      # tokens anybody could mint.
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      JWT_ISSUER: ${JWT_ISSUER:-auth-service}
+      # Browser origins allowed to call this API: the trading UI
+      # (Frontend/). Exact origins, comma-separated.
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200}
+      # kafka:29092, not localhost: inside a container localhost is that
+      # container, and nothing would answer.
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      TRADE_API_PORT: 8081
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # The activation mailer. It asks auth for a token over the internal
+      # network; the secret is the same one auth checks. No defaults for
+      # secrets: missing means the service refuses to start.
+      AUTH_INTERNAL_URL: http://auth:3000
+      ACTIVATION_INTERNAL_SECRET: ${ACTIVATION_INTERNAL_SECRET:?ACTIVATION_INTERNAL_SECRET must be set in .env}
+      ACTIVATION_LINK_BASE_URL: ${ACTIVATION_LINK_BASE_URL:-http://localhost:3000/activate}
+      ACTIVATION_MAIL_FROM: ${ACTIVATION_MAIL_FROM:?ACTIVATION_MAIL_FROM must be set in .env}
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:?SMTP_USERNAME must be set in .env}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:?SMTP_PASSWORD must be set in .env}
+      # KYC: how long a check waits before it runs, how often the job looks,
+      # and failed checks before a customer is set aside. Shorten KYC_DELAY
+      # for a demo; the defaults match application.yml.
+      KYC_DELAY: ${KYC_DELAY:-30s}
+      KYC_JOB_INTERVAL_MS: ${KYC_JOB_INTERVAL_MS:-10000}
+      KYC_MAX_ATTEMPTS: ${KYC_MAX_ATTEMPTS:-5}
+      # How often the outbox relay publishes KYC_VERIFIED to kyc-events.
+      OUTBOX_POLL_MS: ${OUTBOX_POLL_MS:-2000}
+      # How long a deposit or withdrawal waits before the gateway decides it.
+      PAYMENT_DELAY: ${PAYMENT_DELAY:-3s}
+      # Prices and charts for the screens. Without a key, those instruments
+      # show unpriced; nothing else changes.
+      FAUXNANCE_API_KEY: ${FAUXNANCE_API_KEY:-}
+      FAUXNANCE_BASE_URL: ${FAUXNANCE_BASE_URL:-https://y4t9nq2bqf.execute-api.eu-west-2.amazonaws.com/v1}
+      MF_NAV_API_KEY: ${MF_NAV_API_KEY:-}
+      MF_NAV_BASE_URL: ${MF_NAV_BASE_URL:-https://mf-fauxnance-api.onrender.com}
+      MARKET_DATA_DAILY_BUDGET: ${MARKET_DATA_DAILY_BUDGET:-400}
+    ports:
+      - "${API_PUBLISHED_PORT:-8081}:8081"
+    volumes:
+      # The shared hosts-and-ports file; environment variables above win.
+      - ./Config/application.yml:/config/application.yml:ro
+    networks: [trading-net]
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      postgres:
+        # On health, not mere existence: starting early is a crash loop.
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Consumes accepted orders, prices them, settles them. Hosts the
+  # market-data poller. trade-api holds the same key for the screens, with
+  # a budget of its own (MARKET_DATA_DAILY_BUDGET).
+  executor:
+    build:
+      # Repository root: depends on the sibling domain module.
+      context: .
+      dockerfile: Services/executor-service/Dockerfile
+    container_name: fauxnance-executor
+    profiles: [platform]
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-trading_system_db}
+      DB_USER: ${DB_USER:-trading_app}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      # No default: no key, no start.
+      FAUXNANCE_API_KEY: ${FAUXNANCE_API_KEY:?FAUXNANCE_API_KEY must be set in .env}
+      FAUXNANCE_BASE_URL: ${FAUXNANCE_BASE_URL:-https://y4t9nq2bqf.execute-api.eu-west-2.amazonaws.com/v1}
+      # 60s = 1440 requests a day of 2000. The floor is enforced in code.
+      POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-60}
+      # Prices mutual fund orders. Optional: without a key, fund orders are
+      # rejected with no price and everything else trades.
+      MF_NAV_BASE_URL: ${MF_NAV_BASE_URL:-https://mf-fauxnance-api.onrender.com}
+      MF_NAV_API_KEY: ${MF_NAV_API_KEY:-}
+      EXECUTOR_PORT: 8082
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "${EXECUTOR_PUBLISHED_PORT:-8082}:8082"
+    volumes:
+      # The shared hosts-and-ports file; environment variables above win.
+      - ./Config/application.yml:/config/application.yml:ro
+    networks: [trading-net]
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      postgres:
+        # On the health condition. Starting before the database accepts
+        # connections is a crash loop, not a failure.
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Sprint 8. The only component that ever sees a password. Its data lives in
+  # its own database, auth, on the shared instance: auth_app can connect to it
+  # and nothing else, and no other service's role can connect to it at all.
+  auth:
+    build:
+      context: .
+      dockerfile: Services/auth-service/Dockerfile
+    container_name: fauxnance-auth
+    profiles: [platform]
+    environment:
+      # The same secret the Trade REST API verifies with. That is what makes
+      # adopting this service a configuration change rather than a code change.
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      JWT_ISSUER: ${JWT_ISSUER:-auth-service}
+      AUTH_DATABASE_URL: postgresql://${AUTH_DB_USER:-auth_app}:${AUTH_DB_PASSWORD:?AUTH_DB_PASSWORD must be set in .env}@postgres:5432/${AUTH_DB_NAME:-auth}
+      PORT: 3000
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # Consumes kyc-events, publishes account-provisioning via the outbox.
+      KAFKA_BROKERS: kafka:29092
+      # Guards POST /internal/activation-tokens. Same value the Trade REST API sends.
+      ACTIVATION_INTERNAL_SECRET: ${ACTIVATION_INTERNAL_SECRET:?ACTIVATION_INTERNAL_SECRET must be set in .env}
+      # Where /activate sends a customer after they register.
+      ACTIVATION_HOME_URL: ${ACTIVATION_HOME_URL:-http://localhost:4200/}
+      # Browser origins allowed to call this service: the trading UI
+      # (Frontend/). Exact origins, comma-separated.
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200}
+      # The login throttle's shared counter: the hosted Redis every instance
+      # counts in, so five failures means five in total rather than five
+      # each. No default: without it the throttle would quietly go back to
+      # per-instance. Never a localhost URL: inside a container localhost is
+      # that container.
+      REDIS_URL: ${REDIS_URL:?REDIS_URL must be set in .env}
+    ports:
+      # 3000 is reserved for this service in infra/README.md.
+      - "${AUTH_PUBLISHED_PORT:-3000}:3000"
+    volumes:
+      # The shared hosts-and-ports file; environment variables above win.
+      - ./Config/application.yml:/config/application.yml:ro
+    networks: [trading-net]
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      # Started first, but not waited on: logins must work with the broker
+      # down, and the outbox catches up when it returns.
+      kafka:
+        condition: service_started
+    restart: unless-stopped
+
+networks:
+  trading-net:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  kafka-data:

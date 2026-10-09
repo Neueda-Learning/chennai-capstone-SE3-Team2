@@ -1,0 +1,39 @@
+# =====================================================================
+# Shared configuration for every service: where each one is reached.
+#
+# Hosts and ports only. Secrets (passwords, API keys, the JWT secret) are
+# never here: they live in .env, which .env.example documents key by key.
+#
+# How each service reads this file:
+#   order-service, executor-service  Spring imports it (spring.config.import)
+#   auth-service                     reads it at start-up (src/config/shared-config.ts)
+#   Frontend                         environment.ts carries the same two URLs
+#
+# An environment variable of the same meaning always wins over this file,
+# so docker-compose.yml can point containers at each other by service name.
+# =====================================================================
+
+frontend:
+  url: http://localhost
+  port: 4200
+
+services:
+  auth:
+    url: http://localhost
+    port: 3000
+  order:
+    url: http://localhost
+    port: 8081
+  executor:
+    url: http://localhost
+    port: 8082
+
+database:
+  host: localhost
+  port: 5432
+  name: trading_system_db
+  user: postgres
+
+kafka:
+  host: localhost
+  port: 9092

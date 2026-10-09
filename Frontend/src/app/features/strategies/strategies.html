@@ -1,0 +1,165 @@
+<section class="card strategies" aria-labelledby="strategies-title">
+  <h1 id="strategies-title">Strategies</h1>
+  <p class="hint">
+    A strategy places an order for you when the price reaches a level, through the same checks as an order you place
+    yourself. It starts switched off. Once on, it fires once, a buy never spends more than you allow, and three failures
+    stop it.
+  </p>
+
+  <form class="new" [formGroup]="form" (ngSubmit)="create()" novalidate data-testid="strategy-form">
+    <div class="field stock">
+      <label for="strategy-symbol">Stock</label>
+      <app-instrument-search inputId="strategy-symbol" placeholder="Search eg: itc, tata steel" (picked)="pick($event)" />
+      @if (instrument(); as picked) {
+        @if (picked.type === 'MF') {
+          <p class="alert error" role="alert" data-testid="strategy-fund">
+            A fund has no live price for a strategy to watch. Pick a stock.
+          </p>
+        } @else {
+          <span class="picked" data-testid="strategy-picked">{{ picked.symbol }} · {{ picked.name }}</span>
+        }
+      }
+    </div>
+    <div class="field">
+      <label for="strategy-side">Side</label>
+      <select id="strategy-side" formControlName="side" data-testid="strategy-side">
+        <option value="BUY">Buy</option>
+        <option value="SELL">Sell</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="strategy-quantity">Quantity</label>
+      <input id="strategy-quantity" type="number" inputmode="numeric" min="1" step="1" formControlName="quantity" data-testid="strategy-quantity" />
+    </div>
+    <div class="field trigger">
+      <label for="strategy-trigger">When</label>
+      <select id="strategy-trigger" formControlName="trigger" data-testid="strategy-trigger">
+        <option value="FALLS_THROUGH">the price falls to</option>
+        <option value="RISES_THROUGH">the price rises to</option>
+        <option value="MA_CROSSOVER">the 20-day average crosses the 50-day</option>
+        <option value="BOLLINGER">the price reaches its Bollinger band</option>
+      </select>
+    </div>
+    @if (levelTrigger()) {
+      <div class="field">
+        <label for="strategy-price">Price (₹)</label>
+        <input id="strategy-price" type="number" inputmode="decimal" min="0.01" step="0.05" formControlName="triggerPrice" data-testid="strategy-price" />
+      </div>
+    } @else {
+      <p class="field indicator-hint" data-testid="strategy-indicator-hint">
+        {{ form.controls.side.value === 'BUY' ? 'A buy fires when the 20-day crosses above the 50-day, or at the lower band.' : 'A sell fires when the 20-day crosses below the 50-day, or at the upper band.' }}
+        Daily prices, with today's live price as today's close.
+      </p>
+    }
+    <div class="field">
+      <label for="strategy-max-spend">Max spend (₹)</label>
+      <input id="strategy-max-spend" type="number" inputmode="decimal" min="1" step="1" formControlName="maxSpend" data-testid="strategy-max-spend" />
+    </div>
+    <div class="field">
+      <label for="strategy-max-position">Max holding</label>
+      <input id="strategy-max-position" type="number" inputmode="numeric" min="1" step="1" formControlName="maxPosition" data-testid="strategy-max-position" />
+    </div>
+    <div class="submit">
+      <button type="submit" class="primary" data-testid="strategy-submit" [disabled]="creating()">{{ creating() ? 'Creating…' : 'Create' }}</button>
+    </div>
+  </form>
+  @if (problems(); as problems) {
+    <p class="alert error" role="alert" data-testid="strategy-invalid">{{ problems }}</p>
+  }
+  @if (created()) {
+    <p class="alert success" role="status" data-testid="strategy-created">Created, switched off. Switch it on below to arm it.</p>
+  }
+  <app-error-message [error]="createError()" [overrides]="overrides" />
+
+  <h2>Your strategies</h2>
+  <app-error-message [error]="error()" [overrides]="overrides" />
+  @if (strategies(); as strategies) {
+    @if (strategies.length === 0) {
+      <p class="empty" data-testid="strategies-empty">No strategies yet. Set one above: a stock, a level, and what to do there.</p>
+    } @else {
+      <ul class="list" data-testid="strategies-list">
+        @for (strategy of strategies; track strategy.id) {
+          <li class="item" data-testid="strategy" [attr.data-status]="strategy.status" [attr.data-enabled]="strategy.enabled"
+              [attr.data-symbol]="strategy.symbol">
+            <div class="what">
+              <a class="symbol" [routerLink]="['/instrument', strategy.symbol]">{{ strategy.symbol }}</a>
+              <span class="rule" data-testid="strategy-rule"
+                >{{ rule(strategy) }}@if (isLevel(strategy)) {&ngsp;{{ strategy.triggerPrice | currency: 'INR' : 'symbol' : '1.2-2' }}}</span
+              >
+              @if (!isLevel(strategy)) {
+                <span class="figures" data-testid="strategy-indicator">{{ watching(strategy) }}</span>
+              }
+              @if (strategy.side === 'BUY') {
+                <span class="bounds" data-testid="strategy-bounds"
+                  >At most {{ strategy.maxSpend | currency: 'INR' : 'symbol' : '1.2-2' }} a firing, and {{ strategy.maxPosition }} held</span
+                >
+              }
+            </div>
+            <div class="state">
+              @if (!strategy.enabled) {
+                <span class="badge off" data-testid="strategy-status">Off</span>
+              } @else {
+                @switch (strategy.status) {
+                  @case ('ARMED') {
+                    <span class="badge armed" data-testid="strategy-status">Armed</span>
+                  }
+                  @case ('FIRED') {
+                    <span class="badge fired" data-testid="strategy-status"
+                      >Fired {{ strategy.lastFiredAt | date: 'd MMM, HH:mm' : '+0530' }}</span
+                    >
+                  }
+                  @case ('STOPPED') {
+                    <span class="badge stopped" data-testid="strategy-status"
+                      >{{ strategy.failures >= 3 ? 'Stopped after three failures' : 'Stopped' }}</span
+                    >
+                  }
+                }
+              }
+            </div>
+            <div class="actions">
+              <button type="button" class="secondary small" data-testid="strategy-toggle" [disabled]="busy() !== null" (click)="toggle(strategy)">
+                {{ action(strategy).label }}
+              </button>
+              <button type="button" class="secondary small" data-testid="strategy-runs" [attr.aria-expanded]="openRuns() === strategy.id"
+                      (click)="showRuns(strategy)">
+                Runs
+              </button>
+              <button type="button" class="secondary small" data-testid="strategy-delete" [disabled]="busy() !== null" (click)="remove(strategy)">
+                Delete
+              </button>
+            </div>
+            @if (openRuns() === strategy.id) {
+              <div class="runs" data-testid="strategy-run-list">
+                @if (runs(); as runs) {
+                  @if (runs.length === 0) {
+                    <p class="empty" data-testid="runs-empty">Nothing yet: it has not reached its level.</p>
+                  } @else {
+                    <ol>
+                      @for (run of runs; track run.id) {
+                        <li data-testid="run" [attr.data-outcome]="run.outcome">
+                          <!-- &ngsp; keeps a space between the parts, for a screen reader and a copy. -->
+                          <span class="at">{{ run.at | date: 'd MMM, HH:mm:ss' : '+0530' }}</span>&ngsp;
+                          <span class="outcome">{{ outcome(run) }}</span>
+                          @if (run.quotePrice !== null && run.quotePrice !== undefined) {
+                            &ngsp;<span class="price">at {{ run.quotePrice | currency: 'INR' : 'symbol' : '1.2-2' }}</span>
+                          }
+                          @if (run.reason) {
+                            &ngsp;<span class="reason">{{ run.reason }}</span>
+                          }
+                        </li>
+                      }
+                    </ol>
+                  }
+                } @else {
+                  <p class="empty">Reading its runs…</p>
+                }
+              </div>
+            }
+          </li>
+        }
+      </ul>
+    }
+  } @else if (!error()) {
+    <p>Loading your strategies…</p>
+  }
+</section>

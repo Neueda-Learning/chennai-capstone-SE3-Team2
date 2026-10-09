@@ -1,0 +1,94 @@
+.heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.status-line {
+  min-height: 1.5em;
+  color: var(--warning);
+  margin: 0.25rem 0 0.75rem;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.table-wrap table {
+  min-width: 50rem;
+}
+
+
+.muted {
+  color: var(--muted);
+}
+
+
+.empty {
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+
+.cancel {
+  padding: 0.2rem 0.7rem;
+  font-size: 0.85rem;
+}
+
+/* The date on one line; long fund names wrap instead of stretching the table. */
+td:first-child {
+  white-space: nowrap;
+}
+
+.instrument {
+  max-width: 18rem;
+}
+
+td.action {
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .heading {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+.part {
+  margin: 1.5rem 0 0.6rem;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.instrument a {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.instrument a:hover {
+  text-decoration: underline;
+}
+
+.side {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.side.sell {
+  color: var(--danger);
+}
+
+/* Refresh sits at the right, whether or not the title beside it is shown. */
+.heading button {
+  margin-left: auto;
+}

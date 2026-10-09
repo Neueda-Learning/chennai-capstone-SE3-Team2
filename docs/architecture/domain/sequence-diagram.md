@@ -1,0 +1,198 @@
+```mermaid
+---
+title: Place Order — Eight Rules and Every Refusal Path
+---
+sequenceDiagram
+    autonumber
+    actor Caller as Caller
+    participant Svc as OrderService
+    participant AccRepo as AccountRepository
+    participant Acc as Account
+    participant InsRepo as InstrumentRepository
+    participant Ins as Instrument
+    participant PosRepo as PositionRepository
+    participant Pos as Position
+    participant OrdRepo as OrderRepository
+
+    Note over Caller,OrdRepo: Rules run in a fixed order and the FIRST FAILURE WINS.<br/>A suspended account holding no cash gets ACC-403, not ORD-400,<br/>because rule 2 is evaluated before rule 6.
+
+    Caller->>Svc: placeOrder(PlaceOrderRequest)
+    Note right of Caller: Sprint 6 the caller is a Spring controller.<br/>Sprint 7 it is the Trade Executor, in another<br/>process, replaying an order with no validator<br/>in between. Rules 4 and 5 exist for that caller.
+
+    %% ---------------------------------------------------------------
+    rect rgb(245, 235, 235)
+    Note over Svc,AccRepo: RULE 1 — the account must exist
+    Svc->>AccRepo: findById(accountId)
+    AccRepo-->>Svc: Optional<Account>
+    alt no account with that key
+        Svc-->>Caller: throw AccountNotFoundException (ACC-404)
+        Note right of Svc: EXIT. Nothing read, nothing written.<br/>requestedAccountId on a typed field,<br/>logged server-side.
+    end
+    end
+
+    %% ---------------------------------------------------------------
+    rect rgb(245, 235, 235)
+    Note over Svc,Acc: RULE 2 — the account must be ACTIVE
+    Svc->>Acc: isActive()
+    Acc-->>Svc: false (SUSPENDED or CLOSED)
+    alt not ACTIVE
+        Svc-->>Caller: throw AccountNotActiveException (ACC-403)
+        Note right of Svc: EXIT before any cash is looked at.<br/>SUSPENDED is reversible, CLOSED never trades<br/>again — one code, the actual status on a<br/>typed field.
+    end
+    end
+
+    %% ---------------------------------------------------------------
+    rect rgb(245, 235, 235)
+    Note over Svc,Ins: RULE 3 — the instrument must exist and be tradable
+    Svc->>InsRepo: findBySymbol(symbol)
+    InsRepo-->>Svc: Optional<Instrument>
+    alt symbol unknown
+        Svc-->>Caller: throw InstrumentNotFoundException (INS-404, reason=UNKNOWN)
+        Note right of Svc: EXIT.
+    end
+    Svc->>Ins: isTradable()
+    Ins-->>Svc: false
+    alt known but delisted
+        Svc-->>Caller: throw InstrumentNotFoundException (INS-404, reason=NOT_TRADABLE)
+        Note right of Svc: EXIT. One code for both, so a client cannot<br/>probe which symbols exist. Delisting is a flag,<br/>never a deleted row: the order history<br/>references the symbol and that history is the<br/>audit trail.
+    end
+    end
+
+    %% ---------------------------------------------------------------
+    rect rgb(240, 240, 225)
+    Note over Svc: RULE 4 — quantity must be greater than zero
+    alt quantity null, zero or negative
+        Svc-->>Caller: throw InvalidOrderException (VAL-422, field=quantity)
+        Note right of Svc: EXIT. Checked here AND on the DTO, on purpose.<br/>VAL-422 is a documented outcome that the list<br/>of six has no member for.
+    end
+    end
+
+    %% ---------------------------------------------------------------
+    rect rgb(240, 240, 225)
+    Note over Svc: RULE 5 — price must be greater than zero
+    alt price null, zero or negative
+        Svc-->>Caller: throw InvalidOrderException (VAL-422, field=price)
+        Note right of Svc: EXIT. This is the limit price the customer<br/>submitted. The executed price is what the Trade<br/>Executor achieves in Sprint 7 and does not<br/>exist until the order is filled.
+    end
+    end
+
+    %% ---------------------------------------------------------------
+    rect rgb(245, 235, 235)
+    Note over Svc,Acc: RULE 6 — on a BUY, balance >= quantity * price
+    alt side == BUY
+        Svc->>Acc: canAfford(quantity * price)
+        Acc-->>Svc: false
+        alt cannot afford
+            Svc-->>Caller: throw InsufficientFundsException (ORD-400)
+            Note right of Svc: EXIT. The comparison lives on Account —<br/>the service asks, it does not read the balance<br/>and compare. required and available go on<br/>typed fields, not into the message.
+        end
+    end
+    end
+
+    %% ---------------------------------------------------------------
+    rect rgb(245, 235, 235)
+    Note over Svc,Pos: RULE 7 — on a SELL, held quantity >= order quantity
+    alt side == SELL
+        Svc->>PosRepo: find(accountId, instrumentId)
+        PosRepo-->>Svc: Optional<Position>
+        Svc->>Pos: canSell(quantity)
+        Pos-->>Svc: false
+        alt no position, or not enough held
+            Svc-->>Caller: throw InsufficientHoldingsException (ORD-409)
+            Note right of Svc: EXIT. A missing position and a too-small<br/>position are the same refusal. Short selling<br/>is out of scope, so a position never goes<br/>negative.
+        end
+    end
+    end
+
+    %% ---------------------------------------------------------------
+    rect rgb(245, 235, 235)
+    Note over Svc,OrdRepo: RULE 8 — the idempotency key must be unused
+    Svc->>OrdRepo: existsByAccountAndKey(accountId, idempotencyKey)
+    OrdRepo-->>Svc: true
+    alt key already accepted for this account
+        Svc-->>Caller: throw DuplicateOrderException (ORD-409)
+        Note right of Svc: EXIT. Same code as rule 7, deliberately.<br/>Last of the eight, so a duplicate that also<br/>breaks an earlier rule reports the earlier one.
+    end
+    end
+
+    Note over Svc,OrdRepo: THE SEAM. This port is the authority here and an in-memory<br/>fake serves the tests. In Sprint 6 the authority is the unique<br/>constraint on orders.idempotency_key from Sprint 3, because two<br/>concurrent requests both pass a read-then-write check and<br/>losing that race duplicates a trade.
+
+    %% ---------------------------------------------------------------
+    rect rgb(230, 242, 232)
+    Note over Svc,OrdRepo: All eight pass — the accepted path
+    create participant Ord as Order
+    Svc->>Ord: new Order(status = NEW)
+    Note right of Ord: Created only here. On all nine refusal paths<br/>above, no Order ever exists.
+    Svc->>OrdRepo: save(order)
+    OrdRepo-->>Svc: Order (orderId assigned)
+    Svc-->>Caller: Order (status = NEW)
+    end
+
+    Note over Svc,OrdRepo: RULES 9 and 10 carry no code and are not countable this sprint,<br/>but room is left for them: cash and position move together or<br/>neither moves, and every order is recorded including a rejected<br/>one. Nothing has been debited here — the order is returned NEW.
+```
+
+## What Sprint 6 wraps around this
+
+The diagram above is the domain, unchanged. Sprint 6 added a transport
+around it and nothing inside it, which is the point: Sprint 7's Trade
+Executor calls the same `placeOrder` with no HTTP request in sight and
+gets the same eight answers.
+
+What the Trade REST API adds, in order, around one call to the flow above:
+
+```mermaid
+---
+title: Sprint 6 — the transport around the rules
+---
+sequenceDiagram
+    autonumber
+    actor Client
+    participant F as JwtAuthenticationFilter
+    participant C as OrderController
+    participant S as trade.OrderService
+    participant D as domain.OrderService
+    participant M as AccountMapper
+    participant DB as PostgreSQL
+
+    Client->>F: POST /api/v1/orders  (Bearer token)
+    Note right of F: Signature, then expiry, then algorithm —<br/>before any claim is read. All four failures<br/>answer AUTH-401 with one identical body.
+    alt token missing, malformed, expired or forged
+        F-->>Client: 401 {errorCode AUTH-401}
+    end
+
+    F->>C: request, with the verified accountId attached
+    C->>S: placeOrder(PlaceOrderRequest)
+
+    rect rgb(232, 240, 248)
+    Note over S,DB: ONE TRANSACTION — the order row and the cash it commits
+    S->>M: findById(accountId)
+    M-->>S: AccountRow (carrying the version it was read at)
+    alt no such account
+        S-->>Client: 404 {ACC-404}
+    else token does not reach this account
+        S-->>Client: 403 {ACC-403}
+    end
+
+    S->>D: placeOrder(request)
+    Note right of D: Rules 1 to 8, exactly as drawn above.<br/>A refusal throws and the transaction rolls back:<br/>no order row, no cash moved.
+    D-->>S: Order (status NEW)
+
+    S->>M: blockFunds(accountId, notional, versionRead)
+    Note right of M: UPDATE ... SET blocked_funds = blocked_funds + ?,<br/>version = version + 1 WHERE client_id = ? AND version = ?<br/>The version is part of the write, not a check before it.
+    M-->>S: affected row count
+    alt zero rows affected
+        Note right of S: Somebody else wrote first. Zero is not success.
+        S-->>Client: 409 {ORD-409}
+    end
+    end
+
+    S-->>C: OrderResponse
+    C-->>Client: 201 Created, Location: /api/v1/orders/{uuid}
+```
+
+Two things this drawing is meant to settle at the review. The transaction
+encloses the order row and the cash and nothing else — not the token
+check above it, not the response built below it. And the version column
+is named *inside* the write rather than read and compared beforehand,
+which is what makes the database, rather than the application, the thing
+that serialises two customers spending the same money at the same moment.

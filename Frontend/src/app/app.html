@@ -1,0 +1,41 @@
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="app-header">
+  <a class="brand" [routerLink]="session.accessToken() ? '/dashboard' : '/landing'">YELLOW<span class="brand-rest"> // TRADE</span></a>
+  @if (session.accessToken()) {
+    <nav aria-label="Main">
+      <a routerLink="/market-watch" routerLinkActive="active" class="watch-link" data-testid="nav-market-watch">Watchlist</a>
+      <a routerLink="/dashboard" routerLinkActive="active" data-testid="nav-dashboard">Dashboard</a>
+      <a routerLink="/orders" routerLinkActive="active" data-testid="nav-orders">Orders</a>
+      <a routerLink="/holdings" routerLinkActive="active" data-testid="nav-holdings">Holdings</a>
+      <a routerLink="/funds" routerLinkActive="active" data-testid="nav-funds">Funds</a>
+      <a routerLink="/alerts" routerLinkActive="active" data-testid="nav-alerts">Alerts</a>
+      <a routerLink="/strategies" routerLinkActive="active" data-testid="nav-strategies">Strategies</a>
+      <a routerLink="/signals" routerLinkActive="active" data-testid="nav-signals">Signals</a>
+    </nav>
+    <span class="account" data-testid="header-account">
+      @if (current.account(); as account) {
+        <span class="holder">{{ account.holderName }}</span>
+        <span class="ref">{{ account.accountId }}</span>
+      }
+    </span>
+    <app-notification-bell class="bell-slot" />
+    <a class="settings-link" routerLink="/settings" routerLinkActive="active" data-testid="nav-settings">Settings</a>
+    <button type="button" class="secondary sign-out" data-testid="sign-out" (click)="signOut()">Sign out</button>
+  } @else {
+    <nav aria-label="Public">
+      <a routerLink="/landing" routerLinkActive="active">Home</a>
+      <a routerLink="/sign-in" routerLinkActive="active">Sign in</a>
+      <a routerLink="/apply" routerLinkActive="active" class="button primary">Get started</a>
+    </nav>
+  }
+</header>
+<div class="workspace" [class.with-watch]="session.accessToken()">
+  @if (session.accessToken()) {
+    <aside class="watch-panel" aria-label="Watchlist">
+      <app-market-watch />
+    </aside>
+  }
+  <main id="main" class="app-main">
+    <router-outlet />
+  </main>
+</div>

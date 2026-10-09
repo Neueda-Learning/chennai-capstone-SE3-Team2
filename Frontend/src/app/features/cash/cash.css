@@ -1,0 +1,118 @@
+/* The balance and the way to move money, side by side; stacked on a phone. */
+.top {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.summary {
+  display: grid;
+  align-content: start;
+  gap: 1.25rem;
+}
+
+.label {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.figure {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin: 0.25rem 0;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.move {
+  margin: 0;
+}
+
+.move h2 {
+  margin-top: 0;
+}
+
+.actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.transfers {
+  margin-top: 1.75rem;
+}
+
+.heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.heading h2 {
+  margin: 0;
+}
+
+.status-line {
+  color: var(--warning);
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.badge {
+  display: inline-flex;
+  gap: 0.3rem;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.pending {
+  color: var(--warning);
+  background: var(--warning-bg);
+}
+
+.success {
+  color: var(--success);
+  background: var(--success-bg);
+}
+
+.failed {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.reason {
+  display: block;
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+}
+
+.empty {
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+
+@media (max-width: 760px) {
+  .top {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -1,0 +1,130 @@
+import { Test } from '@nestjs/testing';
+import { JwtService } from '@nestjs/jwt';
+import { AuthService } from './auth.service';
+import { CredentialRepository } from '../credentials/credential.repository';
+import { PasswordHasher } from '../credentials/password-hasher';
+import { Env } from '../config/env';
+import { AccessTokenService } from '../tokens/access-token.service';
+import { RefreshTokenService } from '../tokens/refresh-token.service';
+import { LoginFailure } from './login-failure';
+
+describe('AuthService', () => {
+  const SECRET = 'a-test-secret-of-at-least-32-bytes-length';
+  let service: AuthService;
+  const TOKEN = 'ab'.repeat(32);
+  let credentials: { findByUsername: jest.Mock; findById: jest.Mock; registerWithActivationToken: jest.Mock };
+  let refreshTokens: { issue: jest.Mock; rotate: jest.Mock };
+
+  const stored = async () => ({
+    id: '8f14e45f-ceea-4c1b-9d3b-1a2b3c4d5e6f',
+    username: 'priya.menon',
+    passwordHash: await new PasswordHasher().hash('correct horse battery staple'),
+    accountId: 3,
+    roles: ['CUSTOMER'],
+  });
+
+  beforeEach(async () => {
+    credentials = { findByUsername: jest.fn(), findById: jest.fn(), registerWithActivationToken: jest.fn() };
+    refreshTokens = { issue: jest.fn().mockResolvedValue('a'.repeat(64)), rotate: jest.fn() };
+    const env = { jwtSecret: SECRET, jwtIssuer: 'auth-service' } as Env;
+
+    const module = await Test.createTestingModule({
+      providers: [
+        AuthService,
+        { provide: CredentialRepository, useValue: credentials },
+        PasswordHasher,
+        JwtService,
+        AccessTokenService,
+        { provide: RefreshTokenService, useValue: refreshTokens },
+        LoginFailure,
+        { provide: Env, useValue: env },
+      ],
+    }).compile();
+
+    await module.init();
+    service = module.get(AuthService);
+  });
+
+  describe('register', () => {
+    const request = (username = 'priya.menon') => ({
+      username,
+      password: 'correct horse battery staple',
+      activationToken: TOKEN,
+    });
+
+    it('creates no trading account and issues no tokens', async () => {
+      credentials.registerWithActivationToken.mockResolvedValue({ kind: 'registered', credential: await stored() });
+
+      const result = await service.register(request());
+
+      expect(result).toEqual({
+        id: expect.any(String),
+        username: 'priya.menon',
+        accountId: 3,
+        roles: ['CUSTOMER'],
+      });
+      expect(result).not.toHaveProperty('accessToken');
+      expect(result).not.toHaveProperty('refreshToken');
+    });
+
+    it('hands the store the token hash and an argon2 hash, never either plaintext', async () => {
+      credentials.registerWithActivationToken.mockResolvedValue({ kind: 'registered', credential: await stored() });
+
+      await service.register(request());
+
+      const [, passwordHash, tokenHash] = credentials.registerWithActivationToken.mock.calls[0];
+      expect(passwordHash).toMatch(/^\$argon2id\$/);
+      expect(tokenHash).toMatch(/^[0-9a-f]{64}$/);
+      expect(tokenHash).not.toBe(TOKEN);
+    });
+
+    it('refuses a username that is already registered with AUTH-409', async () => {
+      credentials.registerWithActivationToken.mockResolvedValue({ kind: 'username-taken' });
+
+      await expect(service.register(request())).rejects.toMatchObject({ response: { errorCode: 'AUTH-409' } });
+    });
+
+    it('refuses a token the store would not accept with AUTH-401', async () => {
+      credentials.registerWithActivationToken.mockResolvedValue({ kind: 'invalid-token' });
+
+      await expect(service.register(request('new.user')))
+        .rejects.toMatchObject({ response: { errorCode: 'AUTH-401', message: 'Unauthorised' } });
+    });
+  });
+
+  describe('login', () => {
+    it('returns a token pair for the right password', async () => {
+      credentials.findByUsername.mockResolvedValue(await stored());
+
+      const tokens = await service.login({ username: 'priya.menon', password: 'correct horse battery staple' });
+
+      expect(tokens.tokenType).toBe('Bearer');
+      expect(tokens.expiresIn).toBe(900);
+      expect(tokens.accessToken).toMatch(/^eyJ/);
+      expect(tokens.refreshToken).toHaveLength(64);
+    });
+
+    it('carries the account from the stored credential, not from the request', async () => {
+      credentials.findByUsername.mockResolvedValue(await stored());
+
+      const { accessToken } = await service.login({ username: 'priya.menon', password: 'correct horse battery staple' });
+      const claims = new JwtService().decode(accessToken) as Record<string, unknown>;
+
+      expect(claims.accountId).toBe(3);
+    });
+
+    it('refuses a wrong password with AUTH-401', async () => {
+      credentials.findByUsername.mockResolvedValue(await stored());
+
+      await expect(service.login({ username: 'priya.menon', password: 'not the password' }))
+        .rejects.toMatchObject({ response: { errorCode: 'AUTH-401', message: 'Unauthorised' } });
+    });
+
+    it('refuses an unknown user with the identical body', async () => {
+      credentials.findByUsername.mockResolvedValue(null);
+
+      await expect(service.login({ username: 'nobody', password: 'correct horse battery staple' }))
+        .rejects.toMatchObject({ response: { errorCode: 'AUTH-401', message: 'Unauthorised' } });
+    });
+  });
+});

@@ -1,0 +1,11 @@
+# The build context is the repository root now, so keep out everything
+# the image build has no use for. Without this, every target/ directory
+# and the whole .git history are uploaded to the daemon on each build.
+**/target/
+.git/
+.idea/
+*.iml
+.env
+.context/
+sprint-04-analytics-etl/
+**/*.png

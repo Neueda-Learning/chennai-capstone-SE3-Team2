@@ -1,0 +1,95 @@
+.signals {
+  max-width: 52rem;
+  margin-inline: auto;
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.hint,
+.empty,
+.from,
+.strength {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.disclaimer {
+  font-size: 0.85rem;
+  color: var(--warning);
+}
+
+.list {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.25rem 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: var(--radius);
+  background: var(--bg-soft);
+}
+
+.item[data-direction='BUY'] {
+  border-left-color: var(--success);
+}
+
+.item[data-direction='SELL'] {
+  border-left-color: var(--danger);
+}
+
+.what {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.symbol {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.verdict {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.15rem;
+}
+
+.direction {
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.direction[data-direction='BUY'] {
+  color: var(--success);
+}
+
+.direction[data-direction='SELL'] {
+  color: var(--danger);
+}
+
+.direction[data-direction='NONE'] {
+  font-weight: 600;
+}
+
+.reason {
+  grid-column: 1 / -1;
+  margin: 0.2rem 0 0;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}

@@ -1,0 +1,146 @@
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { Component } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
+import { Router, Routes, provideRouter } from '@angular/router';
+import { RouterTestingHarness } from '@angular/router/testing';
+import { testToken } from '../../../testing/tokens';
+import { routes as appRoutes } from '../../app.routes';
+import { provideClients } from '../api/provide-clients';
+import { Session } from '../session/session';
+import { authGuard } from './auth.guard';
+
+@Component({ template: '<p>guarded page</p>' })
+class GuardedPage {}
+
+@Component({ template: '<p>sign-in page</p>' })
+class SignInPage {}
+
+const routes: Routes = [
+  { path: 'sign-in', component: SignInPage },
+  { path: '', canActivateChild: [authGuard], children: [{ path: 'orders', component: GuardedPage }] },
+];
+
+describe('authGuard', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter(routes),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideClients({ tradeApiUrl: 'http://trade.test', authApiUrl: 'http://auth.test' }),
+      ],
+    });
+  });
+
+  afterEach(() => TestBed.inject(HttpTestingController).verify());
+
+  it('blocks unauthenticated navigation and redirects to sign-in, carrying the return address', async () => {
+    const harness = await RouterTestingHarness.create();
+
+    await harness.navigateByUrl('/orders?status=NEW');
+
+    expect(TestBed.inject(Router).url).toBe('/sign-in?returnUrl=%2Forders%3Fstatus%3DNEW');
+    expect(harness.routeNativeElement?.textContent).toContain('sign-in page');
+  });
+
+  it('allows authenticated navigation', async () => {
+    TestBed.inject(Session).start(testToken());
+    const harness = await RouterTestingHarness.create();
+
+    await harness.navigateByUrl('/orders');
+
+    expect(TestBed.inject(Router).url).toBe('/orders');
+    expect(harness.routeNativeElement?.textContent).toContain('guarded page');
+  });
+
+  it('renews an access token that ran out, if the refresh token still works, and lets the navigation through', async () => {
+    TestBed.inject(Session).start(testToken({ exp: Math.floor(Date.now() / 1000) - 1 }), 'refresh-1');
+    const harness = await RouterTestingHarness.create();
+
+    const navigation = harness.navigateByUrl('/orders');
+    await new Promise((resolve) => setTimeout(resolve));
+    const exchange = TestBed.inject(HttpTestingController).expectOne('http://auth.test/auth/refresh');
+    expect(exchange.request.body).toEqual({ refreshToken: 'refresh-1' });
+    exchange.flush({ accessToken: testToken(), refreshToken: 'refresh-2', tokenType: 'Bearer', expiresIn: 900 });
+    await navigation;
+
+    expect(TestBed.inject(Router).url).toBe('/orders');
+  });
+
+  it('sends to sign-in when the access token ran out and the refresh token is refused', async () => {
+    TestBed.inject(Session).start(testToken({ exp: Math.floor(Date.now() / 1000) - 1 }), 'refresh-1');
+    const harness = await RouterTestingHarness.create();
+
+    const navigation = harness.navigateByUrl('/orders');
+    await new Promise((resolve) => setTimeout(resolve));
+    TestBed.inject(HttpTestingController)
+      .expectOne('http://auth.test/auth/refresh')
+      .flush({ errorCode: 'AUTH-401', message: 'Unauthorised' }, { status: 401, statusText: 'Unauthorized' });
+    await navigation;
+
+    expect(TestBed.inject(Router).url).toBe('/sign-in?returnUrl=%2Forders');
+    expect(TestBed.inject(Session).refreshToken()).toBeNull();
+  });
+
+  it('treats an expired session as signed out', async () => {
+    TestBed.inject(Session).start(testToken({ exp: Math.floor(Date.now() / 1000) - 1 }));
+    const harness = await RouterTestingHarness.create();
+
+    await harness.navigateByUrl('/orders');
+
+    expect(TestBed.inject(Router).url).toBe('/sign-in?returnUrl=%2Forders');
+  });
+});
+
+describe('the application routes', () => {
+  it('run the guard on every route but the three public ones; a redirect renders nothing itself', () => {
+    const open = ['landing', 'sign-in', 'apply'];
+    for (const route of appRoutes) {
+      if (route.redirectTo !== undefined) {
+        continue;
+      }
+      if (open.includes(route.path ?? '')) {
+        expect(route.canActivate ?? route.canActivateChild, `${route.path} is open`).toBeUndefined();
+        continue;
+      }
+      // `?? []`: toContain on undefined passes silently, which is how an
+      // unguarded route once slipped through this test.
+      expect(route.canActivateChild ?? [], `route "${route.path}"`).toContain(authGuard);
+    }
+  });
+
+  it('guard every screen behind sign-in', () => {
+    const guarded = appRoutes.find((route) => route.canActivateChild?.includes(authGuard));
+    const screens = (guarded?.children ?? []).filter((child) => child.loadComponent).map((child) => child.path);
+    expect(screens).toEqual(['dashboard', 'orders', 'holdings', 'funds', 'trade', 'instrument/:symbol', 'alerts', 'notifications', 'settings', 'strategies', 'signals', 'market-watch']);
+  });
+
+  it('keeps the old addresses working: the two dashboards and Cash', () => {
+    const guarded = appRoutes.find((route) => route.canActivateChild?.includes(authGuard));
+    const redirects = Object.fromEntries(
+      (guarded?.children ?? []).filter((child) => typeof child.redirectTo === 'string').map((child) => [child.path, child.redirectTo]),
+    );
+    expect(redirects).toMatchObject({ '': 'dashboard', stocks: 'dashboard', 'mutual-funds': 'dashboard', cash: 'funds', '**': 'dashboard' });
+  });
+
+  describe('the home address', () => {
+    const home = () => appRoutes.find((route) => route.path === '' && route.pathMatch === 'full')!;
+    const target = () =>
+      TestBed.runInInjectionContext(() => (home().redirectTo as () => string)());
+
+    it('sends a signed-in customer to their dashboard, not the public page', () => {
+      TestBed.configureTestingModule({});
+      sessionStorage.clear();
+      TestBed.inject(Session).start(testToken());
+      expect(target()).toBe('/dashboard');
+    });
+
+    it('sends a visitor to the landing page', () => {
+      TestBed.configureTestingModule({});
+      sessionStorage.clear();
+      expect(target()).toBe('/landing');
+    });
+  });
+});

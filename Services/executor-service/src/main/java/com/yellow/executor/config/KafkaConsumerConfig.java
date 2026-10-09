@@ -1,0 +1,102 @@
+package com.yellow.executor.config;
+
+import com.fasterxml.jackson.databind.JavaType;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yellow.executor.events.EventEnvelope;
+import com.yellow.executor.events.OrderPlacedPayload;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.kafka.annotation.EnableKafka;
+import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
+import org.springframework.kafka.core.ConsumerFactory;
+import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
+import org.springframework.kafka.listener.CommonErrorHandler;
+import org.springframework.kafka.listener.ContainerProperties;
+import org.springframework.kafka.support.serializer.ErrorHandlingDeserializer;
+import org.springframework.kafka.support.serializer.JsonDeserializer;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** The consuming side of orders. Three settings here are decisions rather than boilerplate. */
+@Configuration
+@EnableKafka
+public class KafkaConsumerConfig {
+
+    @Value("${executor.consumer-group:trade-executor}")
+    private String consumerGroup;
+
+    private final KafkaProperties kafka;
+
+    public KafkaConsumerConfig(KafkaProperties kafka) {
+        this.kafka = kafka;
+    }
+
+    @Bean
+    public ConsumerFactory<String, EventEnvelope<OrderPlacedPayload>> orderPlacedConsumerFactory(
+            ObjectMapper objectMapper) {
+
+        Map<String, Object> props = new HashMap<>(kafka.buildConsumerProperties(null));
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers());
+
+        // Fixed by contract. The broker reports which group is reading `orders`
+        // and it is asked about at the review.
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, consumerGroup);
+
+        // Process, then commit. See the class comment.
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
+
+        // A new group reads the backlog rather than skipping to the end: an
+        // order already on the topic when the executor first starts is an
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+
+        // Small batches, because each record does database work and an HTTP
+        // call. A large poll would sit on records while the broker's session
+        props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 10);
+
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+
+        JavaType envelopeOfOrderPlaced = objectMapper.getTypeFactory()
+                .constructParametricType(EventEnvelope.class, OrderPlacedPayload.class);
+
+        JsonDeserializer<EventEnvelope<OrderPlacedPayload>> value =
+                new JsonDeserializer<>(envelopeOfOrderPlaced, objectMapper, false);
+        // The producer does not send type headers, and we would not trust
+        // them if it did: a consumer that instantiates whatever class a
+        value.setUseTypeHeaders(false);
+
+        // Wrap the JSON deserializer so malformed payloads are surfaced as
+        // failed records that the error handler can recover (DLT), instead
+        ErrorHandlingDeserializer<EventEnvelope<OrderPlacedPayload>> safeValue =
+                new ErrorHandlingDeserializer<>(value);
+
+        return new DefaultKafkaConsumerFactory<>(props, new StringDeserializer(), safeValue);
+    }
+
+    @Bean
+    public ConcurrentKafkaListenerContainerFactory<String, EventEnvelope<OrderPlacedPayload>>
+            orderPlacedListenerContainerFactory(
+                    ConsumerFactory<String, EventEnvelope<OrderPlacedPayload>> consumerFactory,
+                    CommonErrorHandler orderPlacedErrorHandler) {
+
+        ConcurrentKafkaListenerContainerFactory<String, EventEnvelope<OrderPlacedPayload>> factory =
+                new ConcurrentKafkaListenerContainerFactory<>();
+        factory.setConsumerFactory(consumerFactory);
+
+        // The listener decides when the offset moves.
+        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL);
+
+        // One consumer per instance.
+        factory.setConcurrency(1);
+
+        // Story 613: the retry-vs-DLT wiring. Everything the container does
+        // with a failed record -- classify, back off, dead-letter -- is
+        factory.setCommonErrorHandler(orderPlacedErrorHandler);
+
+        return factory;
+    }
+}

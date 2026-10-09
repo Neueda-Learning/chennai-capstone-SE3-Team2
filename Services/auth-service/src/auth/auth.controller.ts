@@ -1,0 +1,78 @@
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common';
+import { Request } from 'express';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { AuthService } from './auth.service';
+import { CurrentUser } from './current-user.decorator';
+import { JwtAuthGuard } from './jwt-auth.guard';
+import { LoginThrottleGuard } from './login-throttle.guard';
+import { LoginAttempts } from './login-attempts';
+import { AccessTokenClaims } from '../tokens/claims';
+import { LoginDto } from './dto/login.dto';
+import { RefreshDto } from './dto/refresh.dto';
+import { RegisterDto } from './dto/register.dto';
+import { TokenResponseDto } from './dto/token-response.dto';
+import { UserResponseDto } from './dto/user-response.dto';
+
+@ApiTags('auth')
+@Controller('auth')
+export class AuthController {
+  constructor(
+    private readonly auth: AuthService,
+    private readonly attempts: LoginAttempts,
+  ) {}
+
+  @Post('register')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Register a user',
+    description: 'Binds a login to the account the activation token was sent for. The account is resolved from the token, never from the request. Issues no tokens and creates no trading account.',
+  })
+  @ApiResponse({ status: 201, type: UserResponseDto })
+  @ApiResponse({ status: 401, description: 'AUTH-401: the activation token is unknown, expired, already used, or its account already has a login. One answer for every cause' })
+  @ApiResponse({ status: 409, description: 'AUTH-409: the username is already registered' })
+  @ApiResponse({ status: 422, description: 'VAL-422: a field failed validation' })
+  register(@Body() dto: RegisterDto): Promise<UserResponseDto> {
+    return this.auth.register(dto);
+  }
+
+  @Post('login')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(LoginThrottleGuard)
+  @ApiOperation({ summary: 'Log in and receive tokens' })
+  @ApiResponse({ status: 200, type: TokenResponseDto })
+  @ApiResponse({ status: 401, description: 'AUTH-401: one answer for every cause' })
+  @ApiResponse({ status: 429, description: 'AUTH-429: too many failures from this caller' })
+  async login(@Body() dto: LoginDto, @Req() request: Request): Promise<TokenResponseDto> {
+    const caller = LoginAttempts.callerKey(request);
+    try {
+      const tokens = await this.auth.login(dto);
+      await this.attempts.recordSuccess(caller);
+      return tokens;
+    } catch (failure) {
+      // Counted after the work, so the throttle never shortens the uniform
+      // failure it sits in front of.
+      await this.attempts.recordFailure(caller);
+      throw failure;
+    }
+  }
+
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Exchange a refresh token for a new pair', description: 'Every refresh issues a new refresh token. The presented one is revoked.' })
+  @ApiResponse({ status: 200, type: TokenResponseDto })
+  @ApiResponse({ status: 401, description: 'AUTH-401' })
+  refresh(@Body() dto: RefreshDto): Promise<TokenResponseDto> {
+    return this.auth.refresh(dto);
+  }
+
+  /** Identity comes from the verified token, never from a parameter the caller controls. */
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get the authenticated user' })
+  @ApiResponse({ status: 200, type: UserResponseDto })
+  @ApiResponse({ status: 401, description: 'AUTH-401' })
+  me(@CurrentUser() user: AccessTokenClaims): Promise<UserResponseDto> {
+    return this.auth.me(user.sub);
+  }
+}

@@ -1,0 +1,373 @@
+/*
+ * Global styles: tokens, base elements and the few shared patterns
+ * (buttons, form fields, alerts, tables). Component styles stay in the
+ * component. Colours meet WCAG AA contrast on the background they sit on.
+ */
+:root {
+  --bg: #090c11;
+  --bg-soft: #111723;
+  --surface: #121927;
+  --surface-elevated: #1a2335;
+  --text: #d9e3f8;
+  --muted: #8fa2c6;
+  --border: #26324b;
+  --accent: #f6c744;
+  --accent-strong: #f2b91b;
+  --accent-text: #0b0f17;
+  --danger: #ff6b6b;
+  --danger-bg: #2b1313;
+  --success: #5ee2a0;
+  --success-bg: #12251d;
+  --warning: #8eb1ff;
+  --warning-bg: #101a2f;
+  --radius: 8px;
+  --mono: 'JetBrains Mono', 'Cascadia Code', 'Cascadia Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    'DejaVu Sans Mono', 'Liberation Mono', monospace;
+  font-family: var(--mono);
+  color: var(--text);
+  background: var(--bg);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  line-height: 1.5;
+  background:
+    radial-gradient(circle at 90% -10%, rgba(94, 226, 160, 0.13), transparent 33%),
+    radial-gradient(circle at 15% -12%, rgba(142, 177, 255, 0.15), transparent 36%),
+    var(--bg);
+}
+
+h1 {
+  font-size: 1.5rem;
+  margin: 0 0 1rem;
+}
+
+h2 {
+  font-size: 1.15rem;
+  margin: 1.5rem 0 0.75rem;
+}
+
+a {
+  color: var(--warning);
+}
+
+/* Keyboard users always see where they are. */
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.35);
+}
+
+button,
+.button {
+  font: inherit;
+  padding: 0.55rem 1.1rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-elevated);
+  color: var(--text);
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+button:hover,
+.button:hover {
+  border-color: var(--warning);
+  background: #1e2a41;
+}
+
+button:active,
+.button:active {
+  transform: translateY(1px);
+}
+
+button.secondary,
+.button.secondary {
+  background: transparent;
+  color: var(--warning);
+  border-color: #335186;
+}
+
+button.primary,
+.button.primary {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+
+button.primary:hover,
+.button.primary:hover {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+label {
+  display: block;
+  font-weight: 600;
+  margin: 1rem 0 0.25rem;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid #334a72;
+  border-radius: var(--radius);
+  background: #0f1623;
+  color: var(--text);
+}
+
+/* One height for every single-line field, so a row of them lines up. */
+input:not([type='radio']):not([type='checkbox']),
+select {
+  min-height: 2.6rem;
+}
+
+textarea {
+  min-height: 4.5rem;
+  resize: vertical;
+}
+
+/* A radio or a checkbox keeps its own size: never stretched across its row. */
+input[type='radio'],
+input[type='checkbox'] {
+  width: auto;
+  flex: none;
+  margin: 0.2rem 0 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
+
+input[readonly] {
+  background: #0a111c;
+  color: var(--muted);
+}
+
+.field-error {
+  color: var(--danger);
+  font-size: 0.9rem;
+  margin: 0.25rem 0 0;
+}
+
+.alert {
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+}
+
+.alert.error {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.alert.success {
+  color: var(--success);
+  background: var(--success-bg);
+}
+
+.alert.info {
+  color: var(--warning);
+  background: var(--warning-bg);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--text);
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+
+th {
+  color: var(--muted);
+  font-size: 0.84rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.filter-chip {
+  border: 1px solid #335186;
+  color: var(--muted);
+  background: #0f1623;
+  border-radius: 999px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.82rem;
+}
+
+.filter-chip.active {
+  color: var(--accent-text);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+td.number,
+th.number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------
+ * Smoothness. Small, consistent motion; none at all for anyone who has
+ * asked their system to reduce it.
+ * ------------------------------------------------------------------ */
+
+/* The scrollbar's space is always kept, so a page never shifts sideways
+   when the next screen is taller or shorter. */
+html {
+  scrollbar-gutter: stable;
+}
+
+a {
+  transition: color 160ms ease;
+}
+
+input,
+select,
+textarea {
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(246, 199, 68, 0.22);
+}
+
+button.small,
+.button.small {
+  padding: 0.3rem 0.8rem;
+  font-size: 0.85rem;
+}
+
+/* A screen's own column: centred in the space beside the watchlist, never
+   pinned to its left edge with the rest of the width empty. */
+.page {
+  margin-inline: auto;
+}
+
+/* A page's heading and the action beside it, on one line. */
+.page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.page-head h1,
+.page-head h2 {
+  margin: 0;
+}
+
+/* The end of a long list: what is shown, and the way to the rest. */
+.more {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* A sideways-scrolling table keeps everything inside it, the screen-reader
+   text included: an absolutely positioned child with nothing positioned
+   between it and the page escapes the scroll box and widens the page. */
+.table-wrap {
+  position: relative;
+}
+
+/* Figures line up digit under digit, so a column of money reads at a glance. */
+table {
+  font-variant-numeric: tabular-nums;
+}
+
+tbody tr {
+  transition: background-color 120ms ease;
+}
+
+tbody tr:hover {
+  background: rgba(142, 177, 255, 0.05);
+}
+
+tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Each screen eases in rather than snapping. The routed component is the
+   outlet's sibling, so this lives here and not in the shell's styles. */
+.app-main > :not(router-outlet) {
+  display: block;
+  animation: screen-in 180ms ease-out both;
+}
+
+.alert {
+  animation: screen-in 160ms ease-out both;
+}
+
+@keyframes screen-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

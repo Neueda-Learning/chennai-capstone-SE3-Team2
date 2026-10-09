@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+  Reactor for the platform. Builds the domain, the Trade REST API and the
+  Trade Executor in dependency order, so `mvn clean install` works on a
+  fresh clone without anything pre-installed in ~/.m2.
+
+  This pom aggregates but does not parent: the services keep
+  spring-boot-starter-parent, and Services/domain-library keeps no parent at all so
+  nothing Spring-shaped can arrive by inheritance.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.yellow</groupId>
+    <artifactId>fauxnance-platform</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>Fauxnance Trading Platform</name>
+    <description>Trading platform reactor.</description>
+
+    <modules>
+        <module>Services/domain-library</module>
+        <module>Services/order-service</module>
+        <module>Services/executor-service</module>
+    </modules>
+
+    <!--
+      The executor depends on Services/domain-library for the two rules it re-checks at
+      execution time, so it builds from here rather than standalone.
+    -->
+
+    <properties>
+        <java.version>21</java.version>
+        <maven.compiler.release>21</maven.compiler.release>
+    </properties>
+
+</project>
