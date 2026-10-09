@@ -10,3 +10,8 @@ fauxnance:
   # Present so the context can start. No test should reach the real API.
   api-key: test-key-not-a-real-credential
   base-url: http://localhost:0
+
+mf-nav:
+  # Present so the context can start: the address is configuration, never a
+  # default in code. No test should reach the real service.
+  base-url: http://localhost:0
