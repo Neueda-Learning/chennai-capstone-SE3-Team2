@@ -24,6 +24,12 @@ server {
         proxy_pass $order_service;
     }
 
+    # order-service's one public route outside /api: applying for an account
+    # (POST /onboarding/applications, no token).
+    location /onboarding/ {
+        proxy_pass $order_service;
+    }
+
     # The auth-service: login, refresh, register, /auth/me ...
     location /auth/ {
         proxy_pass $auth_service;

@@ -113,7 +113,7 @@ and Kafka data and start from nothing next time.
 ### On a server: EC2 with Amazon RDS
 
 The browser reaches ONE address, the frontend container. nginx serves the UI
-and forwards `/api/...` to order-service and `/auth/...`, `/activate` to
+and forwards `/api/...` and `/onboarding/...` to order-service and `/auth/...`, `/activate` to
 auth-service, so the browser never makes a cross-origin request, and only
 one port has to be open.
 

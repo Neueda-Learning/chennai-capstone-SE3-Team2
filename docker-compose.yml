@@ -306,7 +306,7 @@ services:
     container_name: fauxnance-frontend
     profiles: [frontend]
     environment:
-      # Where nginx forwards /api/... and /auth/..., /activate.
+      # Where nginx forwards /api/..., /onboarding/... and /auth/..., /activate.
       ORDER_SERVICE_URL: http://trade-api:8081
       AUTH_SERVICE_URL: http://auth:3000
     ports:
