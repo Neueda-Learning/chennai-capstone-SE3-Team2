@@ -28,7 +28,7 @@ profile so `docker compose up` in isolation starts nothing.
 
 ```bash
 cp .env.example .env               # set JWT_SECRET, DB_PASSWORD, FAUXNANCE_API_KEY
-docker compose --profile platform up -d --build
+docker compose --profile localdb --profile platform up -d --build
 Infrastructure/Kafka/create-topics.sh
 ```
 
@@ -59,8 +59,8 @@ The demonstration proves it by fabricating the duplicate on demand.
   topic would be picked up instead of ours.
 
   ```bash
-  docker compose --profile platform down -v          # -v destroys volumes
-  docker compose --profile platform up -d --build
+  docker compose --profile localdb --profile platform down -v          # -v destroys volumes
+  docker compose --profile localdb --profile platform up -d --build
   Infrastructure/Kafka/create-topics.sh
   ```
 

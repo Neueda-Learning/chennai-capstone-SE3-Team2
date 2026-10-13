@@ -45,8 +45,8 @@ customer ──POST /onboarding/applications──► trade-api
 
 The token never rides Kafka: it is a credential. Its plaintext exists only in
 the HTTP response from auth to the mailer, and in the email. Auth stores its
-SHA-256. Auth never connects to the trading database; the mailer never connects
-to the auth database.
+SHA-256. Auth works only in the auth schema of the one database, as auth_app;
+the mailer, as trading_app, cannot read that schema at all.
 
 ## Applying and KYC
 
@@ -150,7 +150,7 @@ refuses to start and names it.
 
 Scripts additionally read `SPRINT8_END` (check 6's pinned commit, default
 `fcd04df`), `KAFKA_CONTAINER`, `KAFKA_BROKER_INTERNAL`, `AUTH_DB_CONTAINER`,
-`AUTH_DB_USER` and `AUTH_DB_NAME`, all with defaults matching compose.
+`AUTH_DB_USER` and `DB_NAME`, all with defaults matching compose.
 
 Running auth outside compose (`npm run start` in `Services/auth-service`) now also needs
 `KAFKA_BROKERS` and `ACTIVATION_INTERNAL_SECRET` in `Services/auth-service/.env`.
@@ -211,8 +211,8 @@ read; Gmail delivers `you+anything@gmail.com` to `you@gmail.com`, which gives
 as many distinct addresses as a run needs.
 
 ```bash
-docker compose --profile platform down -v
-docker compose --profile platform up -d --build
+docker compose --profile localdb --profile platform down -v
+docker compose --profile localdb --profile platform up -d --build
 bash Infrastructure/Kafka/create-topics.sh
 # no Kafka CLI on the host? run it inside the broker container instead:
 #   docker exec -i -e BROKER=localhost:29092 -e KAFKA_TOPICS_BIN=/opt/kafka/bin/kafka-topics.sh \
@@ -282,8 +282,8 @@ back first:
 ```bash
 docker exec -i fauxnance-postgres psql -U postgres -d trading_system_db \
   -c "UPDATE client_profile SET email = 'you+activation@gmail.com' WHERE client_id = 5"
-docker exec -i fauxnance-postgres psql -U postgres -d auth \
-  -c "DELETE FROM provisioned_account WHERE account_id = 5 AND claimed_by IS NULL"
+docker exec -i fauxnance-postgres psql -U postgres -d trading_system_db \
+  -c "DELETE FROM auth.provisioned_account WHERE account_id = 5 AND claimed_by IS NULL"
 bash scripts/publish-kyc-verified.sh 5
 ```
 
@@ -303,8 +303,8 @@ Record each result in the security review's evidence table.
    `eventId, eventType, eventTime, source, schemaVersion, payload`; payload
    exactly `{"clientId":5}`.
 3. Publish the same `KYC_VERIFIED` again → no second message.
-4. Rollback: in the auth DB,
-   `BEGIN; INSERT INTO provisioned_account VALUES (99); INSERT INTO outbox_event (event_id, topic, message_key, envelope) VALUES (gen_random_uuid(), 'account-provisioning', '99', '{}'); ROLLBACK;`
+4. Rollback: in the auth schema,
+   `BEGIN; INSERT INTO auth.provisioned_account VALUES (99); INSERT INTO auth.outbox_event (event_id, topic, message_key, envelope) VALUES (gen_random_uuid(), 'account-provisioning', '99', '{}'); ROLLBACK;`
    → nothing published.
 5. Broker down after a provisioning committed. Provisioning itself arrives over
    Kafka, so simulate the committed outbox row directly: `docker compose stop kafka`,
@@ -315,7 +315,7 @@ Record each result in the security review's evidence table.
    `outbox_event.published_at` is set.
 
 **Stage 2 — the token endpoint**
-1. After `down -v` / `up`: `\d activation_token` in the auth DB.
+1. After `down -v` / `up`: `\d auth.activation_token` in trading_system_db.
 2. `curl -X POST localhost:3000/internal/activation-tokens -H "X-Internal-Secret: $ACTIVATION_INTERNAL_SECRET" -H 'Content-Type: application/json' -d '{"clientId":6}'`
    → `201` with `activationToken` and `expiresAt`.
 3. `SELECT token_hash, length(token_hash) FROM activation_token` → 64 characters;

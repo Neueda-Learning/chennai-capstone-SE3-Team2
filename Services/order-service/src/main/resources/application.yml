@@ -23,7 +23,7 @@ spring:
       - optional:file:/config/application.yml
 
   datasource:
-    url: jdbc:postgresql://${DB_HOST:${database.host}}:${DB_PORT:${database.port}}/${DB_NAME:${database.name}}
+    url: jdbc:postgresql://${DB_HOST:${database.host}}:${DB_PORT:${database.port}}/${DB_NAME:${database.name}}?sslmode=${DB_SSLMODE:prefer}
     username: ${DB_USER:${database.user}}
     password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
@@ -76,6 +76,11 @@ spring:
 
 server:
   port: ${TRADE_API_PORT:${services.order.port}}
+  # Behind the frontend's nginx, every request arrives from nginx. native lets
+  # Tomcat take the browser's address from X-Forwarded-For -- only when the
+  # request comes from a private-network proxy, so a client cannot claim one --
+  # and the onboarding limiter counts per browser, not per proxy.
+  forward-headers-strategy: native
   error:
     # No whitelabel page, ever. Every failure leaves through the
     # @ControllerAdvice as the error envelope; these switches make sure

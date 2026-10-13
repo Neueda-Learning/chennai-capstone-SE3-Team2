@@ -13,7 +13,7 @@ a second way to run it, for development.
 | Piece | Where | Address |
 |---|---|---|
 | Kafka | EC2, the `kafka` container | `localhost:9092`, through the SSH forward |
-| PostgreSQL 16 | Windows, installed | `localhost:5432`, databases `trading` and `auth` |
+| PostgreSQL 16 | Windows, installed | `localhost:5432`, database `trading_system_db` (schemas `public` and `auth`) |
 | auth | Windows | `localhost:3000` |
 | trade-api | Windows (IntelliJ) | `localhost:8081` |
 | trade-executor | Windows (IntelliJ) | `localhost:8082` |
@@ -32,13 +32,13 @@ git clone https://github.com/Neueda-Learning/chennai-capstone-SE3-Team2.git
 cd chennai-capstone-SE3-Team2
 git checkout kafka-container
 cp .env.example .env            # the placeholders are enough: Kafka reads none of them
-docker compose --profile platform up -d kafka
+docker compose --profile localdb --profile platform up -d kafka
 docker exec -i -e BROKER=localhost:29092 -e KAFKA_TOPICS_BIN=/opt/kafka/bin/kafka-topics.sh \
   fauxnance-kafka bash -s < Infrastructure/Kafka/create-topics.sh
 docker ps --format '{{.Names}} {{.Status}}'      # fauxnance-kafka ... (healthy)
 ```
 
-The topic script is safe to re-run. `docker compose --profile platform down -v`
+The topic script is safe to re-run. `docker compose --profile localdb --profile platform down -v`
 clears Kafka's data; create the topics again after it.
 
 ## 2. On Windows: the SSH connection
@@ -84,14 +84,14 @@ psql -U postgres -v ON_ERROR_STOP=1 -v trading_pw=<DB_PASSWORD> -v analytics_pw=
 ```
 
 `Databases/PostgreSQL/local/setup.sql` does what the container's init does, in the same
-order: the roles `trading_app`, `analytics_ro` and `auth_app`; the databases
-`trading` and `auth` on the one instance; each role allowed into its own
-database only; every schema, migration (001 to 010), index and seed file
-(001 to 007); then auth's migrations.
+order: the roles `trading_app`, `analytics_ro` and `auth_app`; the database
+`trading_system_db` with two schemas, `public` (trading) and `auth`; each role
+allowed into its own schema only; then `schema.sql` (every table of both
+schemas) and `seed_data.sql`.
 
 It stops at the first error, so a second run stops at `role "trading_app"
 already exists` and changes nothing. To start again from nothing -- this
-**deletes both databases**:
+**deletes the database**:
 
 ```powershell
 psql -U postgres -v ON_ERROR_STOP=1 -f Databases/PostgreSQL/reset.sql

@@ -23,8 +23,8 @@
 #     volume, and reading the first message off `orders` with
 #     --from-beginning only picks the message we placed if nothing
 #     else has been through the topic. Run:
-#         docker compose --profile platform down -v
-#         docker compose --profile platform up -d --build
+#         docker compose --profile localdb --profile platform down -v
+#         docker compose --profile localdb --profile platform up -d --build
 #         Infrastructure/Kafka/create-topics.sh
 #     before running this script.
 #   * .env is populated (JWT_SECRET, DB_PASSWORD, FAUXNANCE_API_KEY).

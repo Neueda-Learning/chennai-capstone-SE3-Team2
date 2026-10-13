@@ -61,22 +61,36 @@ Accounts and keys, which go in `.env` (never in git):
 
 ## Run it
 
+Compose runs whatever `COMPOSE_PROFILES` in `.env` lists:
+
+| Profile | What runs |
+|---|---|
+| `localdb` | The bundled PostgreSQL container. Leave it out to use Amazon RDS |
+| `platform` | Kafka (topics created automatically), auth-service, order-service, executor-service |
+| `frontend` | The UI, served by nginx, with the APIs behind it on the same address |
+| `etl` | The analytics ETL, one run: `docker compose run --rm etl` |
+
+### On your machine
+
 ```bash
 git clone https://github.com/Neueda-Learning/chennai-capstone-SE3-Team2.git
 cd chennai-capstone-SE3-Team2
 
 # 1. Configuration: copy the example and fill in every value marked REQUIRED.
-cp .env.example .env
+cp .env.example .env          # COMPOSE_PROFILES=localdb,platform
 
 # 2. PostgreSQL, Kafka (topics included), auth-service, order-service, executor-service.
-docker compose --profile platform up -d --build
-docker compose --profile platform ps        # wait until every service is healthy
+docker compose up -d --build
+docker compose ps             # wait until every service is healthy
 
-# 3. The Frontend.
+# 3. The Frontend, in development mode.
 cd Frontend
 npm ci
-npm start                                    # http://localhost:4200
+npm start                     # http://localhost:4200
 ```
+
+Or the whole thing in containers, UI included: `COMPOSE_PROFILES=localdb,platform,frontend`,
+then `docker compose up -d --build` and open http://localhost:4200.
 
 The first start builds the database from `Databases/PostgreSQL/schema.sql` and
 `seed_data.sql`, and creates every Kafka topic, before any service starts.
@@ -93,8 +107,39 @@ Then in the browser: **New customer? Open an account**, with a real email you ca
 read. The activation email arrives about 40 seconds later; set a password, sign
 in, add cash, and place an order.
 
-Stop everything with `docker compose --profile platform down`. Add `-v` to also
-delete the database and Kafka data and start from nothing next time.
+Stop everything with `docker compose down`. Add `-v` to also delete the database
+and Kafka data and start from nothing next time.
+
+### On a server: EC2 with Amazon RDS
+
+The browser reaches ONE address, the frontend container. nginx serves the UI
+and forwards `/api/...` to order-service and `/auth/...`, `/activate` to
+auth-service, so the browser never makes a cross-origin request, and only
+one port has to be open.
+
+1. **Database, once.** From the EC2 box (`sudo apt-get install -y postgresql-client`),
+   as the RDS master user, with the three passwords you will put in `.env`:
+   ```bash
+   psql -h <RDS-ENDPOINT> -U postgres -d postgres -v ON_ERROR_STOP=1 \
+     -v trading_pw=<DB_PASSWORD> -v analytics_pw=<ANALYTICS_DB_PASSWORD> -v auth_pw=<AUTH_DB_PASSWORD> \
+     -f Databases/PostgreSQL/local/setup.sql
+   ```
+2. **`.env`**, from `.env.example`, with these differences:
+   ```ini
+   COMPOSE_PROFILES=platform,frontend          # no localdb: the database is RDS
+   CONTAINER_DB_HOST=<RDS-ENDPOINT>
+   DB_SSLMODE=require
+   CORS_ALLOWED_ORIGINS=http://<EC2-PUBLIC-IP>:4200
+   ACTIVATION_LINK_BASE_URL=http://<EC2-PUBLIC-IP>:4200/activate
+   ACTIVATION_HOME_URL=http://<EC2-PUBLIC-IP>:4200/
+   ```
+3. **Start:** `docker compose up -d --build`, then `docker compose ps`.
+4. **Open** `http://<EC2-PUBLIC-IP>:4200`. The EC2 security group needs port 4200
+   inbound; the RDS security group needs 5432 from the EC2 instance.
+
+Docker on Ubuntu needs the Compose and Buildx plugins:
+`sudo apt-get install -y docker-compose-v2 docker-buildx`. A build "Killed"
+on a small instance is memory: use 2 GB or more, or add swap.
 
 ## Configuration
 
@@ -113,41 +158,44 @@ An environment variable always wins over `Config/application.yml`. That is how
 
 ## Databases
 
-PostgreSQL holds two databases on one instance:
+One database, `trading_system_db`, with two schemas:
 
-- `trading_system_db`: accounts, orders, positions, and every module's tables.
-- `auth`: logins and tokens only. No other service can connect to it.
+- `public`: accounts, orders, positions, and every module's tables (24).
+- `auth`: logins and tokens (5).
 
-Each service connects with its own limited role (`trading_app`, `auth_app`,
-`analytics_ro`). `postgres` only creates the databases.
+Each service connects with its own limited role, and the schemas keep them
+apart: `trading_app` (read/write) and `analytics_ro` (read-only) may use
+`public` only; `auth_app` may use `auth` only. A trading connection cannot
+read a password hash: it is refused with *permission denied for schema auth*.
+`postgres` only creates the database.
 
 | File | What it does |
 |---|---|
-| `Databases/PostgreSQL/schema.sql` | Every table, constraint and index of `trading_system_db` |
+| `Databases/PostgreSQL/schema.sql` | Every table, constraint and index of `trading_system_db`: `public`, then `auth` |
 | `Databases/PostgreSQL/seed_data.sql` | Reference data, demo customers, and every NSE stock and Direct Growth fund |
-| `Databases/PostgreSQL/reset.sql` | Drops both databases and the three roles, to start again |
-| `Databases/PostgreSQL/migrations/` | The 16 migrations `schema.sql` is built from |
-| `Databases/PostgreSQL/local/setup.sql` | Builds both databases and the roles on a PostgreSQL you installed yourself |
+| `Databases/PostgreSQL/reset.sql` | Drops the database and the three roles, to start again |
+| `Databases/PostgreSQL/migrations/` | The 16 migrations `schema.sql` is built from (auth's 4 are in `Services/auth-service/migrations/`) |
+| `Databases/PostgreSQL/local/setup.sql` | Builds the roles, the database and both schemas on a PostgreSQL you installed yourself, or on RDS |
 
 `schema.sql` and `seed_data.sql` are generated from `base/`, `migrations/`,
-`indexes/` and `seed/` by `scripts/build-db-scripts.sh`. Run it after adding a
+`indexes/`, auth's migrations and `seed/` by `scripts/build-db-scripts.sh`. Run it after adding a
 migration, and commit both files.
 
-Without Docker, on a local PostgreSQL 16, as the superuser:
+Without Docker, on a local PostgreSQL 16 or on RDS, as the superuser:
 
 ```bash
 psql -U postgres -v ON_ERROR_STOP=1 \
   -v trading_pw=<DB_PASSWORD> -v analytics_pw=<ANALYTICS_DB_PASSWORD> -v auth_pw=<AUTH_DB_PASSWORD> \
   -f Databases/PostgreSQL/local/setup.sql
 
-# To start again from nothing (deletes both databases):
+# To start again from nothing (deletes the database):
 psql -U postgres -v ON_ERROR_STOP=1 -f Databases/PostgreSQL/reset.sql
 ```
 
-Or only the trading database, into one you created:
+`setup.sql` is the roles and permissions, then exactly these two files. Into a
+database you created yourself, with your own roles, they are:
 
 ```bash
-createdb -U postgres trading_system_db
 psql -U postgres -d trading_system_db -v ON_ERROR_STOP=1 -f Databases/PostgreSQL/schema.sql
 psql -U postgres -d trading_system_db -v ON_ERROR_STOP=1 -f Databases/PostgreSQL/seed_data.sql
 ```
@@ -176,7 +224,7 @@ The ETL reads `trading_system_db` as `analytics_ro` and loads the star schema in
 `Databases/DuckDB/analytics/analytics.duckdb`:
 
 ```bash
-cd "ETL Layer" && python -m etl.pipeline
+cd "ETL Layer" && python -m etl.pipeline run
 ```
 
 ## When something is wrong
@@ -185,10 +233,10 @@ cd "ETL Layer" && python -m etl.pipeline
 |---|---|
 | `... must be set in .env` from `docker compose` | A REQUIRED value is missing from `.env`: compare it with `.env.example` |
 | `port is already allocated` | Something else holds the port, often a PostgreSQL installed on 5432. Stop it, or set `DB_PUBLISHED_PORT` in `.env` |
-| A service cannot find `trading_system_db` | The PostgreSQL data volume predates it: `docker compose --profile platform down -v`, then `up` again |
+| A service cannot find `trading_system_db`, or auth cannot find its tables | The PostgreSQL data volume predates them: `docker compose down -v`, then `up` again |
 | Stock orders all `REJECTED` | No price: check `FAUXNANCE_API_KEY`; the key allows 2,000 requests a day |
 | Fund orders all `REJECTED` | No NAV: check `MF_NAV_API_KEY` |
-| A service waits forever on Kafka | `docker compose --profile platform logs kafka-init` shows whether the topics were created |
+| A service waits forever on Kafka | `docker compose logs kafka-init` shows whether the topics were created |
 
 More: `docs/runbooks/` (activation, payments, the event backbone, a Windows
 setup), `docs/architecture/`, and the decision logs in `docs/sprints/`.

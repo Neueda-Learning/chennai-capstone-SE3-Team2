@@ -52,7 +52,7 @@ for candidate in $(seq "${ACCOUNT_ID:-1}" 10); do
     *)   fail "minting a token answered $(echo "$MINT" | tail -1) for account $candidate" ;;
   esac
 done
-[ -n "$ACCOUNT" ] || fail "every provisioned account is claimed. Reset with: docker compose --profile platform down -v"
+[ -n "$ACCOUNT" ] || fail "every provisioned account is claimed. Reset with: docker compose --profile localdb --profile platform down -v"
 
 REG=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$AUTH/auth/register" \
   -H 'Content-Type: application/json' \

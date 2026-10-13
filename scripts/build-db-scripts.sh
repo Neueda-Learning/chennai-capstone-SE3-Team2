@@ -4,7 +4,9 @@
 # ordered source files, so the two single-file scripts never drift from
 # the migrations they are made of.
 #
-#   schema.sql     base/ + migrations/ (in number order) + indexes/
+#   schema.sql     base/ + migrations/ (in number order) + indexes/, in the
+#                  public schema; then the auth service's migrations
+#                  (Services/auth-service/migrations), in the auth schema
 #   seed_data.sql  seed/ (in number order)
 #
 # Run it after adding a migration or a seed file, then commit both outputs.
@@ -42,5 +44,29 @@ for phase in base migrations indexes; do
 done
 mapfile -t seeds < <(LC_ALL=C ls "$DB"/seed/*.sql)
 
-concat "$DB/schema.sql" "schema.sql - the trading_system_db schema: tables, migrations 001-016, indexes" "${schema[@]}"
+AUTH_MIGRATIONS="$(cd "$DB/../../Services/auth-service/migrations" && pwd)"
+mapfile -t auth < <(LC_ALL=C ls "$AUTH_MIGRATIONS"/*.sql)
+
+concat "$DB/schema.sql" "schema.sql - all of trading_system_db: the trading tables (public), then auth's (auth)" "${schema[@]}"
+{
+    echo
+    echo "-- ====================================================================="
+    echo "-- The auth schema: the auth service's logins and tokens, in their own"
+    echo "-- schema of this database. Only auth_app may use it (init/00-roles.sh,"
+    echo "-- local/setup.sql); auth's SQL names its tables bare, so they are"
+    echo "-- created with the search_path set to the schema."
+    echo "-- ====================================================================="
+    echo "CREATE SCHEMA IF NOT EXISTS auth;"
+    echo "SET search_path TO auth;"
+    for f in "${auth[@]}"; do
+        echo
+        echo "-- ---------------------------------------------------------------------"
+        echo "-- Services/auth-service/migrations/$(basename "$f")"
+        echo "-- ---------------------------------------------------------------------"
+        cat "$f"
+    done
+    echo
+    echo "RESET search_path;"
+} >> "$DB/schema.sql"
+echo "appended the auth schema from ${#auth[@]} files"
 concat "$DB/seed_data.sql" "seed_data.sql - reference data and demo data for trading_system_db" "${seeds[@]}"

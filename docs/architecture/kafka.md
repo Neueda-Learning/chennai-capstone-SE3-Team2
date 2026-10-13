@@ -2,7 +2,7 @@
 
 ## How the topics are created
 One command, safe to re-run against an empty broker: `Infrastructure/Kafka/create-topics.sh`
-Run it against the `kafka` service after `docker compose --profile platform up -d kafka` reports healthy.
+Run it against the `kafka` service after `docker compose --profile localdb --profile platform up -d kafka` reports healthy.
 
 ## Why the key decides the partition, and the partition decides ordering
 Kafka only orders messages within one partition, never across partitions.

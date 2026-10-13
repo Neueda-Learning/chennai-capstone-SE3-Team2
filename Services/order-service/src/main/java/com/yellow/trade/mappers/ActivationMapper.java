@@ -7,7 +7,7 @@ import org.apache.ibatis.annotations.Select;
 
 import java.util.UUID;
 
-/** The trading database, and only the trading database. The auth database is never reached from here. */
+/** The trading schema, and only the trading schema. The auth schema is never reached from here: trading_app has no access to it. */
 @Mapper
 public interface ActivationMapper {
 

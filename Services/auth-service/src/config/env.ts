@@ -29,9 +29,11 @@ export class Env {
   get port(): number { return Number(this.required('PORT')); }
 
   /**
-   * AUTH_DATABASE_URL when given (compose builds one). Otherwise built from
-   * the parts the repository-root .env already holds for compose and the
-   * Windows setup, so the auth password is written down once.
+   * AUTH_DATABASE_URL when given. Otherwise built from the parts the
+   * repository-root .env already holds, so the auth password is written down
+   * once. The platform has ONE database (DB_NAME); auth works in its own
+   * schema inside it (databaseSchema), as its own role. AUTH_DB_NAME overrides
+   * the database only for a deployment that keeps auth apart.
    */
   get databaseUrl(): string {
     const url = this.config.get<string>('AUTH_DATABASE_URL');
@@ -45,8 +47,35 @@ export class Env {
     const user = this.config.get<string>('AUTH_DB_USER') || 'auth_app';
     const host = this.required('DB_HOST');
     const port = this.required('DB_PORT');
-    const name = this.config.get<string>('AUTH_DB_NAME') || 'auth';
-    return `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${name}`;
+    const name = this.config.get<string>('AUTH_DB_NAME') || this.required('DB_NAME');
+    return `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${name}${this.sslParameter()}`;
+  }
+
+  /**
+   * DB_SSLMODE, as libpq names the modes. `require` encrypts without checking
+   * the server's certificate -- what libpq's require does, and what RDS needs
+   * without shipping its CA -- which node-pg spells no-verify. Unset, disable
+   * or prefer: no parameter, a plain connection, as on the local stack.
+   */
+  private sslParameter(): string {
+    const mode = this.config.get<string>('DB_SSLMODE');
+    if (!mode || mode === 'disable' || mode === 'prefer') {
+      return '';
+    }
+    return `?sslmode=${mode === 'require' ? 'no-verify' : mode}`;
+  }
+
+  /**
+   * The schema auth's tables live in (AUTH_DB_SCHEMA, default auth). Set as
+   * the connection's search_path, so the SQL needs no schema prefix. Only a
+   * plain identifier: it ends up in a connection option.
+   */
+  get databaseSchema(): string {
+    const schema = this.config.get<string>('AUTH_DB_SCHEMA') || 'auth';
+    if (!/^[a-z_][a-z0-9_]*$/.test(schema)) {
+      throw new Error(`AUTH_DB_SCHEMA must be a plain lower-case identifier, not ${JSON.stringify(schema)}`);
+    }
+    return schema;
   }
 
   get kafkaBrokers(): string[] {
@@ -64,6 +93,14 @@ export class Env {
    * down, the throttle counts in memory and the limit is per instance.
    */
   get redisUrl(): string | undefined { return this.config.get('REDIS_URL') || undefined; }
+
+  /**
+   * An Express trust-proxy value (e.g. uniquelocal), or nothing. Behind the
+   * frontend's nginx every request arrives from nginx; trusting it lets the
+   * login throttle count the browser's address from X-Forwarded-For. Only the
+   * addresses named are believed, so a client cannot claim one itself.
+   */
+  get trustProxy(): string | undefined { return this.config.get<string>('TRUST_PROXY') || undefined; }
 
   get outboxPollMs(): number { return Number(this.config.get('OUTBOX_POLL_MS') ?? 2000); }
 

@@ -28,15 +28,43 @@ describe('Env', () => {
   });
 
   it('builds the database URL from the shared .env parts when AUTH_DATABASE_URL is not set', () => {
-    const parts = { ...complete, AUTH_DATABASE_URL: undefined, AUTH_DB_PASSWORD: 'p@ss:w/rd', DB_HOST: 'localhost', DB_PORT: '5432' };
-    expect(envWith(parts).databaseUrl).toBe('postgresql://auth_app:p%40ss%3Aw%2Frd@localhost:5432/auth');
+    const parts = {
+      ...complete, AUTH_DATABASE_URL: undefined, AUTH_DB_PASSWORD: 'p@ss:w/rd',
+      DB_HOST: 'localhost', DB_PORT: '5432', DB_NAME: 'trading_system_db',
+    };
+    // One database for the platform; auth lives in its own schema inside it.
+    expect(envWith(parts).databaseUrl).toBe('postgresql://auth_app:p%40ss%3Aw%2Frd@localhost:5432/trading_system_db');
     expect(envWith({ ...parts, AUTH_DB_USER: 'other', AUTH_DB_NAME: 'auth2' }).databaseUrl).toBe(
       'postgresql://other:p%40ss%3Aw%2Frd@localhost:5432/auth2',
     );
   });
 
+  it('asks for encryption when DB_SSLMODE says so: require encrypts without verifying, as libpq does', () => {
+    const parts = {
+      ...complete, AUTH_DATABASE_URL: undefined, AUTH_DB_PASSWORD: 'pw',
+      DB_HOST: 'db.example', DB_PORT: '5432', DB_NAME: 'trading_system_db',
+    };
+    expect(envWith({ ...parts, DB_SSLMODE: 'require' }).databaseUrl).toBe(
+      'postgresql://auth_app:pw@db.example:5432/trading_system_db?sslmode=no-verify',
+    );
+    expect(envWith({ ...parts, DB_SSLMODE: 'verify-full' }).databaseUrl).toMatch(/\?sslmode=verify-full$/);
+    expect(envWith({ ...parts, DB_SSLMODE: 'disable' }).databaseUrl).not.toContain('sslmode');
+    expect(envWith(parts).databaseUrl).not.toContain('sslmode');
+  });
+
+  it('works in the auth schema by default, and refuses a schema name that is not a plain identifier', () => {
+    expect(envWith(complete).databaseSchema).toBe('auth');
+    expect(envWith({ ...complete, AUTH_DB_SCHEMA: 'auth_v2' }).databaseSchema).toBe('auth_v2');
+    expect(() => envWith({ ...complete, AUTH_DB_SCHEMA: 'auth; drop table x' }).databaseSchema).toThrow('AUTH_DB_SCHEMA');
+  });
+
   it('prefers a full AUTH_DATABASE_URL over the parts', () => {
     expect(envWith({ ...complete, AUTH_DB_PASSWORD: 'ignored' }).databaseUrl).toBe(complete.AUTH_DATABASE_URL);
+  });
+
+  it('trusts a proxy only when TRUST_PROXY names one', () => {
+    expect(envWith(complete).trustProxy).toBeUndefined();
+    expect(envWith({ ...complete, TRUST_PROXY: 'uniquelocal' }).trustProxy).toBe('uniquelocal');
   });
 
   it('reads a comma-separated broker list', () => {

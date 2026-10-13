@@ -20,14 +20,16 @@ CLIENT_ID="${1:?usage: $0 <clientId>}"
 
 AUTH_DB_CONTAINER="${AUTH_DB_CONTAINER:-fauxnance-postgres}"
 AUTH_DB_USER="${AUTH_DB_USER:-auth_app}"
-AUTH_DB_NAME="${AUTH_DB_NAME:-auth}"
+# One database; auth_app's search_path is the auth schema, so the bare table
+# names below are auth's.
+DB_NAME="${DB_NAME:-trading_system_db}"
 
 command -v docker >/dev/null || { echo "need docker on PATH" >&2; exit 2; }
 
 # The envelope is built in SQL, so its eventId and eventTime come from the
 # same clock and generator every other outbox row uses. One statement: it
 # inserts only when the account is provisioned and unclaimed.
-INSERTED="$(docker exec -i "$AUTH_DB_CONTAINER" psql -U "$AUTH_DB_USER" -d "$AUTH_DB_NAME" \
+INSERTED="$(docker exec -i "$AUTH_DB_CONTAINER" psql -U "$AUTH_DB_USER" -d "$DB_NAME" \
   -v ON_ERROR_STOP=1 -qtA -v client_id="$CLIENT_ID" <<'SQL'
 WITH target AS (
     SELECT account_id FROM provisioned_account

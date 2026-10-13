@@ -14,6 +14,13 @@ async function bootstrap(): Promise<void> {
 
   configureApp(app);
 
+  // Behind a reverse proxy (the frontend's nginx), take the client's address
+  // from X-Forwarded-For -- from the proxies TRUST_PROXY names, and no others.
+  const trustProxy = app.get(Env).trustProxy;
+  if (trustProxy) {
+    app.getHttpAdapter().getInstance().set('trust proxy', trustProxy);
+  }
+
   // The trading UI calls this service from another origin. Only the origins
   // listed are answered; every other browser origin is refused.
   app.enableCors(corsOptions(app.get(Env).corsAllowedOrigins));

@@ -56,7 +56,9 @@ test.describe('notifications', () => {
       { timeout: 45_000 },
     );
     await expect(latest.getByTestId('notification-delivery')).toHaveText('In the app', { timeout: 15_000 });
-    await expect(page.getByTestId('bell-count')).toBeVisible();
+    // The bell re-counts on navigation and every 30 s: on an empty inbox this
+    // is its first unread one, so allow one refresh.
+    await expect(page.getByTestId('bell-count')).toBeVisible({ timeout: 35_000 });
 
     await latest.getByTestId('notification-read').click();
     await expect(latest.getByTestId('notification-read')).toHaveCount(0);

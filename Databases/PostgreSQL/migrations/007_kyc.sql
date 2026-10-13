@@ -40,7 +40,7 @@ CREATE INDEX IF NOT EXISTS ix_kyc_verification_pending
 -- Events waiting to be published, written in the same transaction as the
 -- change they announce: a rolled-back decision leaves no row and publishes
 -- nothing, and a committed one is retried until the broker takes it. Same
--- shape as the auth service's outbox_event, which lives in its own database.
+-- shape as the auth service's outbox_event, which lives in the auth schema.
 CREATE TABLE IF NOT EXISTS outbox_event (
     event_id      UUID         PRIMARY KEY,
     topic         VARCHAR(249) NOT NULL,

@@ -424,7 +424,7 @@ so run the cash journey first (each run deposits ₹100), or add cash on the
 Cash page.
 
 ```bash
-docker compose --profile platform up -d      # the stack, from the repository root
+docker compose --profile localdb --profile platform up -d      # the stack, from the repository root
 npm start                                    # the UI, in another terminal
 npx playwright install chromium              # once per machine
 npm run e2e:login                            # each journey in its own process --

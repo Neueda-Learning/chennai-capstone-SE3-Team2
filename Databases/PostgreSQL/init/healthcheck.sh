@@ -4,7 +4,7 @@
 #
 # The second half matters. If an init script fails, the container exits; the
 # restart policy brings it back, the data directory now exists, and Postgres
-# skips initialisation and starts normally -- with no roles, no auth database
+# skips initialisation and starts normally -- with no roles, no auth schema
 # and no tables. Without the marker check that broken server would report
 # healthy and every service would start against it.
 #
@@ -15,5 +15,5 @@ set -eu
 pg_isready -q -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"
 
 marker="$(psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc \
-    "SELECT shobj_description(oid, 'pg_database') FROM pg_database WHERE datname = '$AUTH_DB_NAME'")"
+    "SELECT shobj_description(oid, 'pg_database') FROM pg_database WHERE datname = '$POSTGRES_DB'")"
 [ "$marker" = "fauxnance: init complete" ]

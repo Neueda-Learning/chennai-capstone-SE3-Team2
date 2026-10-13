@@ -1,4 +1,4 @@
-# Local stack:  docker compose --profile platform up -d --build
+# Local stack:  docker compose up -d --build   (profiles come from COMPOSE_PROFILES in .env)
 # Values that differ per machine come from .env, which is not committed.
 
 name: fauxnance
@@ -63,11 +63,13 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: fauxnance-postgres
-    profiles: [platform]
+    # The bundled database. Leave localdb out of COMPOSE_PROFILES to use an
+    # external one (Amazon RDS) instead: set CONTAINER_DB_HOST in .env.
+    profiles: [localdb]
     environment:
-      # One instance, two databases: trading (POSTGRES_DB) and auth, which
-      # init/00-roles.sh creates. The superuser runs the init scripts and
-      # nothing else -- no service connects as it.
+      # One database (POSTGRES_DB), two schemas: public for trading, auth for
+      # the auth service, which init/00-roles.sh creates. The superuser runs
+      # the init scripts and nothing else -- no service connects as it.
       POSTGRES_DB: ${DB_NAME:-trading_system_db}
       POSTGRES_USER: ${POSTGRES_SUPERUSER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?POSTGRES_SUPERUSER_PASSWORD must be set in .env}
@@ -78,26 +80,22 @@ services:
       ANALYTICS_RO_PASSWORD: ${ANALYTICS_DB_PASSWORD:?ANALYTICS_DB_PASSWORD must be set in .env}
       AUTH_APP_USER: ${AUTH_DB_USER:-auth_app}
       AUTH_APP_PASSWORD: ${AUTH_DB_PASSWORD:?AUTH_DB_PASSWORD must be set in .env}
-      AUTH_DB_NAME: ${AUTH_DB_NAME:-auth}
+      AUTH_DB_SCHEMA: ${AUTH_DB_SCHEMA:-auth}
     ports:
       - "${DB_PUBLISHED_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       # Applied in filename order, and ONLY when the volume is empty.
-      # Roles, the auth database and default privileges come first, so every
+      # Roles, the auth schema and default privileges come first, so every
       # table below is granted to the right role as it is created.
       - ./Databases/PostgreSQL/init/00-roles.sh:/docker-entrypoint-initdb.d/00-roles.sh:ro
-      # The whole trading_system_db schema, then its reference and demo data:
-      # the same two files a deployment applies by hand (see README.md).
-      # Rebuilt from base/, migrations/, indexes/ and seed/ by
-      # scripts/build-db-scripts.sh.
+      # Every table -- trading's in public, auth's in auth -- then the
+      # reference and demo data: the same two files a deployment applies by
+      # hand (see README.md). Rebuilt by scripts/build-db-scripts.sh.
       - ./Databases/PostgreSQL/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       - ./Databases/PostgreSQL/seed_data.sql:/docker-entrypoint-initdb.d/02-seed-data.sql:ro
-      # Auth's schema, applied to the auth database by 13-auth-schema.sh. The
-      # files are mounted OUTSIDE the init folder: the image runs every .sql
-      # in there against trading, where auth's tables do not belong.
-      - ./Databases/PostgreSQL/init/13-auth-schema.sh:/docker-entrypoint-initdb.d/13-auth-schema.sh:ro
-      - ./Services/auth-service/migrations:/auth-migrations:ro
+      # Last: marks initialisation complete, for the health check.
+      - ./Databases/PostgreSQL/init/13-init-complete.sh:/docker-entrypoint-initdb.d/13-init-complete.sh:ro
       - ./Databases/PostgreSQL/init/healthcheck.sh:/usr/local/bin/fauxnance-healthcheck.sh:ro
     networks: [trading-net]
     healthcheck:
@@ -118,10 +116,14 @@ services:
     container_name: fauxnance-trade-api
     profiles: [platform]
     environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
+      # postgres (the bundled database) unless CONTAINER_DB_HOST names another,
+      # e.g. an RDS endpoint. DB_HOST in .env is for runs outside Docker.
+      DB_HOST: ${CONTAINER_DB_HOST:-postgres}
+      DB_PORT: ${CONTAINER_DB_PORT:-5432}
       DB_NAME: ${DB_NAME:-trading_system_db}
-      # trading_app: read/write on trading, no connection to auth, not superuser.
+      # prefer: SSL when the server offers it. require for RDS.
+      DB_SSLMODE: ${DB_SSLMODE:-prefer}
+      # trading_app: read/write on the public schema, no access to auth, not superuser.
       DB_USER: ${DB_USER:-trading_app}
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
       # No default: the service refuses to start rather than accept
@@ -175,7 +177,9 @@ services:
         condition: service_completed_successfully
       postgres:
         # On health, not mere existence: starting early is a crash loop.
+        # Not required: with an external database there is no postgres.
         condition: service_healthy
+        required: false
       kafka:
         condition: service_healthy
     restart: unless-stopped
@@ -191,9 +195,13 @@ services:
     container_name: fauxnance-executor
     profiles: [platform]
     environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
+      # postgres (the bundled database) unless CONTAINER_DB_HOST names another,
+      # e.g. an RDS endpoint. DB_HOST in .env is for runs outside Docker.
+      DB_HOST: ${CONTAINER_DB_HOST:-postgres}
+      DB_PORT: ${CONTAINER_DB_PORT:-5432}
       DB_NAME: ${DB_NAME:-trading_system_db}
+      # prefer: SSL when the server offers it. require for RDS.
+      DB_SSLMODE: ${DB_SSLMODE:-prefer}
       DB_USER: ${DB_USER:-trading_app}
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
@@ -219,15 +227,17 @@ services:
         condition: service_completed_successfully
       postgres:
         # On the health condition. Starting before the database accepts
-        # connections is a crash loop, not a failure.
+        # connections is a crash loop, not a failure. Not required: with an
+        # external database there is no postgres.
         condition: service_healthy
+        required: false
       kafka:
         condition: service_healthy
     restart: unless-stopped
 
   # Sprint 8. The only component that ever sees a password. Its data lives in
-  # its own database, auth, on the shared instance: auth_app can connect to it
-  # and nothing else, and no other service's role can connect to it at all.
+  # its own schema, auth, of the one database: auth_app may use that schema
+  # and nothing else, and no other service's role may use it at all.
   auth:
     build:
       context: .
@@ -239,7 +249,14 @@ services:
       # adopting this service a configuration change rather than a code change.
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
       JWT_ISSUER: ${JWT_ISSUER:-auth-service}
-      AUTH_DATABASE_URL: postgresql://${AUTH_DB_USER:-auth_app}:${AUTH_DB_PASSWORD:?AUTH_DB_PASSWORD must be set in .env}@postgres:5432/${AUTH_DB_NAME:-auth}
+      # The same database as the Java services, its own role and schema.
+      DB_HOST: ${CONTAINER_DB_HOST:-postgres}
+      DB_PORT: ${CONTAINER_DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-trading_system_db}
+      DB_SSLMODE: ${DB_SSLMODE:-prefer}
+      AUTH_DB_USER: ${AUTH_DB_USER:-auth_app}
+      AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD:?AUTH_DB_PASSWORD must be set in .env}
+      AUTH_DB_SCHEMA: ${AUTH_DB_SCHEMA:-auth}
       PORT: 3000
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       # Consumes kyc-events, publishes account-provisioning via the outbox.
@@ -248,6 +265,9 @@ services:
       ACTIVATION_INTERNAL_SECRET: ${ACTIVATION_INTERNAL_SECRET:?ACTIVATION_INTERNAL_SECRET must be set in .env}
       # Where /activate sends a customer after they register.
       ACTIVATION_HOME_URL: ${ACTIVATION_HOME_URL:-http://localhost:4200/}
+      # Behind the frontend's nginx: believe X-Forwarded-For from private
+      # network proxies only, so the login throttle counts per browser.
+      TRUST_PROXY: ${TRUST_PROXY:-uniquelocal}
       # Browser origins allowed to call this service: the trading UI
       # (Frontend/). Exact origins, comma-separated.
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200}
@@ -269,11 +289,60 @@ services:
         condition: service_completed_successfully
       postgres:
         condition: service_healthy
+        required: false
       # Started first, but not waited on: logins must work with the broker
       # down, and the outbox catches up when it returns.
       kafka:
         condition: service_started
     restart: unless-stopped
+
+  # The trading UI, built and served by nginx, which also forwards the API
+  # paths to the services. The browser talks to ONE origin -- this one -- so
+  # there is no cross-origin request at all, and only this port needs to be
+  # open. Profile frontend: `npm start` serves the UI in development instead.
+  frontend:
+    build:
+      context: ./Frontend
+    container_name: fauxnance-frontend
+    profiles: [frontend]
+    environment:
+      # Where nginx forwards /api/... and /auth/..., /activate.
+      ORDER_SERVICE_URL: http://trade-api:8081
+      AUTH_SERVICE_URL: http://auth:3000
+    ports:
+      - "${FRONTEND_PUBLISHED_PORT:-4200}:80"
+    networks: [trading-net]
+    depends_on:
+      trade-api:
+        condition: service_started
+      auth:
+        condition: service_started
+    restart: unless-stopped
+
+  # The analytics ETL (ETL Layer/): one run, then it exits. Reads the trading
+  # schema as the read-only role and writes the DuckDB star schema to
+  # Databases/DuckDB/analytics/. Run it with:  docker compose run --rm etl
+  etl:
+    build:
+      context: "./ETL Layer"
+    container_name: fauxnance-etl
+    profiles: [etl]
+    environment:
+      DB_HOST: ${CONTAINER_DB_HOST:-postgres}
+      DB_PORT: ${CONTAINER_DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-trading_system_db}
+      ANALYTICS_DB_USER: ${ANALYTICS_DB_USER:-analytics_ro}
+      ANALYTICS_DB_PASSWORD: ${ANALYTICS_DB_PASSWORD:?ANALYTICS_DB_PASSWORD must be set in .env}
+      DUCKDB_PATH: /data/analytics.duckdb
+      DEAD_LETTER_DIR: /data/dead_letters
+    volumes:
+      - ./Databases/DuckDB/analytics:/data
+    networks: [trading-net]
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+    restart: "no"
 
 networks:
   trading-net:

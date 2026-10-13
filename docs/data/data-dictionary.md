@@ -279,7 +279,7 @@ published to Kafka by a relay. Added by `007_kyc.sql` for `KYC_VERIFIED`.
 
 A rolled-back change leaves no row and publishes nothing; a committed one is
 retried until it is published. The auth service has a table of the same shape
-in its own database.
+in its own schema, `auth.outbox_event`.
 
 ---
 

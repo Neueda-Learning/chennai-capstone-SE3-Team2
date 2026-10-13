@@ -15,7 +15,7 @@ spring:
       - optional:file:/config/application.yml
 
   datasource:
-    url: jdbc:postgresql://${DB_HOST:${database.host}}:${DB_PORT:${database.port}}/${DB_NAME:${database.name}}
+    url: jdbc:postgresql://${DB_HOST:${database.host}}:${DB_PORT:${database.port}}/${DB_NAME:${database.name}}?sslmode=${DB_SSLMODE:prefer}
     username: ${DB_USER:${database.user}}
     password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver

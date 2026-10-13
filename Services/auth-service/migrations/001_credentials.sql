@@ -1,5 +1,6 @@
--- The auth service's own schema. It lives in its own database: a service that
--- holds passwords should not also hold a connection to the trading data.
+-- The auth service's own tables. They live in their own schema, auth, which
+-- only auth_app may use: a service that holds passwords shares no tables with
+-- the trading data, and the trading roles cannot read these.
 
 -- Accounts opened by onboarding and waiting for someone to claim a login.
 -- In a real platform this is filled by the onboarding system. Here it is
