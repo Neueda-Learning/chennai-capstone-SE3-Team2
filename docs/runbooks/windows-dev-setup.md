@@ -34,8 +34,8 @@ git checkout kafka-container
 cp .env.example .env            # the placeholders are enough: Kafka reads none of them
 docker compose --profile localdb --profile platform up -d kafka
 docker exec -i -e BROKER=localhost:29092 -e KAFKA_TOPICS_BIN=/opt/kafka/bin/kafka-topics.sh \
-  fauxnance-kafka bash -s < Infrastructure/Kafka/create-topics.sh
-docker ps --format '{{.Names}} {{.Status}}'      # fauxnance-kafka ... (healthy)
+  kafka bash -s < Infrastructure/Kafka/create-topics.sh
+docker ps --format '{{.Names}} {{.Status}}'      # kafka ... (healthy)
 ```
 
 The topic script is safe to re-run. `docker compose --profile localdb --profile platform down -v`

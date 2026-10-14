@@ -25,7 +25,7 @@ SYMBOL_PATTERN='^[A-Za-z0-9.:&-]{1,30}$'
 [[ "$SYMBOL" =~ $SYMBOL_PATTERN ]] || { echo "symbol looks wrong" >&2; exit 2; }
 [[ "$PRICE" =~ ^[0-9]+(\.[0-9]{1,4})?$ ]] || { echo "price must be a number" >&2; exit 2; }
 
-KAFKA_CONTAINER="${KAFKA_CONTAINER:-fauxnance-kafka}"
+KAFKA_CONTAINER="${KAFKA_CONTAINER:-kafka}"
 KAFKA_BROKER_INTERNAL="${KAFKA_BROKER_INTERNAL:-kafka:29092}"
 command -v docker >/dev/null || { echo "need docker on PATH" >&2; exit 2; }
 

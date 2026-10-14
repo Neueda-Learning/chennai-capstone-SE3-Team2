@@ -1,13 +1,13 @@
 # Local stack:  docker compose up -d --build   (profiles come from COMPOSE_PROFILES in .env)
 # Values that differ per machine come from .env, which is not committed.
 
-name: fauxnance
+name: yellow-trade
 
 services:
 
   kafka:
     image: apache/kafka:3.8.0
-    container_name: fauxnance-kafka
+    container_name: kafka
     profiles: [platform]
     environment:
       KAFKA_NODE_ID: 1
@@ -46,7 +46,7 @@ services:
   # service below waits for this to finish, so a first `up` just works.
   kafka-init:
     image: apache/kafka:3.8.0
-    container_name: fauxnance-kafka-init
+    container_name: kafka-init
     profiles: [platform]
     environment:
       BROKER: kafka:29092
@@ -62,7 +62,7 @@ services:
 
   postgres:
     image: postgres:16-alpine
-    container_name: fauxnance-postgres
+    container_name: postgres
     # The bundled database. Leave localdb out of COMPOSE_PROFILES to use an
     # external one (Amazon RDS) instead: set CONTAINER_DB_HOST in .env.
     profiles: [localdb]
@@ -108,12 +108,12 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  trade-api:
+  order-service:
     build:
       # Repository root: the service depends on the sibling domain module.
       context: .
       dockerfile: Services/order-service/Dockerfile
-    container_name: fauxnance-trade-api
+    container_name: order-service
     profiles: [platform]
     environment:
       # postgres (the bundled database) unless CONTAINER_DB_HOST names another,
@@ -141,7 +141,7 @@ services:
       # The activation mailer. It asks auth for a token over the internal
       # network; the secret is the same one auth checks. No defaults for
       # secrets: missing means the service refuses to start.
-      AUTH_INTERNAL_URL: http://auth:3000
+      AUTH_INTERNAL_URL: http://auth-service:3000
       ACTIVATION_INTERNAL_SECRET: ${ACTIVATION_INTERNAL_SECRET:?ACTIVATION_INTERNAL_SECRET must be set in .env}
       ACTIVATION_LINK_BASE_URL: ${ACTIVATION_LINK_BASE_URL:-http://localhost:3000/activate}
       ACTIVATION_MAIL_FROM: ${ACTIVATION_MAIL_FROM:?ACTIVATION_MAIL_FROM must be set in .env}
@@ -187,12 +187,12 @@ services:
   # Consumes accepted orders, prices them, settles them. Hosts the
   # market-data poller. trade-api holds the same key for the screens, with
   # a budget of its own (MARKET_DATA_DAILY_BUDGET).
-  executor:
+  executor-service:
     build:
       # Repository root: depends on the sibling domain module.
       context: .
       dockerfile: Services/executor-service/Dockerfile
-    container_name: fauxnance-executor
+    container_name: executor-service
     profiles: [platform]
     environment:
       # postgres (the bundled database) unless CONTAINER_DB_HOST names another,
@@ -238,11 +238,11 @@ services:
   # Sprint 8. The only component that ever sees a password. Its data lives in
   # its own schema, auth, of the one database: auth_app may use that schema
   # and nothing else, and no other service's role may use it at all.
-  auth:
+  auth-service:
     build:
       context: .
       dockerfile: Services/auth-service/Dockerfile
-    container_name: fauxnance-auth
+    container_name: auth-service
     profiles: [platform]
     environment:
       # The same secret the Trade REST API verifies with. That is what makes
@@ -303,19 +303,19 @@ services:
   frontend:
     build:
       context: ./Frontend
-    container_name: fauxnance-frontend
+    container_name: frontend
     profiles: [frontend]
     environment:
       # Where nginx forwards /api/..., /onboarding/... and /auth/..., /activate.
-      ORDER_SERVICE_URL: http://trade-api:8081
-      AUTH_SERVICE_URL: http://auth:3000
+      ORDER_SERVICE_URL: http://order-service:8081
+      AUTH_SERVICE_URL: http://auth-service:3000
     ports:
       - "${FRONTEND_PUBLISHED_PORT:-4200}:80"
     networks: [trading-net]
     depends_on:
-      trade-api:
+      order-service:
         condition: service_started
-      auth:
+      auth-service:
         condition: service_started
     restart: unless-stopped
 
@@ -325,7 +325,7 @@ services:
   etl:
     build:
       context: "./ETL Layer"
-    container_name: fauxnance-etl
+    container_name: etl
     profiles: [etl]
     environment:
       DB_HOST: ${CONTAINER_DB_HOST:-postgres}

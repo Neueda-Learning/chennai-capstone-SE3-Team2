@@ -86,7 +86,7 @@ the Windows setup). `payments.batch-size` (50 a run) and
 
 | What | What happens | What you see |
 |---|---|---|
-| Deciding a transfer throws (the database, a bug) | That transfer's transaction rolls back and it stays `PENDING`; the others in the run go on. The next run tries again. | `transfer N not decided (attempt n of 5), left PENDING: <ExceptionClass>` in `docker compose logs trade-api` |
+| Deciding a transfer throws (the database, a bug) | That transfer's transaction rolls back and it stays `PENDING`; the others in the run go on. The next run tries again. | `transfer N not decided (attempt n of 5), left PENDING: <ExceptionClass>` in `docker compose logs order-service` |
 | Five failed attempts | The transfer is **set aside**: still `PENDING`, its withdrawal still held, and no run picks it up again. Money no run will move until a person acts -- alert on this. | `PAYMENT_SET_ASIDE transfer N set aside after 5 failed attempts` |
 | Two instances decide the same transfer | The guarded update lets one win; the other moves nothing. | `transfer N decided …` once |
 | The customer's request gets no answer | The Cash page sends the same idempotency key on the retry, so the server returns the first transfer instead of making a second. | one row per key in `fund_transfer` |
@@ -98,10 +98,10 @@ account.
 Find what is stuck, and retry a set-aside transfer once the cause is fixed:
 
 ```bash
-docker exec -i fauxnance-postgres psql -U postgres -d trading_system_db -c \
+docker exec -i postgres psql -U postgres -d trading_system_db -c \
   "SELECT transfer_id, client_id, direction, amount, attempts, last_error, created_at
      FROM fund_transfer WHERE status = 'PENDING' ORDER BY created_at"
-docker exec -i fauxnance-postgres psql -U postgres -d trading_system_db -c \
+docker exec -i postgres psql -U postgres -d trading_system_db -c \
   "UPDATE fund_transfer SET attempts = 0 WHERE transfer_id = <N>"
 ```
 
@@ -140,7 +140,7 @@ curl -sS -X POST localhost:8081/api/v1/accounts/$ID/withdrawals -H "$H" -H "$J" 
   -d "{\"amount\":250000,\"idempotencyKey\":\"$(cat /proc/sys/kernel/random/uuid)\"}"  # PAY-400: more than available
 curl -sS -X POST localhost:8081/api/v1/accounts/$ID/deposits -H "$H" -H "$J" \
   -d "{\"amount\":250000,\"idempotencyKey\":\"$(cat /proc/sys/kernel/random/uuid)\"}"  # later FAILED, over the limit
-docker compose logs trade-api | grep -c '<the full account number>'         # 0
+docker compose logs order-service | grep -c '<the full account number>'         # 0
 ```
 
 Or in the browser: **Cash** in the header.

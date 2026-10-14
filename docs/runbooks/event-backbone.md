@@ -93,7 +93,7 @@ The script exits non-zero on any regression. In sequence it:
 6. Reads one message off `orders` with the console consumer,
    preserving the key on the `\t` separator so the replay lands on
    the same partition. Console tools run inside the broker
-   container (`docker exec fauxnance-kafka /opt/kafka/bin/...`) so
+   container (`docker exec kafka /opt/kafka/bin/...`) so
    there is nothing extra to install on the host.
 7. Produces the same message back to `orders`, key preserved.
 8. Sleeps a few seconds — the executor consumer runs on its own
@@ -104,7 +104,7 @@ The script exits non-zero on any regression. In sequence it:
     payload entries carrying the order's UUID is exactly **1**.
     The first delivery published a `FILLED`; the ALREADY_SETTLED
     path in `FullSettlement.java:73` deliberately publishes nothing.
-11. Greps `docker logs fauxnance-executor` for the line
+11. Greps `docker logs executor-service` for the line
     `duplicate delivery ignored: order <uuid> on account 3 was
     already settled, nothing written and nothing published`. That is
     what the executor prints on the zero-rows-affected branch, and
@@ -122,7 +122,7 @@ The script exits non-zero on any regression. In sequence it:
 ### If the demo fails
 
 - `executor did not settle within 30s` → `FAUXNANCE_API_KEY` is
-  wrong or Fauxnance is unreachable. `docker logs fauxnance-executor`
+  wrong or Fauxnance is unreachable. `docker logs executor-service`
   will show `NO_PRICE` or an HTTP error from the quote client.
 - `no message on orders topic` → the volume was not reset before the
   run. Repeat the prerequisites.
@@ -198,7 +198,7 @@ Two integration tests, both under `executor/src/test/java/com/yellow/executor/co
 Straight from the brief. Bring these on demand:
 
 - the running stack
-- `docker exec fauxnance-kafka /opt/kafka/bin/kafka-topics.sh
+- `docker exec kafka /opt/kafka/bin/kafka-topics.sh
   --describe --bootstrap-server kafka:29092` with `design/kafka.md`
   open beside them
 - one order traced end to end: HTTP request → `orders` topic →

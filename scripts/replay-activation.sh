@@ -18,7 +18,7 @@ set -euo pipefail
 CLIENT_ID="${1:?usage: $0 <clientId>}"
 [[ "$CLIENT_ID" =~ ^[1-9][0-9]*$ ]] || { echo "clientId must be a positive integer" >&2; exit 2; }
 
-AUTH_DB_CONTAINER="${AUTH_DB_CONTAINER:-fauxnance-postgres}"
+AUTH_DB_CONTAINER="${AUTH_DB_CONTAINER:-postgres}"
 AUTH_DB_USER="${AUTH_DB_USER:-auth_app}"
 # One database; auth_app's search_path is the auth schema, so the bare table
 # names below are auth's.

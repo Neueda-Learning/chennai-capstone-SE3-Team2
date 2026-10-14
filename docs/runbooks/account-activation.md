@@ -88,7 +88,7 @@ registered. Only `VERIFIED` queues `KYC_VERIFIED`, in the same transaction, and
 trade-api's outbox relay publishes it every `OUTBOX_POLL_MS`.
 
 ```bash
-docker exec -i fauxnance-postgres psql -U postgres -d trading_system_db -c \
+docker exec -i postgres psql -U postgres -d trading_system_db -c \
   "SELECT kv.status, kv.reason, kv.checks, kv.attempts, kv.last_error, ca.kyc_status
      FROM kyc_verification kv JOIN client_account ca USING (client_id)
     WHERE client_id = <id>"
@@ -134,7 +134,7 @@ refuses to start and names it.
 | `ACTIVATION_INTERNAL_SECRET` | auth **and** trade-api | none — required, secret | Guards `POST /internal/activation-tokens`. Same value both sides. `openssl rand -base64 48` |
 | `ACTIVATION_HOME_URL` | auth | `http://localhost:4200/` | Linked from the "Your login is ready" page after registering |
 | `OUTBOX_POLL_MS` | auth **and** trade-api | `2000` | How often each outbox relay looks for unsent events |
-| `AUTH_INTERNAL_URL` | trade-api | `http://localhost:3000` (compose: `http://auth:3000`) | Base URL for minting tokens |
+| `AUTH_INTERNAL_URL` | trade-api | `http://localhost:3000` (compose: `http://auth-service:3000`) | Base URL for minting tokens |
 | `ACTIVATION_LINK_BASE_URL` | trade-api | `http://localhost:3000/activate` | The link in the email; `?token=` is appended |
 | `ACTIVATION_MAIL_FROM` | trade-api | none — required | Sender address. For Gmail, the account itself |
 | `SMTP_HOST` | trade-api | `smtp.gmail.com` | |
@@ -172,7 +172,7 @@ Running auth outside compose (`npm run start` in `Services/auth-service`) now al
 
 | What | What happens | What you see |
 |---|---|---|
-| Kafka, while auth provisions | The account and its outbox row commit anyway. The relay retries every `OUTBOX_POLL_MS` and sends when the broker returns. Logins are unaffected. | `OUTBOX_PUBLISH_FAILED event=<uuid> …` warnings in `docker compose logs auth`; `SELECT * FROM outbox_event WHERE published_at IS NULL` in the auth DB |
+| Kafka, while auth provisions | The account and its outbox row commit anyway. The relay retries every `OUTBOX_POLL_MS` and sends when the broker returns. Logins are unaffected. | `OUTBOX_PUBLISH_FAILED event=<uuid> …` warnings in `docker compose logs auth-service`; `SELECT * FROM outbox_event WHERE published_at IS NULL` in the auth DB |
 | Kafka, at auth startup | Auth starts and serves HTTP; the `kyc-events` consumer retries every 10 s. | `kyc-events consumer not running (…); retrying in 10s` |
 | Auth database, while consuming `kyc-events` | The message is not committed and kafkajs retries it. A verification is never dropped. | kafkajs retry errors in the auth log |
 | Auth (HTTP), while the mailer runs | Retried 3 times with backoff (0.5 s, 2 s, 8 s), then dead-lettered to `account-provisioning.DLT` with `x-failure-class: TRANSIENT`. Not lost. | `activation retry n for account-provisioning-…` in the trade-api log |
@@ -180,13 +180,13 @@ Running auth outside compose (`npm run start` in `Services/auth-service`) now al
 | No `client_profile` row | Dead-lettered on the first attempt, `x-failure-class: POISON`. A real inconsistency. | DLT record, reason `no client_profile row for client N` |
 | Account already has a login | Nothing sent, message acknowledged. | `client N already has a login; nothing sent` |
 | A malformed event on either topic | Dead-lettered on the first attempt with the original bytes. | DLT record with `x-failure-reason` |
-| Kafka, while trade-api relays `KYC_VERIFIED` | KYC keeps deciding; the event waits in trade-api's `outbox_event` and is retried every `OUTBOX_POLL_MS`, without limit, and sent when the broker returns. | `OUTBOX_PUBLISH_FAILED event=<uuid> …` in `docker compose logs trade-api`; `SELECT * FROM outbox_event WHERE published_at IS NULL` in the trading DB |
+| Kafka, while trade-api relays `KYC_VERIFIED` | KYC keeps deciding; the event waits in trade-api's `outbox_event` and is retried every `OUTBOX_POLL_MS`, without limit, and sent when the broker returns. | `OUTBOX_PUBLISH_FAILED event=<uuid> …` in `docker compose logs order-service`; `SELECT * FROM outbox_event WHERE published_at IS NULL` in the trading DB |
 | A KYC check that errors every time | Retried each run, then set aside, still `PENDING`. | `KYC_SET_ASIDE` in the trade-api log; see [Applying and KYC](#applying-and-kyc) |
 
 Read a dead-letter topic:
 
 ```bash
-docker exec fauxnance-kafka /opt/kafka/bin/kafka-console-consumer.sh \
+docker exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
   --bootstrap-server kafka:29092 --topic account-provisioning.DLT \
   --from-beginning --property print.headers=true --timeout-ms 5000
 ```
@@ -216,7 +216,7 @@ docker compose --profile localdb --profile platform up -d --build
 bash Infrastructure/Kafka/create-topics.sh
 # no Kafka CLI on the host? run it inside the broker container instead:
 #   docker exec -i -e BROKER=localhost:29092 -e KAFKA_TOPICS_BIN=/opt/kafka/bin/kafka-topics.sh \
-#     fauxnance-kafka bash -s < Infrastructure/Kafka/create-topics.sh
+#     kafka bash -s < Infrastructure/Kafka/create-topics.sh
 
 curl -sS -X POST localhost:8081/onboarding/applications -H 'Content-Type: application/json' \
   -d '{"name":"Demo Customer","dob":"1995-06-15","email":"you+kyc1@gmail.com",
@@ -280,9 +280,9 @@ with no checks. The ten seeded accounts are already provisioned, so give one
 back first:
 
 ```bash
-docker exec -i fauxnance-postgres psql -U postgres -d trading_system_db \
+docker exec -i postgres psql -U postgres -d trading_system_db \
   -c "UPDATE client_profile SET email = 'you+activation@gmail.com' WHERE client_id = 5"
-docker exec -i fauxnance-postgres psql -U postgres -d trading_system_db \
+docker exec -i postgres psql -U postgres -d trading_system_db \
   -c "DELETE FROM auth.provisioned_account WHERE account_id = 5 AND claimed_by IS NULL"
 bash scripts/publish-kyc-verified.sh 5
 ```
@@ -310,7 +310,7 @@ Record each result in the security review's evidence table.
    Kafka, so simulate the committed outbox row directly: `docker compose stop kafka`,
    then `bash scripts/replay-activation.sh 6` (it writes exactly the row
    provisioning writes) → it succeeds, and `OUTBOX_PUBLISH_FAILED` appears in
-   `docker compose logs auth`. `docker compose start kafka` → within a few
+   `docker compose logs auth-service`. `docker compose start kafka` → within a few
    seconds the message is on `account-provisioning` and
    `outbox_event.published_at` is set.
 
@@ -329,12 +329,12 @@ Record each result in the security review's evidence table.
 2. Duplicate: consume one `ACCOUNT_PROVISIONED` off the topic and produce it
    back with the same key (as `scripts/duplicate-replay.sh` does for `orders`)
    → no second email; `already emailed; nothing sent` in the trade-api log.
-3. Auth unreachable. `docker compose stop auth`, then produce an
+3. Auth unreachable. `docker compose stop auth-service`, then produce an
    `ACCOUNT_PROVISIONED` by hand (auth's outbox cannot, since auth is stopped):
    ```bash
    printf '7\t{"eventId":"%s","eventType":"ACCOUNT_PROVISIONED","eventTime":"%s","source":"auth-service","schemaVersion":1,"payload":{"clientId":7}}\n' \
      "$(cat /proc/sys/kernel/random/uuid)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-   | docker exec -i fauxnance-kafka /opt/kafka/bin/kafka-console-producer.sh \
+   | docker exec -i kafka /opt/kafka/bin/kafka-console-producer.sh \
        --bootstrap-server kafka:29092 --topic account-provisioning \
        --property parse.key=true --property key.separator=$'\t'
    ```
@@ -342,7 +342,7 @@ Record each result in the security review's evidence table.
    `account-provisioning.DLT` with `x-failure-class: TRANSIENT`. Not lost.
 4. The same command with `7` replaced by `999` (no `client_profile`), auth
    running → `account-provisioning.DLT`, `x-failure-class: POISON`, first attempt.
-5. `docker compose logs trade-api auth | grep -c '<token or email>'` → 0.
+5. `docker compose logs order-service auth-service | grep -c '<token or email>'` → 0.
 
 **Stage 4 — register**
 1. The link flow above registers with no account number.
@@ -360,4 +360,4 @@ Record each result in the security review's evidence table.
    `OUTBOX_PUBLISH_FAILED` in the trade-api log; `docker compose start kafka` →
    the event is sent and auth provisions the account.
 5. Order as seeded account 9 (`kyc_status PENDING`) → `403 ACC-403 KYC not verified`.
-6. `docker compose logs trade-api auth postgres | grep -c '<name|email|PAN>'` → 0.
+6. `docker compose logs order-service auth-service postgres | grep -c '<name|email|PAN>'` → 0.

@@ -21,7 +21,7 @@ To create the topics by hand against the running broker:
 
 ```bash
 docker exec -i -e BROKER=localhost:29092 -e KAFKA_TOPICS_BIN=/opt/kafka/bin/kafka-topics.sh \
-  fauxnance-kafka bash -s < Infrastructure/Kafka/create-topics.sh
+  kafka bash -s < Infrastructure/Kafka/create-topics.sh
 ```
 
 (Inside its own container the broker listens on 29092; 9092 is the port it

@@ -22,7 +22,7 @@ set -euo pipefail
 CLIENT_ID="${1:?usage: $0 <clientId>}"
 [[ "$CLIENT_ID" =~ ^[1-9][0-9]*$ ]] || { echo "clientId must be a positive integer" >&2; exit 2; }
 
-KAFKA_CONTAINER="${KAFKA_CONTAINER:-fauxnance-kafka}"
+KAFKA_CONTAINER="${KAFKA_CONTAINER:-kafka}"
 KAFKA_BROKER_INTERNAL="${KAFKA_BROKER_INTERNAL:-kafka:29092}"
 
 command -v docker >/dev/null || { echo "need docker on PATH" >&2; exit 2; }
