@@ -1,0 +1,40 @@
+# Yellow Trade on Kubernetes: everything every deployment shares. Not applied on its own:
+# apply an overlay (overlays/frontend-lb or overlays/ingress), which adds the public addresses.
+# Run k8s/prepare.sh first: it copies the repository files this kustomization reads into generated/.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: yellow-trade
+resources:
+  - namespace.yaml
+  - storageclass.yaml
+  - kafka.yaml
+  - kafka-topics-job.yaml
+  - auth-service.yaml
+  - order-service.yaml
+  - executor-service.yaml
+  - frontend.yaml
+configMapGenerator:
+  - name: yellow-trade-config               # non-secret settings, every service (envFrom)
+    envs: [config.env]
+  - name: yellow-trade-shared-config        # Config/application.yml, mounted at /config (prepare.sh copies it)
+    files: [application.yml=generated/application.yml]
+  - name: kafka-topics-script               # Infrastructure/Kafka/create-topics.sh (prepare.sh copies it)
+    files: [create-topics.sh=generated/create-topics.sh]
+  - name: frontend-nginx                    # the frontend's nginx, with cluster upstreams
+    files: [default.conf.template=frontend/default.conf.template]
+secretGenerator:
+  - name: yellow-trade-secrets              # your copy of secrets.env.example; never committed
+    envs: [secrets.env]
+images:
+  - name: yellow-trade-auth-service
+    newName: 222125591853.dkr.ecr.ap-south-1.amazonaws.com/etp-auth-service
+    newTag: latest
+  - name: yellow-trade-order-service
+    newName: 222125591853.dkr.ecr.ap-south-1.amazonaws.com/etp-order-service
+    newTag: latest
+  - name: yellow-trade-executor-service
+    newName: 222125591853.dkr.ecr.ap-south-1.amazonaws.com/etp-executor-service
+    newTag: latest
+  - name: yellow-trade-frontend
+    newName: 222125591853.dkr.ecr.ap-south-1.amazonaws.com/etp-frontend
+    newTag: latest

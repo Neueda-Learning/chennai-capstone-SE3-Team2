@@ -1,0 +1,82 @@
+# OPTIONAL: the compose file's postgres service. One database (trading_system_db), schemas
+# public and auth, one role per service; the superuser only builds it. For anything that
+# matters, use RDS instead.
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+spec:
+  clusterIP: None
+  selector: { app: postgres }
+  ports:
+    - { name: pg, port: 5432, targetPort: pg }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels: { app: postgres }
+  template:
+    metadata:
+      labels: { app: postgres }
+    spec:
+      enableServiceLinks: false        # no POSTGRES_* variables from Services: the image reads POSTGRES_*
+      securityContext:
+        fsGroup: 70                    # the postgres user of the alpine image
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - { name: pg, containerPort: 5432 }
+          env:
+            - { name: POSTGRES_DB, valueFrom: { configMapKeyRef: { name: yellow-trade-config, key: DB_NAME } } }
+            - { name: POSTGRES_USER, value: postgres }
+            - { name: POSTGRES_PASSWORD, valueFrom: { secretKeyRef: { name: yellow-trade-secrets, key: POSTGRES_SUPERUSER_PASSWORD } } }
+            # Read by 00-roles.sh: one role per service, with the passwords the services use.
+            - { name: TRADING_APP_USER, valueFrom: { configMapKeyRef: { name: yellow-trade-config, key: DB_USER } } }
+            - { name: TRADING_APP_PASSWORD, valueFrom: { secretKeyRef: { name: yellow-trade-secrets, key: DB_PASSWORD } } }
+            - { name: ANALYTICS_RO_USER, value: analytics_ro }
+            - { name: ANALYTICS_RO_PASSWORD, valueFrom: { secretKeyRef: { name: yellow-trade-secrets, key: ANALYTICS_DB_PASSWORD } } }
+            - { name: AUTH_APP_USER, valueFrom: { configMapKeyRef: { name: yellow-trade-config, key: AUTH_DB_USER } } }
+            - { name: AUTH_APP_PASSWORD, valueFrom: { secretKeyRef: { name: yellow-trade-secrets, key: AUTH_DB_PASSWORD } } }
+            - { name: AUTH_DB_SCHEMA, valueFrom: { configMapKeyRef: { name: yellow-trade-config, key: AUTH_DB_SCHEMA } } }
+            # A sub-folder: a fresh ext4 disk has lost+found at its root, which initdb rejects.
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          # healthcheck.sh: ready only once the init scripts ran to the end (compose's check).
+          startupProbe:
+            exec: { command: [/scripts/healthcheck.sh] }
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            exec: { command: [/scripts/healthcheck.sh] }
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            tcpSocket: { port: pg }
+            periodSeconds: 20
+            failureThreshold: 6
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 768Mi }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+            - { name: initdb, mountPath: /docker-entrypoint-initdb.d, readOnly: true }
+            - { name: healthcheck, mountPath: /scripts, readOnly: true }
+      volumes:
+        - name: initdb
+          configMap: { name: postgres-init, defaultMode: 0755 }      # executable: run, not sourced
+        - name: healthcheck
+          configMap: { name: postgres-healthcheck, defaultMode: 0755 }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: gp3
+        resources:
+          requests: { storage: 5Gi }

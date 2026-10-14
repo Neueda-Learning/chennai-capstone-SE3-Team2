@@ -1,0 +1,29 @@
+# STAGE 1: ONE load balancer, in front of the frontend. That is all the browser needs: the
+# page and every API call share its origin (nginx forwards /api/, /onboarding/, /auth/,
+# /activate). auth-service, order-service and executor-service stay internal.
+#   kubectl apply -k k8s/overlays/frontend-lb
+# Its address exists only after the first apply: README step 8 writes it into urls.env.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: yellow-trade
+resources:
+  - ../../base
+# PostgreSQL in the cluster instead of RDS: uncomment the two lines below.
+#components:
+#  - ../../optional/postgres
+configMapGenerator:
+  - name: yellow-trade-urls
+    envs: [urls.env]
+patches:
+  - patch: |-
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: frontend
+        annotations:
+          # Public. Without the AWS Load Balancer Controller this is a classic ELB, which
+          # ignores the line; with it (README step 10) a new LoadBalancer Service becomes
+          # an NLB, and an NLB is internal unless this says otherwise.
+          service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+      spec:
+        type: LoadBalancer

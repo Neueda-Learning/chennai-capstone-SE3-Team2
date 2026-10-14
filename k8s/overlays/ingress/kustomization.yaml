@@ -1,0 +1,17 @@
+# STAGE 2 (optional): ONE ALB (Ingress), in front of the frontend -- the way to add HTTPS
+# and your own domain. Needs the AWS Load Balancer Controller (README step 10).
+#   kubectl apply -k k8s/overlays/ingress
+# Every path goes to the frontend's nginx, which forwards the API paths exactly as with
+# frontend-lb, so the services stay internal here too.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: yellow-trade
+resources:
+  - ../../base
+  - ingress.yaml
+# PostgreSQL in the cluster instead of RDS: uncomment the two lines below.
+#components:
+#  - ../../optional/postgres
+configMapGenerator:
+  - name: yellow-trade-urls
+    envs: [urls.env]

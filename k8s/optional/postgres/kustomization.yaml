@@ -1,0 +1,25 @@
+# OPTIONAL: PostgreSQL inside the cluster instead of RDS -- the compose file's localdb profile.
+# A Component, so an overlay switches it on with one line (uncomment `components:` there).
+# It also points the services at it: DB_HOST=postgres, DB_SSLMODE=prefer.
+# Built on the first start with an empty disk, exactly as compose builds it:
+# 00-roles.sh, schema.sql, seed_data.sql, 13-init-complete.sh (prepare.sh copies them).
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - postgres.yaml
+configMapGenerator:
+  - name: postgres-init
+    files:
+      - 00-roles.sh=generated/00-roles.sh
+      # gzip: seed_data.sql is ~475 KiB, more than kubectl apply's 256 KiB annotation
+      # limit; the postgres image reads .sql.gz itself.
+      - 01-schema.sql.gz=generated/01-schema.sql.gz
+      - 02-seed-data.sql.gz=generated/02-seed-data.sql.gz
+      - 13-init-complete.sh=generated/13-init-complete.sh
+  - name: postgres-healthcheck
+    files: [healthcheck.sh=generated/healthcheck.sh]
+  - name: yellow-trade-config
+    behavior: merge
+    literals:
+      - DB_HOST=postgres
+      - DB_SSLMODE=prefer

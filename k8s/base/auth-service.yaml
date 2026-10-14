@@ -1,0 +1,70 @@
+# auth-service (NestJS) on 3000: logins, tokens, the activation page. The browser reaches it
+# only through the frontend's nginx (/auth/, /activate); order-service at AUTH_INTERNAL_URL.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: auth-service }
+  template:
+    metadata:
+      labels: { app: auth-service }
+    spec:
+      enableServiceLinks: false
+      # The image's user, auth, is uid 100 / gid 101 (adduser -S in the Dockerfile).
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100
+        runAsGroup: 101
+        fsGroup: 101
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: auth-service
+          image: yellow-trade-auth-service
+          ports:
+            - { name: http, containerPort: 3000 }
+          envFrom:
+            - configMapRef: { name: yellow-trade-config }
+            - configMapRef: { name: yellow-trade-urls }     # CORS_ALLOWED_ORIGINS, ACTIVATION_HOME_URL
+          env:
+            - { name: PORT, value: "3000" }
+            # Only the secrets this service uses, as in docker-compose.yml. Never the
+            # trading_app password: auth_app sees the auth schema and nothing else.
+            - { name: AUTH_DB_PASSWORD, valueFrom: { secretKeyRef: { name: yellow-trade-secrets, key: AUTH_DB_PASSWORD } } }
+            - { name: JWT_SECRET, valueFrom: { secretKeyRef: { name: yellow-trade-secrets, key: JWT_SECRET } } }
+            - { name: ACTIVATION_INTERNAL_SECRET, valueFrom: { secretKeyRef: { name: yellow-trade-secrets, key: ACTIVATION_INTERNAL_SECRET } } }
+            - { name: REDIS_URL, valueFrom: { secretKeyRef: { name: yellow-trade-secrets, key: REDIS_URL } } }
+          volumeMounts:
+            - { name: shared-config, mountPath: /config, readOnly: true }   # Config/application.yml
+          # No health route of its own: the Swagger document answers once Nest is listening
+          # (the image's HEALTHCHECK uses the same).
+          startupProbe:
+            httpGet: { path: /docs/json, port: http }
+            periodSeconds: 5
+            failureThreshold: 36
+          readinessProbe:
+            httpGet: { path: /docs/json, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /docs/json, port: http }
+            periodSeconds: 20
+            failureThreshold: 5
+          resources:
+            requests: { cpu: 100m, memory: 192Mi }
+            limits: { memory: 512Mi }
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
+      volumes:
+        - name: shared-config
+          configMap: { name: yellow-trade-shared-config }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service
+spec:
+  type: ClusterIP
+  selector: { app: auth-service }
+  ports:
+    - { name: http, port: 3000, targetPort: http }

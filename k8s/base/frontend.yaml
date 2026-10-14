@@ -1,0 +1,59 @@
+# The trading UI, served by nginx, which also forwards /api/, /onboarding/, /auth/ and
+# /activate to the services. The browser talks to this ONE origin only (the image is built
+# with the "docker" configuration: every API call goes to the page's own origin), so it is
+# the only Service an overlay exposes.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: frontend }
+  template:
+    metadata:
+      labels: { app: frontend }
+    spec:
+      enableServiceLinks: false
+      # nginx's master process starts as root to bind port 80, then runs its workers as
+      # nginx -- the image's own design, as in compose.
+      securityContext:
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: frontend
+          image: yellow-trade-frontend
+          ports:
+            - { name: http, containerPort: 80 }
+          env:
+            # Where nginx forwards: the Services below, by name (compose sets the same two).
+            - { name: ORDER_SERVICE_URL, value: "http://order-service:8081" }
+            - { name: AUTH_SERVICE_URL, value: "http://auth-service:3000" }
+          volumeMounts:
+            # Replaces the image's template with the cluster one (base/frontend/).
+            - name: nginx-template
+              mountPath: /etc/nginx/templates/default.conf.template
+              subPath: default.conf.template
+              readOnly: true
+          readinessProbe:
+            httpGet: { path: /, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /, port: http }
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { memory: 256Mi }
+          securityContext: { allowPrivilegeEscalation: false }
+      volumes:
+        - name: nginx-template
+          configMap: { name: frontend-nginx }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+spec:
+  type: ClusterIP                      # frontend-lb makes it a LoadBalancer; ingress puts an ALB in front
+  selector: { app: frontend }
+  ports:
+    - { name: http, port: 80, targetPort: http }

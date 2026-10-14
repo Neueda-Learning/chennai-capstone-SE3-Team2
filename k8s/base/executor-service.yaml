@@ -1,0 +1,89 @@
+# executor-service: the Trade Executor (Spring Boot) on 8082 -- consumes orders, prices
+# and settles them, and runs the market-data poller. No caller needs its port except the
+# probes, so its Service stays internal in every overlay.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: executor-service
+spec:
+  replicas: 1                          # the poller spends the Fauxnance key's daily quota: one copy
+  strategy: { type: Recreate }         # never two pollers at once during a rollout
+  selector:
+    matchLabels: { app: executor-service }
+  template:
+    metadata:
+      labels: { app: executor-service }
+    spec:
+      enableServiceLinks: false
+      # The image's user, trade, is uid 100 / gid 101 (adduser -S in the Dockerfile).
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100
+        runAsGroup: 101
+        fsGroup: 101
+        seccompProfile: { type: RuntimeDefault }
+      # compose starts it only once Kafka and the database are up. Without this, a first
+      # start that beats the Kafka pod fails ("No resolvable bootstrap urls") and is
+      # restarted. It also names an unreachable RDS in this container's log.
+      initContainers:
+        - name: wait-for-kafka-and-db
+          image: yellow-trade-executor-service
+          envFrom:
+            - configMapRef: { name: yellow-trade-config }
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z -w 2 kafka 29092; do echo "waiting for kafka:29092"; sleep 2; done
+              until nc -z -w 2 "$DB_HOST" "$DB_PORT"; do echo "waiting for the database at $DB_HOST:$DB_PORT"; sleep 2; done
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { memory: 32Mi }
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
+      containers:
+        - name: executor-service
+          image: yellow-trade-executor-service
+          ports:
+            - { name: http, containerPort: 8082 }
+          envFrom:
+            - configMapRef: { name: yellow-trade-config }
+          env:
+            - { name: EXECUTOR_PORT, value: "8082" }
+            - { name: DB_PASSWORD, valueFrom: { secretKeyRef: { name: yellow-trade-secrets, key: DB_PASSWORD } } }
+            - { name: FAUXNANCE_API_KEY, valueFrom: { secretKeyRef: { name: yellow-trade-secrets, key: FAUXNANCE_API_KEY } } }
+            - { name: MF_NAV_API_KEY, valueFrom: { secretKeyRef: { name: yellow-trade-secrets, key: MF_NAV_API_KEY } } }
+          volumeMounts:
+            - { name: shared-config, mountPath: /config, readOnly: true }   # Config/application.yml
+            - { name: tmp, mountPath: /tmp }
+          startupProbe:
+            httpGet: { path: /actuator/health/liveness, port: http }
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: http }
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            requests: { cpu: 250m, memory: 640Mi }
+            limits: { memory: 1280Mi }
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
+      volumes:
+        - name: shared-config
+          configMap: { name: yellow-trade-shared-config }
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: executor-service
+spec:
+  type: ClusterIP
+  selector: { app: executor-service }
+  ports:
+    - { name: http, port: 8082, targetPort: http }

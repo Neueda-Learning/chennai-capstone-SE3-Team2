@@ -5,6 +5,7 @@ import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { BankAccountResponse, TransferResponse } from '../../../generated/extensions';
 import { PaymentsApi } from '../../core/api/payments-api';
 import { TradeApi } from '../../core/api/trade-api';
+import { newIdempotencyKey } from '../../core/http/idempotency-key';
 import { Session } from '../../core/session/session';
 import { REREAD_POLICY } from '../../shared/reread/reread-policy';
 import { ErrorMessage } from '../../shared/error-message/error-message';
@@ -79,7 +80,7 @@ export class Cash {
     }
 
     const request = `${direction}:${amount}`;
-    const key = this.unconfirmed?.request === request ? this.unconfirmed.key : crypto.randomUUID();
+    const key = this.unconfirmed?.request === request ? this.unconfirmed.key : newIdempotencyKey();
     this.unconfirmed = { key, request };
 
     this.submitting.set(direction);

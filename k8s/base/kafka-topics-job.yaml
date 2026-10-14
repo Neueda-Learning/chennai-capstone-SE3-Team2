@@ -1,0 +1,43 @@
+# The compose file's kafka-init: creates all ten topics with the repository's own
+# Infrastructure/Kafka/create-topics.sh (ConfigMap kafka-topics-script), then finishes.
+# --if-not-exists makes a re-run harmless. The finished Job removes itself after an hour,
+# so a later apply runs it again. A Job cannot be changed: if create-topics.sh changes
+# within that hour, first  kubectl -n yellow-trade delete job kafka-topics
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kafka-topics
+spec:
+  backoffLimit: 10
+  activeDeadlineSeconds: 900
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels: { app: kafka-topics }
+    spec:
+      restartPolicy: OnFailure
+      enableServiceLinks: false
+      containers:
+        - name: create-topics
+          image: apache/kafka:3.8.0
+          env:
+            - { name: BROKER, value: "kafka:29092" }
+            - { name: KAFKA_TOPICS_BIN, value: /opt/kafka/bin/kafka-topics.sh }
+          command: [bash, -c]
+          args:
+            - |
+              set -eu
+              # compose waits for the broker's health check; here the Job waits itself.
+              until "$KAFKA_TOPICS_BIN" --bootstrap-server "$BROKER" --list >/dev/null 2>&1; do
+                echo "waiting for Kafka at $BROKER"; sleep 5
+              done
+              bash /scripts/create-topics.sh
+              "$KAFKA_TOPICS_BIN" --bootstrap-server "$BROKER" --list
+          volumeMounts:
+            - { name: script, mountPath: /scripts, readOnly: true }
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 512Mi }
+      volumes:
+        - name: script
+          configMap: { name: kafka-topics-script }

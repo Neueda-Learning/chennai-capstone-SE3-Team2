@@ -1,7 +1,7 @@
 # Local stack:  docker compose up -d --build   (profiles come from COMPOSE_PROFILES in .env)
 # Values that differ per machine come from .env, which is not committed.
 
-name: yellow-trade
+name: etp
 
 services:
 

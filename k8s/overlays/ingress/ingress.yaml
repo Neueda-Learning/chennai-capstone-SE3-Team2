@@ -1,0 +1,21 @@
+# The AWS Load Balancer Controller builds an ALB from this (README step 10).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: yellow-trade
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip              # straight to the frontend pod
+    alb.ingress.kubernetes.io/healthcheck-path: /
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+    # HTTPS: use these three instead of the listen-ports line above, and https:// in urls.env.
+    # The ACM certificate must be in the cluster's region.
+    #alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    #alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:REGION:ACCOUNT:certificate/ID
+    #alb.ingress.kubernetes.io/ssl-redirect: "443"
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          - { path: /, pathType: Prefix, backend: { service: { name: frontend, port: { number: 80 } } } }

@@ -8,6 +8,7 @@ import { InstrumentResponse } from '../../../generated/extensions';
 import { OrderResponse, OrderSide, OrderStatus, PositionResponse } from '../../../generated/trade';
 import { InstrumentCatalog } from '../../core/api/instrument-catalog';
 import { TradeApi } from '../../core/api/trade-api';
+import { newIdempotencyKey } from '../../core/http/idempotency-key';
 import { watchPrices } from '../../core/market/live-prices';
 import { CurrentAccount } from '../../core/session/current-account';
 import { Session } from '../../core/session/session';
@@ -288,7 +289,7 @@ export class OrderTicket {
     // A market order's limit follows the live price, so a retry may carry a
     // newer one: the same order all the same, under the same key.
     const fingerprint = JSON.stringify(this.atMarket() ? { ...order, price: 'MARKET' } : order);
-    const idempotencyKey = this.unconfirmed?.order === fingerprint ? this.unconfirmed.key : crypto.randomUUID();
+    const idempotencyKey = this.unconfirmed?.order === fingerprint ? this.unconfirmed.key : newIdempotencyKey();
     this.unconfirmed = { key: idempotencyKey, order: fingerprint };
 
     this.submitting.set(true);

@@ -1,0 +1,4 @@
+docker build -t etp-auth-service ./Services/auth-service
+docker build -t etp-order-service ./Services/order-service
+docker build -t etp-executor-service ./Services/executor-service
+docker build -t etp-frontend ./Frontend

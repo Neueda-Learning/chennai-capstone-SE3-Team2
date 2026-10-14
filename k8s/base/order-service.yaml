@@ -1,0 +1,98 @@
+# order-service: the Trade REST API (Spring Boot) on 8081. The browser reaches it only
+# through the frontend's nginx (/api/, /onboarding/). Same settings as its compose service.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-service
+spec:
+  replicas: 1                          # it runs the KYC, payment and outbox jobs: one copy
+  strategy: { type: Recreate }         # never two copies of those jobs during a rollout
+  selector:
+    matchLabels: { app: order-service }
+  template:
+    metadata:
+      labels: { app: order-service }
+    spec:
+      enableServiceLinks: false
+      # The image's user, trade, is uid 100 / gid 101 (adduser -S in the Dockerfile).
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100
+        runAsGroup: 101
+        fsGroup: 101
+        seccompProfile: { type: RuntimeDefault }
+      # compose starts it only once Kafka and the database are up. Without this, a first
+      # start that beats the Kafka pod fails ("No resolvable bootstrap urls") and is
+      # restarted. It also names an unreachable RDS in this container's log.
+      initContainers:
+        - name: wait-for-kafka-and-db
+          image: yellow-trade-order-service
+          envFrom:
+            - configMapRef: { name: yellow-trade-config }
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z -w 2 kafka 29092; do echo "waiting for kafka:29092"; sleep 2; done
+              until nc -z -w 2 "$DB_HOST" "$DB_PORT"; do echo "waiting for the database at $DB_HOST:$DB_PORT"; sleep 2; done
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { memory: 32Mi }
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
+      containers:
+        - name: order-service
+          image: yellow-trade-order-service
+          ports:
+            - { name: http, containerPort: 8081 }
+          envFrom:
+            - configMapRef: { name: yellow-trade-config }
+            - configMapRef: { name: yellow-trade-urls }     # CORS_ALLOWED_ORIGINS, ACTIVATION_LINK_BASE_URL
+          env:
+            - { name: TRADE_API_PORT, value: "8081" }
+            # Only the secrets this service uses, as in docker-compose.yml.
+            - { name: DB_PASSWORD, valueFrom: { secretKeyRef: { name: yellow-trade-secrets, key: DB_PASSWORD } } }
+            - { name: JWT_SECRET, valueFrom: { secretKeyRef: { name: yellow-trade-secrets, key: JWT_SECRET } } }
+            - { name: ACTIVATION_INTERNAL_SECRET, valueFrom: { secretKeyRef: { name: yellow-trade-secrets, key: ACTIVATION_INTERNAL_SECRET } } }
+            - { name: SMTP_USERNAME, valueFrom: { secretKeyRef: { name: yellow-trade-secrets, key: SMTP_USERNAME } } }
+            - { name: SMTP_PASSWORD, valueFrom: { secretKeyRef: { name: yellow-trade-secrets, key: SMTP_PASSWORD } } }
+            - { name: ACTIVATION_MAIL_FROM, valueFrom: { secretKeyRef: { name: yellow-trade-secrets, key: ACTIVATION_MAIL_FROM } } }
+            - { name: FAUXNANCE_API_KEY, valueFrom: { secretKeyRef: { name: yellow-trade-secrets, key: FAUXNANCE_API_KEY } } }
+            - { name: MF_NAV_API_KEY, valueFrom: { secretKeyRef: { name: yellow-trade-secrets, key: MF_NAV_API_KEY } } }
+          volumeMounts:
+            - { name: shared-config, mountPath: /config, readOnly: true }   # Config/application.yml
+            - { name: tmp, mountPath: /tmp }
+          # /actuator/health/liveness and /readiness: the app itself. Not /actuator/health,
+          # which also checks the database and the SMTP server -- a mail outage must not
+          # take the API out of service.
+          startupProbe:
+            httpGet: { path: /actuator/health/liveness, port: http }
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: http }
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            requests: { cpu: 250m, memory: 640Mi }
+            limits: { memory: 1280Mi }
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
+      volumes:
+        - name: shared-config
+          configMap: { name: yellow-trade-shared-config }
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-service
+spec:
+  type: ClusterIP
+  selector: { app: order-service }
+  ports:
+    - { name: http, port: 8081, targetPort: http }
