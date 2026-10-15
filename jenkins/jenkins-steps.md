@@ -65,7 +65,7 @@ the pods that use it restart by themselves.
 3. Repository URL: `https://github.com/Neueda-Learning/chennai-capstone-SE3-Team2.git`,
    credential `github-scm`.
 4. Branch: `*/feature/deployed` (or `*/main` once merged).
-5. Script Path: `jenkins/JenkinsfileCI`.
+5. Script Path: `JenkinsfileCI`.
 6. Save, then **Build Now** once. The first run registers the poll trigger and the parameters.
 
 Stages: Checkout > Validate build agent > Test (`mvn -B test`, untick `RUN_TESTS` to skip) >
@@ -81,7 +81,7 @@ After that, CI polls the branch every 5 minutes and builds only when there are n
 
 1. **New Item** > name `yellow-trade-cd` > **Pipeline**.
 2. Same repository, credential and branch as CI.
-3. Script Path: `jenkins/JenkinsfileCD`.
+3. Script Path: `JenkinsfileCD`.
 4. No trigger: CD is a manual promotion.
 5. Save, then **Build Now** once. It fails with "IMAGE_TAG is required"; this is expected
    and only makes **Build with Parameters** appear.
@@ -91,7 +91,7 @@ After that, CI polls the branch every 5 minutes and builds only when there are n
 **Build with Parameters**. Usually only `IMAGE_TAG` changes:
 
 ```text
-IMAGE_TAG=1.7                      the tag CI printed
+IMAGE_TAG=1.3                     
 AWS_REGION=ap-south-1
 EKS_CLUSTER_NAME=etp-cluster-1
 RDS_HOST=database-1.cpekuiuqcl99.ap-south-1.rds.amazonaws.com
@@ -144,8 +144,8 @@ To roll back, run CD again with an older tag.
 ## 8. Files
 
 ```text
-jenkins/JenkinsfileCI            CI: test, build, push
-jenkins/JenkinsfileCD            CD: check, deploy one tag
+JenkinsfileCI                    CI: test, build, push
+JenkinsfileCD                    CD: check, deploy one tag
 jenkins/rds-test.sh              EKS -> RDS check, used by CD (also by hand)
 jenkins/prereq.md                one-time checks before the first CD run
 k8s/base/config.env              non-secret settings (CD overrides the DB_ lines from its parameters)
