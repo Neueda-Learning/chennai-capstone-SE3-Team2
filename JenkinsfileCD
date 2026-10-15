@@ -154,7 +154,8 @@ pipeline {
 
             # The selected tag goes into the images: block, so the first apply already runs it
             # (no second rollout from kubectl set image, and the next apply does not undo it).
-            sed -i -E "s#^([[:space:]]*newName: ).*/(etp-[a-z-]+)\\$#\\1$REGISTRY/\\2#; s#^([[:space:]]*newTag: ).*#\\1$IMAGE_TAG#" k8s/base/kustomization.yaml
+            # The tag is quoted: unquoted, YAML reads 1.7 as a number and kustomize rejects it.
+            sed -i -E "s#^([[:space:]]*newName: ).*/(etp-[a-z-]+)\\$#\\1$REGISTRY/\\2#; s#^([[:space:]]*newTag: ).*#\\1\\"$IMAGE_TAG\\"#" k8s/base/kustomization.yaml
             grep -E 'newName|newTag' k8s/base/kustomization.yaml
 
             # Copies application.yml and create-topics.sh into generated/ and checks secrets.env.
