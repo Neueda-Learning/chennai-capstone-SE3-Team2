@@ -27,14 +27,14 @@ secretGenerator:
     envs: [secrets.env]
 images:
   - name: yellow-trade-auth-service
-    newName: 222125591853.dkr.ecr.ap-south-1.amazonaws.com/etp-auth-service
+    newName: 290281447005.dkr.ecr.ap-south-1.amazonaws.com/etp-auth-service
     newTag: latest
   - name: yellow-trade-order-service
-    newName: 222125591853.dkr.ecr.ap-south-1.amazonaws.com/etp-order-service
+    newName: 290281447005.dkr.ecr.ap-south-1.amazonaws.com/etp-order-service
     newTag: latest
   - name: yellow-trade-executor-service
-    newName: 222125591853.dkr.ecr.ap-south-1.amazonaws.com/etp-executor-service
+    newName: 290281447005.dkr.ecr.ap-south-1.amazonaws.com/etp-executor-service
     newTag: latest
   - name: yellow-trade-frontend
-    newName: 222125591853.dkr.ecr.ap-south-1.amazonaws.com/etp-frontend
+    newName: 290281447005.dkr.ecr.ap-south-1.amazonaws.com/etp-frontend
     newTag: latest
