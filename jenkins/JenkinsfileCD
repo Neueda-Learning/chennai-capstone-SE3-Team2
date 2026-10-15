@@ -1,0 +1,210 @@
+// Yellow Trade CD: deploy one ECR tag made by JenkinsfileCI to the existing EKS cluster
+// (k8s/README.md steps 6-9). Run by hand with Build with Parameters. See jenkins/jenkins-steps.md.
+pipeline {
+  agent any
+
+  options {
+    disableConcurrentBuilds()
+    skipDefaultCheckout(true)
+    timeout(time: 30, unit: 'MINUTES')
+    buildDiscarder(logRotator(numToKeepStr: '20'))
+  }
+
+  parameters {
+    string(name: 'IMAGE_TAG', defaultValue: '', description: 'Required: the tag JenkinsfileCI printed (IMAGE_TAG=1.N)')
+    string(name: 'AWS_REGION', defaultValue: 'ap-south-1', description: 'AWS region')
+    string(name: 'EKS_CLUSTER_NAME', defaultValue: 'etp-cluster-1', description: 'The existing cluster (k8s/cluster.example.yaml)')
+    string(name: 'RDS_HOST', defaultValue: 'database-1.cpekuiuqcl99.ap-south-1.rds.amazonaws.com', description: 'RDS endpoint (DB_HOST)')
+    string(name: 'RDS_PORT', defaultValue: '5432', description: 'RDS PostgreSQL port')
+    string(name: 'RDS_DATABASE', defaultValue: 'trading_system_db', description: 'Database name')
+    string(name: 'RDS_USER', defaultValue: 'trading_app', description: 'Database user of order and executor')
+    string(name: 'K8S_OVERLAY', defaultValue: 'k8s/overlays/frontend-lb', description: 'Kustomize overlay: frontend-lb, or ingress after README step 10')
+    booleanParam(name: 'AUTO_AUTHORIZE_RDS', defaultValue: true, description: 'Only after the RDS test fails: allow the cluster VPC CIDR into the RDS security group on 5432')
+  }
+
+  environment {
+    K8S_NAMESPACE = 'yellow-trade'
+    AUTH_REPO     = 'etp-auth-service'
+    ORDER_REPO    = 'etp-order-service'
+    EXECUTOR_REPO = 'etp-executor-service'
+    FRONTEND_REPO = 'etp-frontend'
+    KUBECONFIG    = "${WORKSPACE}/.kubeconfig"    // per build, never the jenkins user's ~/.kube
+  }
+
+  stages {
+    stage('Checkout SCM') {
+      steps {
+        deleteDir()
+        checkout scm
+        sh 'git rev-parse HEAD'
+        script {
+          if (!params.IMAGE_TAG?.trim()) {
+            error('IMAGE_TAG is required. Run JenkinsfileCI first and enter its pushed ECR tag.')
+          }
+          env.IMAGE_TAG        = params.IMAGE_TAG.trim()
+          env.AWS_REGION       = params.AWS_REGION.trim()
+          env.EKS_CLUSTER_NAME = params.EKS_CLUSTER_NAME.trim()
+          env.K8S_OVERLAY      = params.K8S_OVERLAY.trim()
+          env.DB_HOST          = params.RDS_HOST.trim()
+          env.DB_PORT          = params.RDS_PORT.trim()
+          env.DB_NAME          = params.RDS_DATABASE.trim()
+          env.DB_USER          = params.RDS_USER.trim()
+        }
+      }
+    }
+
+    stage('Validate existing EKS cluster') {
+      steps {
+        sh '''#!/usr/bin/env bash
+          set -euo pipefail
+          command -v aws >/dev/null
+          command -v kubectl >/dev/null
+          test -f "$K8S_OVERLAY/kustomization.yaml"
+          # The RDS parameters go into this workspace's config.env only; git is not changed.
+          sed -i -E "s#^DB_HOST=.*#DB_HOST=$DB_HOST#; s#^DB_PORT=.*#DB_PORT=$DB_PORT#; s#^DB_NAME=.*#DB_NAME=$DB_NAME#; s#^DB_USER=.*#DB_USER=$DB_USER#" k8s/base/config.env
+          aws eks describe-cluster --region "$AWS_REGION" --name "$EKS_CLUSTER_NAME" \
+            --query 'cluster.status' --output text | grep -qx ACTIVE
+          aws eks update-kubeconfig --region "$AWS_REGION" --name "$EKS_CLUSTER_NAME"
+          kubectl get nodes -o wide
+          if [ -z "$(kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-ebs-csi-driver --no-headers 2>/dev/null)" ]; then
+            echo 'aws-ebs-csi-driver is not installed: Kafka disk cannot be created (k8s/README.md, Troubleshooting).' >&2
+            exit 1
+          fi
+        '''
+      }
+    }
+
+    stage('Test RDS connectivity first') {
+      steps {
+        script {
+          def code = sh(script: 'bash jenkins/rds-test.sh', returnStatus: true)
+          env.RDS_TEST_FAILED = (code == 0) ? 'false' : 'true'
+          echo "RDS connectivity test failed: ${env.RDS_TEST_FAILED}"
+        }
+      }
+    }
+
+    stage('Authorize RDS only after failed test') {
+      when {
+        allOf {
+          expression { params.AUTO_AUTHORIZE_RDS }
+          environment name: 'RDS_TEST_FAILED', value: 'true'
+        }
+      }
+      steps {
+        // The cluster is in its own VPC, peered with the RDS VPC (README step 4A), so the rule
+        // names the cluster's CIDR, as the README does. Peering and routes are not made here.
+        sh '''#!/usr/bin/env bash
+          set -euo pipefail
+          RDS_ID=$(aws rds describe-db-instances --region "$AWS_REGION" \
+            --query "DBInstances[?Endpoint.Address=='$DB_HOST'].DBInstanceIdentifier | [0]" --output text)
+          if [ -z "$RDS_ID" ] || [ "$RDS_ID" = None ]; then
+            echo "No RDS instance has the endpoint $DB_HOST: check RDS_HOST." >&2; exit 1
+          fi
+          RDS_SG=$(aws rds describe-db-instances --region "$AWS_REGION" --db-instance-identifier "$RDS_ID" \
+            --query 'DBInstances[0].VpcSecurityGroups[0].VpcSecurityGroupId' --output text)
+          EKS_VPC=$(aws eks describe-cluster --region "$AWS_REGION" --name "$EKS_CLUSTER_NAME" \
+            --query 'cluster.resourcesVpcConfig.vpcId' --output text)
+          EKS_CIDR=$(aws ec2 describe-vpcs --region "$AWS_REGION" --vpc-ids "$EKS_VPC" \
+            --query 'Vpcs[0].CidrBlock' --output text)
+          echo "RDS $RDS_ID, security group $RDS_SG: allowing $EKS_CIDR on 5432"
+          aws ec2 authorize-security-group-ingress --region "$AWS_REGION" --group-id "$RDS_SG" \
+            --protocol tcp --port 5432 --cidr "$EKS_CIDR" || echo 'RDS ingress rule already exists.'
+        '''
+      }
+    }
+
+    stage('Retry RDS test') {
+      when { environment name: 'RDS_TEST_FAILED', value: 'true' }
+      steps {
+        sh '''#!/usr/bin/env bash
+          set -euo pipefail
+          bash jenkins/rds-test.sh || {
+            echo 'RDS is still unreachable from the cluster. Check the VPC peering and routes (k8s/README.md step 4A).' >&2
+            exit 1
+          }
+        '''
+      }
+    }
+
+    stage('Verify selected ECR images') {
+      steps {
+        script {
+          env.AWS_ACCOUNT_ID = sh(script: 'aws sts get-caller-identity --query Account --output text', returnStdout: true).trim()
+          env.REGISTRY = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com"
+        }
+        sh '''#!/usr/bin/env bash
+          set -euo pipefail
+          for repo in "$AUTH_REPO" "$ORDER_REPO" "$EXECUTOR_REPO" "$FRONTEND_REPO"; do
+            aws ecr describe-images --region "$AWS_REGION" --repository-name "$repo" \
+              --image-ids imageTag="$IMAGE_TAG" >/dev/null || {
+              echo "$repo:$IMAGE_TAG is not in ECR. Use a tag JenkinsfileCI pushed." >&2; exit 1; }
+          done
+        '''
+      }
+    }
+
+    stage('Inject secrets and deploy selected images') {
+      steps {
+        withCredentials([file(credentialsId: 'yellow-trade-secrets-env', variable: 'SECRETS_ENV')]) {
+          sh '''#!/usr/bin/env bash
+            set -euo pipefail
+            install -m 600 "$SECRETS_ENV" k8s/base/secrets.env
+            sed -i 's/\\r$//' k8s/base/secrets.env      # in case it was uploaded from Windows
+
+            # The selected tag goes into the images: block, so the first apply already runs it
+            # (no second rollout from kubectl set image, and the next apply does not undo it).
+            sed -i -E "s#^([[:space:]]*newName: ).*/(etp-[a-z-]+)\\$#\\1$REGISTRY/\\2#; s#^([[:space:]]*newTag: ).*#\\1$IMAGE_TAG#" k8s/base/kustomization.yaml
+            grep -E 'newName|newTag' k8s/base/kustomization.yaml
+
+            # Copies application.yml and create-topics.sh into generated/ and checks secrets.env.
+            bash k8s/prepare.sh
+
+            kubectl apply -f k8s/base/namespace.yaml
+            # A Job is immutable; deleting it lets apply re-run it (creating topics is idempotent).
+            kubectl -n "$K8S_NAMESPACE" delete job kafka-topics --ignore-not-found
+            kubectl apply --dry-run=server -k "$K8S_OVERLAY"
+            kubectl apply -k "$K8S_OVERLAY"
+
+            for d in auth-service order-service executor-service frontend; do
+              kubectl -n "$K8S_NAMESPACE" rollout status "deployment/$d" --timeout=300s
+            done
+            kubectl -n "$K8S_NAMESPACE" wait --for=condition=complete job/kafka-topics --timeout=180s
+            kubectl -n "$K8S_NAMESPACE" get pods -o wide
+            kubectl -n "$K8S_NAMESPACE" get svc
+          '''
+        }
+      }
+    }
+
+    stage('Smoke test') {
+      when { expression { env.K8S_OVERLAY.endsWith('frontend-lb') } }
+      steps {
+        sh '''#!/usr/bin/env bash
+          set -euo pipefail
+          LB=$(kubectl -n "$K8S_NAMESPACE" get svc frontend -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          echo "frontend: http://$LB"
+          grep -q "$LB" "$K8S_OVERLAY/urls.env" || \
+            echo "WARNING: urls.env does not name http://$LB; the browser will get 403 Invalid CORS request (README step 8)."
+          for i in $(seq 1 20); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "http://$LB/" || true)
+            [ "$code" = 200 ] && break
+            sleep 6
+          done
+          echo "GET / -> $code"
+          [ "$code" = 200 ]
+          curl -s "http://$LB/api/v1/accounts/1" | grep -q 'AUTH-401'      # order-service answers through nginx
+        '''
+      }
+    }
+  }
+
+  post {
+    failure {
+      sh 'kubectl -n yellow-trade get pods 2>/dev/null || true; kubectl -n yellow-trade get events --sort-by=.lastTimestamp 2>/dev/null | tail -20 || true'
+    }
+    always {
+      sh 'rm -f k8s/base/secrets.env "$KUBECONFIG"'
+    }
+  }
+}
